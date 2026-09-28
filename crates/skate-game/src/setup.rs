@@ -45,6 +45,9 @@ fn installed(base: &Path) -> Result<Option<(PathBuf, serde_json::Value)>, String
 }
 
 pub(crate) fn asset_root() -> Result<PathBuf, String> {
+    #[cfg(target_os = "android")]
+    return Ok(crate::android::files_dir()?.join("assets"));
+    #[allow(unreachable_code)]
     if std::env::args_os().any(|arg| arg == "--assets") {
         return Ok(PathBuf::from("assets"));
     }

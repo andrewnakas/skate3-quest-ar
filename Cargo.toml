@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/skate-core", "crates/skate-data", "crates/skate-game", "crates/skate-mods", "crates/skate-vehicles", "crates/skate-net", "crates/skate-steam-relay", "crates/skate-audio-formats", "crates/skate-audio-core"]
+members = ["crates/skate-core", "crates/skate-data", "crates/skate-game", "crates/skate-mods", "crates/skate-vehicles", "crates/skate-net", "crates/skate-steam-relay", "crates/skate-audio-formats", "crates/skate-audio-core", "crates/skate-quest"]
 resolver = "3"
 
 [workspace.package]
@@ -8,7 +8,15 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
-bevy = { version = "=0.18.1" }
+# Bevy's default features, spelled out so the Quest crate can pick the
+# NativeActivity glue instead of the default GameActivity (only one may be
+# enabled). Identical to `default` on desktop.
+bevy = { version = "=0.18.1", default-features = false, features = [
+    "default_app", "2d_bevy_render", "3d_bevy_render", "ui_api", "ui_bevy_render",
+    "scene", "audio", "picking",
+    "std", "android_shared_stdcxx", "bevy_gilrs", "bevy_winit", "default_font",
+    "multi_threaded", "webgl2", "x11", "wayland", "sysinfo_plugin",
+] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 skate-core = { path = "crates/skate-core" }

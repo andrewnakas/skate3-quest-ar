@@ -24,6 +24,40 @@ impl Default for PublishedTickInput {
     }
 }
 
+/// A pad supplied by something other than XInput (the XR Touch
+/// controllers). When this resource exists it owns controller slot 0.
+#[derive(Resource, Default)]
+pub(crate) struct ExternalPad {
+    state: Option<(u16, [u8; 2], [i16; 2], [i16; 2])>,
+    packet: u32,
+}
+
+impl ExternalPad {
+    pub(crate) fn set(&mut self, state: skate_core::input::xbox::XboxState) {
+        let next = Some((state.buttons, state.triggers, state.left, state.right));
+        if next != self.state {
+            self.packet = self.packet.wrapping_add(1);
+            self.state = next;
+        }
+    }
+
+    fn packet(&self) -> Result<platform::DevicePacket, platform::DeviceError> {
+        let (buttons, triggers, left, right) =
+            self.state.ok_or(platform::DeviceError::Disconnected)?;
+        Ok(platform::DevicePacket {
+            number: self.packet,
+            state: skate_core::input::xbox::XboxState {
+                buttons,
+                triggers,
+                left,
+                right,
+            },
+            // XINPUT_DEVSUBTYPE_GAMEPAD.
+            subtype: 1,
+        })
+    }
+}
+
 pub(crate) struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
@@ -42,13 +76,18 @@ pub(crate) fn poll_controllers(
     config: Res<crate::config::Config>,
     net: Option<Res<crate::multiplayer::Multiplayer>>,
     windows: Query<&Window>,
+    external: Option<Res<ExternalPad>>,
     mut capabilities: Local<[platform::CapabilityCache; 4]>,
 ) {
     let previous = input.status;
     let focused = windows.iter().any(|w| w.focused);
     let active = net.is_some_and(|n| n.active());
     input.collect(std::array::from_fn(|slot| {
-        if active
+        if slot == 0
+            && let Some(external) = &external
+        {
+            external.packet()
+        } else if active
             && ((!focused && config.multiplayer.controller.is_none())
                 || config
                     .multiplayer
@@ -64,6 +103,9 @@ pub(crate) fn poll_controllers(
     for (index, (&before, &after)) in previous.iter().zip(&input.status).enumerate() {
         if before != after {
             match after {
+                ControllerStatus::Ready if index == 0 && external.is_some() => {
+                    info!("Controller {index}: XR Touch controllers ready")
+                }
                 ControllerStatus::Ready => info!("Controller {index}: raw XInput ready"),
                 ControllerStatus::Unavailable(platform::DeviceError::Disconnected) => {
                     info!("Controller {index}: disconnected");

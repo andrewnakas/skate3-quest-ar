@@ -85,3 +85,6 @@ __pycache__/
 *.pcm
 /quest-data/
 /lite-maps/
+
+# Khronos OpenXR loader, fetched by scripts/quest/fetch-openxr-loader.sh
+/crates/skate-quest/runtime_libs/**/*.so

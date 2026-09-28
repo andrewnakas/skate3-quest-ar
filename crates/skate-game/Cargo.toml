@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[lib]
+name = "skate_game"
+path = "src/lib.rs"
+
 [[bin]]
 name = "skate3rust"
 path = "src/main.rs"
@@ -26,6 +30,10 @@ test = false
 [features]
 default = ["dev-dynamic"]
 dev-dynamic = ["bevy/dynamic_linking"]
+# OpenXR passthrough mode (`--xr`); the Quest build always enables it.
+xr = ["dep:bevy_mod_openxr", "dep:bevy_mod_xr", "dep:openxr"]
+# Desktop XR keeps a mirror window beside the headset view.
+xr-window = ["xr", "bevy_mod_openxr/window_support"]
 
 [dependencies]
 bevy = { workspace = true, features = ["jpeg", "trace", "debug"] }
@@ -42,6 +50,9 @@ skate-mods = { path = "../skate-mods" }
 skate-vehicles = { path = "../skate-vehicles" }
 skate-net = { path = "../skate-net" }
 blake3 = "=1.8.7"
+bevy_mod_openxr = { version = "=0.5.0", optional = true, features = ["fb_passthrough"] }
+bevy_mod_xr = { version = "=0.5.0", optional = true }
+openxr = { version = "0.21.1", optional = true }
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
 
 [dev-dependencies]

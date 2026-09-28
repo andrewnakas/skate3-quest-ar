@@ -13,6 +13,21 @@ pub(crate) struct Config {
     pub multiplayer: crate::multiplayer::Options,
     pub map_fingerprint: u64,
     pub teleport: Option<String>,
+    /// `--xr [--xr-scale K]`: OpenXR passthrough miniature.
+    pub xr: Option<XrOptions>,
+}
+
+/// OpenXR view options. Physics never sees these; they only scale the view.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct XrOptions {
+    /// Real-world size / miniature size. 12 makes a 1.8 m skater 15 cm tall.
+    pub scale: f32,
+}
+
+impl Default for XrOptions {
+    fn default() -> Self {
+        Self { scale: 12.0 }
+    }
 }
 
 impl Config {
@@ -28,6 +43,7 @@ impl Config {
             multiplayer: crate::multiplayer::Options::default(),
             map_fingerprint: 0,
             teleport: None,
+            xr: None,
         };
         let mut difficulty_override = None;
         let mut explicit_map = false;
@@ -123,6 +139,24 @@ impl Config {
                     config.map = None;
                     config.map_path = None;
                 }
+                Some("--xr") => {
+                    if !cfg!(feature = "xr") {
+                        return Err("--xr needs a build with the `xr` feature".into());
+                    }
+                    config.xr.get_or_insert_default();
+                }
+                Some("--xr-scale") => {
+                    let scale: f32 = args
+                        .next()
+                        .ok_or("--xr-scale requires a number")?
+                        .to_string_lossy()
+                        .parse()
+                        .map_err(|_| "Invalid --xr-scale")?;
+                    if !(1.0..=1000.0).contains(&scale) {
+                        return Err("--xr-scale must be between 1 and 1000".into());
+                    }
+                    config.xr.get_or_insert_default().scale = scale;
+                }
                 Some("--check-assets") => config.check_assets = true,
                 Some("--start-paused") => config.start_paused = true,
                 Some("--teleport") => {
@@ -150,11 +184,14 @@ impl Config {
                 }
                 _ => {
                     return Err(format!(
-                        "Unknown argument {arg:?}. Usage: skate3rust [--assets DIRECTORY] [--map MAP.skate | --test-world] [--difficulty easy|normal|hardcore] [--verify CAPTURE.png] [--check-assets] [--start-paused]"
+                        "Unknown argument {arg:?}. Usage: skate3rust [--assets DIRECTORY] [--map MAP.skate | --test-world] [--difficulty easy|normal|hardcore] [--verify CAPTURE.png] [--check-assets] [--start-paused] [--xr [--xr-scale K]]"
                     ));
                 }
             }
         }
+        // The Quest build has no command line and is always the XR game.
+        #[cfg(target_os = "android")]
+        config.xr.get_or_insert_default();
         config.asset_root = config
             .asset_root
             .canonicalize()
