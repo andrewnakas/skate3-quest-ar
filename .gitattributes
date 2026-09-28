@@ -3,3 +3,6 @@
 sdk/examples/** text eol=lf
 sdk/examples/**/*.glb binary
 mods/*.zip binary
+
+# Mac/Linux scripts must keep LF endings.
+*.sh text eol=lf
