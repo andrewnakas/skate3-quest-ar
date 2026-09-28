@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+id = "owned_world_materials"
+version = "1.15.0"
+name = "Owned World Authoring"
+tagline = "Build, validate, and export Skate 3 Custom Engine maps"
+maintainer = "Skate 3 Custom Engine Layer contributors"
+type = "add-on"
+
+blender_version_min = "5.0.0"
+
+license = [
+  "SPDX:MIT",
+]

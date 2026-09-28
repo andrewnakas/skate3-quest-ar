@@ -1,0 +1,236 @@
+{
+  "id": "community.native-trainer",
+  "api": 1,
+  "name": "Native Trainer Showcase",
+  "version": "2.1.0",
+  "author": "Skate Rust Engine",
+  "description": "Native tuning, telemetry, checkpoint return, stopwatch, breadcrumbs and beacons in one original Lua mod. Manage options here; default keyboard shortcuts F5 save, F6 return, F7 stopwatch, F8 reset, F9 beacon. Stock tuning is 1x.",
+  "entry": "main.lua",
+  "settings": {
+    "pop": {
+      "type": "number",
+      "label": "Pop height",
+      "description": "Multiplies native ground-jump minimum and maximum heights. 1.00x is stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "grind_pop": {
+      "type": "number",
+      "label": "Grind pop height",
+      "description": "Multiplies the existing grind-launch height. 1.00x is stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "push_speed": {
+      "type": "number",
+      "label": "Maximum push speed",
+      "description": "Multiplies the speed up to which pushing works. This is not a downhill speed cap. 1.00x is stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "push_power": {
+      "type": "number",
+      "label": "Push power",
+      "description": "Multiplies native difficulty-specific push velocity changes. 1.00x is stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "braking": {
+      "type": "number",
+      "label": "Brake strength",
+      "description": "Multiplies foot and tail braking forces. 1.00x is stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "steering": {
+      "type": "number",
+      "label": "Steering response",
+      "description": "Multiplies the native general steering scalar. 1.00x is stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "wobble": {
+      "type": "number",
+      "label": "Speed wobble",
+      "description": "Multiplies native wobble amplitude. Zero removes wobble. 1.00x is stock.",
+      "default": 1,
+      "min": 0,
+      "max": 2,
+      "step": 0.25
+    },
+    "offboard_jump": {
+      "type": "number",
+      "label": "Off-board jump",
+      "description": "Multiplies native biped jump height. 1x preserves stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "grip": {
+      "type": "number",
+      "label": "Wheel / slide grip",
+      "description": "Multiplies ground wheel static/dynamic friction and sideways slide friction. 1x preserves stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "turn_power": {
+      "type": "number",
+      "label": "Turning force",
+      "description": "Multiplies native heading turn torque strength. 1x preserves stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "manual_drag": {
+      "type": "number",
+      "label": "Manual drag",
+      "description": "Multiplies native manual balance linear drag. 1x preserves stock.",
+      "default": 1,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25
+    },
+    "hud": {
+      "type": "choice",
+      "label": "Telemetry HUD",
+      "default": "full",
+      "choices": [
+        "off",
+        "compact",
+        "full"
+      ],
+      "description": "Live board speed and session statistics. Full adds position, altitude and event counts."
+    },
+    "units": {
+      "type": "choice",
+      "label": "Speed units",
+      "default": "km/h",
+      "choices": [
+        "km/h",
+        "mph",
+        "m/s"
+      ],
+      "description": "Display conversion only; does not alter physics."
+    },
+    "trail": {
+      "type": "boolean",
+      "label": "Breadcrumb trail",
+      "default": false,
+      "description": "Leave up to 24 small visual markers behind you. No collision. Cleared on map change."
+    },
+    "trail_spacing": {
+      "type": "number",
+      "label": "Trail spacing (m)",
+      "default": 6,
+      "min": 1,
+      "max": 30,
+      "step": 1,
+      "description": "Minimum distance between breadcrumb markers."
+    },
+    "marker_color": {
+      "type": "choice",
+      "label": "Marker colour",
+      "default": "cyan",
+      "choices": [
+        "cyan",
+        "orange",
+        "purple"
+      ],
+      "description": "Colour of newly placed checkpoints, breadcrumbs and beacons."
+    },
+    "hud_label": {
+      "type": "string",
+      "label": "HUD label",
+      "default": "TRAINER",
+      "description": "An editable label demonstrating string settings."
+    },
+    "show_help": {
+      "type": "boolean",
+      "label": "Show key hints",
+      "default": true,
+      "description": "Show current shortcut bindings in the HUD."
+    },
+    "save_key": {
+      "type": "choice",
+      "label": "Save checkpoint key",
+      "default": "F5",
+      "choices": [
+        "F5",
+        "KeyJ",
+        "KeyK",
+        "KeyL"
+      ],
+      "description": "Choose distinct shortcuts. If keys coincide, save, return, timer, reset, beacon run in that order."
+    },
+    "return_key": {
+      "type": "choice",
+      "label": "Return checkpoint key",
+      "default": "F6",
+      "choices": [
+        "F6",
+        "KeyJ",
+        "KeyK",
+        "KeyL"
+      ],
+      "description": "Choose distinct shortcuts. If keys coincide, save, return, timer, reset, beacon run in that order."
+    },
+    "timer_key": {
+      "type": "choice",
+      "label": "Stopwatch key",
+      "default": "F7",
+      "choices": [
+        "F7",
+        "KeyJ",
+        "KeyK",
+        "KeyL"
+      ],
+      "description": "Choose distinct shortcuts. If keys coincide, save, return, timer, reset, beacon run in that order."
+    },
+    "reset_key": {
+      "type": "choice",
+      "label": "Reset / clear key",
+      "default": "F8",
+      "choices": [
+        "F8",
+        "KeyJ",
+        "KeyK",
+        "KeyL"
+      ],
+      "description": "Choose distinct shortcuts. If keys coincide, save, return, timer, reset, beacon run in that order."
+    },
+    "beacon_key": {
+      "type": "choice",
+      "label": "Place beacon key",
+      "default": "F9",
+      "choices": [
+        "F9",
+        "KeyJ",
+        "KeyK",
+        "KeyL"
+      ],
+      "description": "Choose distinct shortcuts. If keys coincide, save, return, timer, reset, beacon run in that order."
+    },
+    "hold_fakie": {
+      "type": "boolean",
+      "label": "Hold fakie stance",
+      "description": "Prevents the automatic idle/bump stance-switch animation. Normal steering, slides and tricks remain available. Turn off to restore stock correction.",
+      "default": false
+    }
+  }
+}

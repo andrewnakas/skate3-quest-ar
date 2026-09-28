@@ -1,0 +1,4 @@
+Native Trainer Showcase 2.0
+F5 save checkpoint; F6 return; F7 start/stop stopwatch; F8 clear session; F9 place beacon.
+All bindings and visual options are configurable. All physics multipliers default to 1.
+Telemetry reads the existing engine; cubes are visual only. No game assets are bundled.

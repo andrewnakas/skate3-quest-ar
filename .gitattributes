@@ -1,0 +1,5 @@
+
+# Keep bundled package bytes reproducible across checkouts.
+sdk/examples/** text eol=lf
+sdk/examples/**/*.glb binary
+mods/*.zip binary

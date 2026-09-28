@@ -1,0 +1,182 @@
+{
+  "id": "community.freestyle-mx",
+  "api": 1,
+  "name": "Freestyle MX",
+  "version": "1.0.0",
+  "author": "Local vehicle SDK example",
+  "description": "Freestyle motocross. Left stick is the BIKE, right stick is the RIDER.\n\nRIDE    Left stick steers. RT throttle, LT front brake, B rear brake.\n        A is the clutch: hold it, rev, and dump it to loft the front.\nPRELOAD Pull the left stick BACK on the face of a jump and snap it forward\n        at the lip. That, not your run-up speed, is your jump height.\nWHEELIE Left stick back on the throttle. Forward on the front brake stoppies.\nAIR     Bars whip the back end round; left stick held is a flip; right stick\n        rolls for a tabletop. LET GO and the bike squares itself to land.\nTRICKS  Hold LB or RB and push the right stick. Tuck back in before you land.\n\nY or E gets on and off, R or R3 resets, F9 respawns the bike nearby.\nKeyboard: WASD ride, arrows bike attitude, IJKL rider, Z/X tricks, C clutch.",
+  "entry": "main.lua",
+  "settings": {
+    "engine": {
+      "type": "number",
+      "label": "Engine force",
+      "description": "Applied live.",
+      "default": 2100,
+      "min": 100,
+      "max": 8000,
+      "step": 100
+    },
+    "speed": {
+      "type": "number",
+      "label": "Maximum speed (m/s)",
+      "description": "Applied live. A 250 four-stroke tops out around 30.",
+      "default": 38,
+      "min": 5,
+      "max": 80,
+      "step": 1
+    },
+    "tire_friction": {
+      "type": "number",
+      "label": "Tire friction coefficient",
+      "description": "Knobbies on dirt. Lower slides more.",
+      "default": 1.9,
+      "min": 0.2,
+      "max": 2,
+      "step": 0.05
+    },
+    "lean_max": {
+      "type": "number",
+      "label": "Maximum lean (radians)",
+      "description": "How far the bike lays over. Past atan(tire friction) the tyres cannot hold it and it just scrubs speed.",
+      "default": 1.05,
+      "min": 0.1,
+      "max": 1.2,
+      "step": 0.05
+    },
+    "lean_rate": {
+      "type": "number",
+      "label": "Lean response",
+      "description": "How quickly the lean takes up. Lower is more gradual and easier to adjust mid-corner.",
+      "default": 5.5,
+      "min": 2,
+      "max": 30,
+      "step": 0.5
+    },
+    "lean_expo": {
+      "type": "number",
+      "label": "Steering softness near centre",
+      "default": 0.6,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "description": "Softens the first part of the stick so small corrections are possible. 0 is linear; 0.6 means a quarter stick asks for about a tenth of the lean."
+    },
+    "counter_steer": {
+      "type": "number",
+      "label": "Steering to lean",
+      "description": "How much bar input becomes lean at speed. Zero means the right stick alone leans it.",
+      "default": 1,
+      "min": 0,
+      "max": 2,
+      "step": 0.05
+    },
+    "lean_yaw": {
+      "type": "number",
+      "label": "Cornering bite",
+      "default": 11,
+      "min": 1,
+      "max": 25,
+      "step": 0.5,
+      "description": "How hard the bike follows the arc its lean angle dictates. Lower understeers and slides wide."
+    },
+    "steer_rate": {
+      "type": "number",
+      "label": "Turn rate",
+      "default": 3.2,
+      "min": 0,
+      "max": 6,
+      "step": 0.1,
+      "description": "How hard the bars turn the bike at speed. Lean physics alone caps out around half this once you are moving."
+    },
+    "grip_assist": {
+      "type": "number",
+      "label": "Grip assist",
+      "default": 0.7,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "description": "How much of the turn is made by pointing the bike rather than by the tyres. High feels railed; low feels loose and slides more."
+    },
+    "berm_assist": {
+      "type": "number",
+      "label": "Berm bite",
+      "default": 0.2,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "description": "How much a banked corner adds to your lean. Most of a berm already works without this; past about 0.45 the tyres give up and the bike slides wide instead of turning harder."
+    },
+    "step_assist": {
+      "type": "number",
+      "label": "Step climbing",
+      "default": 0.3,
+      "min": 0,
+      "max": 0.6,
+      "step": 0.05,
+      "description": "Tallest kerb or stair riser the bike will climb, in metres. A raycast wheel cannot roll over an edge on its own, so without this the bike stops dead on anything above about a 0.15 m step. Ramps are unaffected. 0 turns it off."
+    },
+    "preload_release": {
+      "type": "number",
+      "label": "Preload pop",
+      "description": "Launch impulse from loading the suspension and releasing it on a lip.",
+      "default": 500,
+      "min": 0,
+      "max": 2000,
+      "step": 50
+    },
+    "air_yaw": {
+      "type": "number",
+      "label": "Whip authority",
+      "description": "How hard the bars swing the back end round in the air.",
+      "default": 9,
+      "min": 0,
+      "max": 20,
+      "step": 0.5
+    },
+    "whip_rate": {
+      "type": "number",
+      "label": "Whip rate (rad/s)",
+      "default": 3.5,
+      "min": 0.5,
+      "max": 10,
+      "step": 0.25,
+      "description": "How far round the bars will send the back end at full lock in the air."
+    },
+    "flip_rate": {
+      "type": "number",
+      "label": "Flip rate (rad/s)",
+      "default": 5.5,
+      "min": 1,
+      "max": 10,
+      "step": 0.25,
+      "description": "Pitch rate on a held stick. A backflip takes about 2*pi divided by this, in seconds."
+    },
+    "engine_volume": {
+      "type": "number",
+      "label": "Engine volume",
+      "description": "Motor loudness; zero mutes it.",
+      "default": 0.5,
+      "min": 0,
+      "max": 1,
+      "step": 0.05
+    },
+    "hud": {
+      "type": "boolean",
+      "label": "Show the HUD",
+      "description": "Controls, speed, score and the current trick.",
+      "default": true
+    },
+    "scoring": {
+      "type": "boolean",
+      "label": "Score runs",
+      "description": "Award points for air time, rotation and tricks held and tucked in.",
+      "default": true
+    },
+    "remount": {
+      "type": "boolean",
+      "label": "Get back on automatically",
+      "default": true,
+      "description": "After a crash, stand the bike up and put the rider back on it. Turn this off to walk back yourself."
+    }
+  }
+}

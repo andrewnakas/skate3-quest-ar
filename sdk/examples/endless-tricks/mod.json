@@ -1,0 +1,38 @@
+{
+  "id": "community.endless-tricks",
+  "api": 1,
+  "name": "Endless Tricks",
+  "version": "1.0.0",
+  "author": "Skate Rust Engine",
+  "description": "Hold a kickflip, heelflip, 360 flip or laserflip and keep going for as long as the air lasts, up to sixteen. Not a Skate 3 trick: retail stops at four. Needs real height off a ledge or a ramp; a flat pop still stops at a double. Owns native trainer tuning, so it cannot run alongside the Native Trainer.",
+  "entry": "main.lua",
+  "settings": {
+    "enabled": {
+      "type": "boolean",
+      "label": "Endless flips",
+      "description": "Off restores the stock four-rung ladder exactly.",
+      "default": true
+    },
+    "max_flips": {
+      "type": "number",
+      "label": "Maximum flips",
+      "description": "Most flips one pop may reach. 4 is the stock quad; from the 9th on it is just called ENDLESS.",
+      "default": 16,
+      "min": 5,
+      "max": 16,
+      "step": 1
+    },
+    "require_air": {
+      "type": "boolean",
+      "label": "Require air for each flip",
+      "description": "Off (default) keeps flipping while you hold and stay off the ground, with no height needed. On only starts a flip it has the air to land out of, so you bail less and flip less.",
+      "default": false
+    },
+    "hud": {
+      "type": "boolean",
+      "label": "Show status",
+      "description": "Small on-screen reminder of the current limit.",
+      "default": true
+    }
+  }
+}

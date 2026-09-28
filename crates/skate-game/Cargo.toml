@@ -1,0 +1,50 @@
+[package]
+name = "skate-game"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "skate3rust"
+path = "src/main.rs"
+
+[[bin]]
+name = "skate3-audio-check"
+path = "src/audio_check_main.rs"
+test = false
+
+[[bin]]
+name = "skate3-multiplayer"
+path = "src/multiplayer_main.rs"
+test = false
+
+[[bin]]
+name = "skate3-custom-models"
+path = "src/custom_models_main.rs"
+test = false
+
+[features]
+default = ["dev-dynamic"]
+dev-dynamic = ["bevy/dynamic_linking"]
+
+[dependencies]
+bevy = { workspace = true, features = ["jpeg", "trace", "debug"] }
+tracing-log = "0.2"
+skate-core.workspace = true
+skate-data.workspace = true
+skate-audio-formats.workspace = true
+skate-audio-core.workspace = true
+half = "=2.7.1"
+serde_json.workspace = true
+serde.workspace = true
+skate-mods = { path = "../skate-mods" }
+
+skate-vehicles = { path = "../skate-vehicles" }
+skate-net = { path = "../skate-net" }
+blake3 = "=1.8.7"
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
+
+[dev-dependencies]
+naga = { version = "=27.0.3", features = ["wgsl-in"] }
+naga_oil = { version = "=0.20.0", default-features = false }
+wgpu = { version = "=27.0.1", default-features = false, features = ["vulkan", "naga-ir"] }

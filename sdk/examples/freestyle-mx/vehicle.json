@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "model": "bike.glb",
+  "half_extents": [
+    0.16,
+    0.25,
+    0.9
+  ],
+  "collider_offset": [
+    0.0,
+    0.3,
+    0.0
+  ],
+  "collider_rounding": 0.12,
+  "chassis_friction": 0.2,
+  "mass": 150,
+  "center_of_mass": [
+    0.0,
+    0.32,
+    -0.02
+  ],
+  "inertia_half_extents": [
+    0.22,
+    0.45,
+    0.85
+  ],
+  "engine_force": 2100,
+  "max_speed": 38,
+  "brake_impulse": 110,
+  "steering_angle": 0.8,
+  "suspension_length": 0.4,
+  "suspension_stiffness": 35,
+  "suspension_damping": 5.5,
+  "tire_grip": 1.9,
+  "ground_stability": 0,
+  "air_control": 0,
+  "bike": {
+    "enabled": true,
+    "lean_max": 1.05,
+    "lean_rate": 9.0,
+    "lean_expo": 0.3,
+    "counter_steer": 1.15,
+    "upright_gain": 60.0,
+    "steer_falloff": 0.045,
+    "cornering_scale": 2.0,
+    "lean_yaw": 15.0,
+    "steer_rate": 3.2,
+    "grip_assist": 0.7,
+    "pivot_boost": 1.0,
+    "berm_assist": 0.2,
+    "preload_force": 1100.0,
+    "preload_release": 500.0,
+    "air_yaw": 9.0,
+    "air_pitch_down": 11.0,
+    "air_pitch_up": 11.0,
+    "air_roll": 9.0,
+    "flip_rate": 5.5,
+    "whip_rate": 3.5,
+    "air_level": 4.5,
+    "wheelie_limit": 0.85,
+    "stoppie_limit": 0.5,
+    "clutch_boost": 1.6,
+    "landing_roll": 1.05,
+    "landing_pitch": 1.35,
+    "landing_yaw": 1.1,
+    "step_assist": 0.3
+  },
+  "wheels": [
+    {
+      "node": "wheel_front",
+      "position": [
+        0,
+        0.25,
+        0.74
+      ],
+      "radius": 0.3351,
+      "steering": true,
+      "driven": false
+    },
+    {
+      "node": "wheel_rear",
+      "position": [
+        0,
+        0.25,
+        -0.74
+      ],
+      "radius": 0.3372,
+      "steering": false,
+      "driven": true
+    }
+  ],
+  "seat": [
+    0.0,
+    0.56,
+    -0.12
+  ],
+  "exit": [
+    1.1,
+    0.0,
+    0.0
+  ],
+  "camera_distance": 6.0,
+  "camera_height": 2.0,
+  "engine_audio": {
+    "enabled": true,
+    "volume": 0.5,
+    "idle_pitch": 0.55,
+    "max_pitch": 3.2,
+    "profile": "four_stroke_single"
+  },
+  "rider_safety": {
+    "enabled": true,
+    "offset": [
+      0.0,
+      0.3,
+      0.0
+    ],
+    "radius": 0.28,
+    "half_height": 0.32,
+    "crash_delta_v": 24.0,
+    "hit_impulse": 2600.0,
+    "inverted_up_y": -0.3,
+    "inverted_seconds": 1.2,
+    "eject_up_speed": 2.5
+  },
+  "parked_nodes": [
+    "kickstand"
+  ],
+  "animations": {
+    "file": "rider.json",
+    "drive": "seated",
+    "idle": "seated",
+    "reverse": "seated",
+    "brake": "seated",
+    "steer_left": "steer_left",
+    "steer_right": "steer_right",
+    "stand": "stand",
+    "crouch": "crouch",
+    "weight_back": "weight_back",
+    "weight_forward": "weight_forward",
+    "lean_left": "lean_left",
+    "lean_right": "lean_right",
+    "tricks": [
+      "superman",
+      "lazyboy",
+      "nacnac",
+      "cancan",
+      "heelclicker",
+      "kissofdeath",
+      "cordova",
+      "nohander"
+    ]
+  }
+}

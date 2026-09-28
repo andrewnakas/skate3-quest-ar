@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "model": "kart.glb",
+  "half_extents": [
+    0.5,
+    0.14,
+    0.65
+  ],
+  "mass": 220,
+  "engine_force": 1800,
+  "max_speed": 25,
+  "brake_impulse": 90,
+  "steering_angle": 0.5,
+  "suspension_length": 0.25,
+  "suspension_stiffness": 30,
+  "suspension_damping": 4,
+  "tire_grip": 1.3,
+  "ground_stability": 0.8,
+  "air_control": 6,
+  "wheels": [
+    {
+      "node": "wheel_rl",
+      "position": [
+        0.5815213608992547,
+        0.057323790779298445,
+        -0.673016238225116
+      ],
+      "radius": 0.3338663063949073,
+      "steering": false,
+      "driven": true
+    },
+    {
+      "node": "wheel_rr",
+      "position": [
+        -0.5302057197312625,
+        0.06093891045413358,
+        -0.6730162402958683
+      ],
+      "radius": 0.3338663063949072,
+      "steering": false,
+      "driven": true
+    },
+    {
+      "node": "wheel_fl",
+      "position": [
+        0.5573244172948093,
+        0.016883687342375997,
+        0.4261990809959044
+      ],
+      "radius": 0.31535000391066886,
+      "steering": true,
+      "driven": false
+    },
+    {
+      "node": "wheel_fr",
+      "position": [
+        -0.5201046643741327,
+        0.01739195285686146,
+        0.4231450809914261
+      ],
+      "radius": 0.31535000391066886,
+      "steering": true,
+      "driven": false
+    }
+  ],
+  "seat": [
+    0,
+    0.18,
+    -0.2
+  ],
+  "exit": [
+    1.8,
+    0,
+    0
+  ],
+  "camera_distance": 5,
+  "camera_height": 2,
+  "animations": {
+    "file": "rider.json",
+    "enter": "enter",
+    "exit": "exit",
+    "drive": "drive",
+    "idle": "drive",
+    "reverse": "drive",
+    "brake": "drive",
+    "steer_left": "steer_left",
+    "steer_right": "steer_right"
+  },
+  "collider_offset": [
+    0,
+    0,
+    0
+  ],
+  "collider_rounding": 0.1,
+  "chassis_friction": 0.05,
+  "engine_audio": {
+    "enabled": true,
+    "volume": 0.45,
+    "idle_pitch": 0.7,
+    "max_pitch": 2.8
+  },
+  "center_of_mass": [
+    0,
+    -0.2,
+    0
+  ],
+  "inertia_half_extents": [
+    1.1,
+    0.35,
+    1.4
+  ],
+  "rider_safety": {
+    "enabled": true,
+    "offset": [
+      0,
+      0.5,
+      0
+    ],
+    "radius": 0.25,
+    "half_height": 0.25,
+    "crash_delta_v": 12,
+    "hit_impulse": 1200,
+    "inverted_up_y": -0.2,
+    "inverted_seconds": 1.0,
+    "eject_up_speed": 2
+  }
+}

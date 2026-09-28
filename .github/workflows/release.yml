@@ -1,0 +1,86 @@
+name: Windows release
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    if: github.event_name != 'release' || github.event.release.tag_name != 'experimental'
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+    concurrency:
+      group: windows-build-${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: tools/requirements-setup.txt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-release
+          cache-on-failure: true
+      # Cargo's dependency cache excludes our vendored Bevy crates. Cache their
+      # compiler outputs by content as well, independent of checkout timestamps.
+      - uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Check updater and publisher without starting game
+        run: python -m unittest discover -s tools -p "test_*release*.py" -v
+      - name: Check updater protocol
+        run: python -m unittest discover -s tools -p "test_update*.py" -v
+      - name: Check character package update transaction
+        run: python tools/mixamo_to_skate/check_package.py --transaction-only
+      - name: Check isolated asset refresh and failure recovery
+        run: python -m unittest tools.asset_pipeline.test_versions -v
+      - name: Build Windows package
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || 'experimental' }}
+          RUSTC_WRAPPER: sccache
+        run: ./scripts/Build-Release.ps1
+      - name: Report compiler cache hits
+        if: always()
+        shell: pwsh
+        run: sccache --show-stats
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skate3rust-windows-x64
+          retention-days: 7
+          path: |
+            target/skate3rust-windows-x64.zip
+            target/skate3rust-windows-x64.zip.sha256
+            target/release.json
+  publish:
+    needs: windows
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: windows-release-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: skate3rust-windows-x64
+          path: target
+      - name: Publish rolling experimental
+        if: github.event_name != 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/publish_experimental.py --directory target
+      - name: Attach numbered release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" target/skate3rust-windows-x64.zip target/skate3rust-windows-x64.zip.sha256 target/release.json --clobber

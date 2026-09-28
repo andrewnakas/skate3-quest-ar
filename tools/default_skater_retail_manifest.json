@@ -1,0 +1,328 @@
+{
+  "schema": 1,
+  "platform": "xbox360",
+  "title_update": "TU3 / retail 1.05",
+  "preset": {
+    "name": "SavedRecipeFallbackMale",
+    "recipe_sha256": "FDE81E75125250266EE3118705ACB921B6A89F903810683BF91190FC1C13237E",
+    "recipe_size": 157948,
+    "payload_offset": 16,
+    "recipe_name": "cas_db",
+    "recipe_type": 3,
+    "gender": 1,
+    "alternative_female_recipe_sha256": "D8F0227F5B93C688CE7093A6694BFFB2455C8FF643D7F6FE61F6A2317281C8F5",
+    "body_mods": {
+      "skinniness": 0.0,
+      "fatness": 0.0,
+      "face_fields": 0.25
+    }
+  },
+  "morph_assembly": {
+    "encoding": "rx2-dense-position-delta-direct-weight-v1",
+    "face_targets": [
+      "local_brows_depth",
+      "local_brows_height",
+      "local_brows_rotation",
+      "local_chin_length",
+      "local_eye_height",
+      "local_eye_rotation",
+      "local_eye_width",
+      "local_jaw_chiseled",
+      "local_jaw_depth",
+      "local_mouth_corner",
+      "local_mouth_height",
+      "local_mouth_lipsize",
+      "local_mouth_width",
+      "local_nose_curve",
+      "local_nose_height",
+      "local_nose_length",
+      "local_nose_width"
+    ],
+    "expected_targets": {
+      "Arm": [
+        "fat_male_arms_shoulderdown_h",
+        "thin_male_arms_shoulderdown_h"
+      ],
+      "Feet": [],
+      "Hair": [],
+      "Organ": [],
+      "OuterTorso": [
+        "fat_tanktop_h",
+        "thin_tanktop_h"
+      ],
+      "Pants": [
+        "fat_denim_straight_leg_pants_male_h",
+        "thin_denim_straight_leg_pants_male_h"
+      ],
+      "Rostral": [
+        "fat",
+        "local_brows_depth",
+        "local_brows_height",
+        "local_brows_rotation",
+        "local_chin_length",
+        "local_eye_height",
+        "local_eye_rotation",
+        "local_eye_width",
+        "local_jaw_chiseled",
+        "local_jaw_depth",
+        "local_mouth_corner",
+        "local_mouth_height",
+        "local_mouth_lipsize",
+        "local_mouth_width",
+        "local_nose_curve",
+        "local_nose_height",
+        "local_nose_length",
+        "local_nose_width",
+        "thin"
+      ],
+      "SkateBoard": [],
+      "SkateTruck": [],
+      "SkateWheel": []
+    }
+  },
+  "archive": {
+    "name": "createacharacter.big",
+    "sha256": "B87E9E01D446DF37D707D0F2AC2AB872BAF29BBA91EEAE5FD08997C7D475D4EB",
+    "size": 472328128
+  },
+  "catalog": {
+    "composite": "cas_db_xfd1ca62f_000",
+    "outer_torso_requires_arm_model": "shoulder",
+    "outer_torso_type": "tanktop",
+    "pants_wear_style": "low waist pant",
+    "selected_lod": 0,
+    "unselected_slots": [
+      "Accessory",
+      "Glasses",
+      "Hat",
+      "InnerTorso",
+      "Jewellery",
+      "Leg",
+      "Misc",
+      "Sock",
+      "WristItem"
+    ]
+  },
+  "components": [
+    {
+      "slot": "Arm",
+      "asset_id": "af71f8ae8ef28d10",
+      "model_id": "00000dce03e38811",
+      "model_arena_id": "b00d7ceaa2cb1b8b",
+      "low_model_id": "00000dcf03e38811",
+      "low_model_arena_id": "d1b961a8181c66a0",
+      "material_id": "0000557b03e38817",
+      "tint": [0.72, 0.57, 0.49],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "blurmask": "0000228f03e38818",
+        "specular": "0000216603e38818",
+        "normal": "0000229103e38818",
+        "decal": "00000e7403e38818",
+        "diffuse": "0000228c03e38818",
+        "decal2": "2c7f3818000201de"
+      }
+    },
+    {
+      "slot": "Feet",
+      "asset_id": "85b73da337acc9ce",
+      "model_id": "2c7f381100170192",
+      "model_arena_id": "8435d230d628fc21",
+      "low_model_id": "2c7f381100170193",
+      "low_model_arena_id": "8435d230d628fc20",
+      "material_id": "2c7f381700171aa8",
+      "tint": [1.0, 1.0, 1.0],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "normal": "2c7f381800171957",
+        "diffuse": "2c7f381800171958",
+        "decal2": "2c7f3818001702f9"
+      }
+    },
+    {
+      "slot": "Hair",
+      "asset_id": "bab72a34fa64163b",
+      "model_id": "00000de203e38811",
+      "model_arena_id": "cf9fd166506ed9b7",
+      "low_model_id": "00000de303e38811",
+      "low_model_arena_id": "9b4d6ba733dcee6e",
+      "material_id": "00000c4c03e38817",
+      "tint": [0.02, 0.01, 0.01],
+      "alpha_mode": "MASK",
+      "alpha_cutoff": 0.5,
+      "textures": {
+        "alpha": "00000b8e03e38818",
+        "normal": "00000b8d03e38818",
+        "diffuse": "00000b8c03e38818"
+      }
+    },
+    {
+      "slot": "Organ",
+      "asset_id": "b278a4bfb3d6c4bc",
+      "model_id": "00000e1a03e38811",
+      "model_arena_id": "b248ee9743b353d4",
+      "low_model_id": "00000e1b03e38811",
+      "low_model_arena_id": "967dd98bf69f281f",
+      "material_id": "00000c6203e38817",
+      "tint": [1.0, 1.0, 1.0],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "normal": "00000bb903e38818",
+        "environment": "000000ae03e38818",
+        "diffuse": "00000bb803e38818"
+      }
+    },
+    {
+      "slot": "OuterTorso",
+      "asset_id": "a3a732c5dd7e7e2c",
+      "model_id": "00000ec603e38811",
+      "model_arena_id": "e9317c9a61e316dd",
+      "low_model_id": "00000ec703e38811",
+      "low_model_arena_id": "e44b4f1f38d703ec",
+      "material_id": "0000129b03e38817",
+      "tint": [1.0, 1.0, 1.0],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "normal": "00000fa103e38818",
+        "diffuse": "00000fa203e38818",
+        "decal2": "00000bc103e38818"
+      }
+    },
+    {
+      "slot": "Pants",
+      "asset_id": "d92b14a037b78985",
+      "model_id": "2c7f381100170177",
+      "model_arena_id": "86947c3d00e4326b",
+      "low_model_id": "2c7f381100170178",
+      "low_model_arena_id": "86947c3d00e43264",
+      "material_id": "2c7f3817001719cd",
+      "tint": [1.0, 1.0, 1.0],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "normal": "2c7f3818001718aa",
+        "diffuse": "2c7f3818001718a9",
+        "decal2": "2c7f3818001702f9"
+      }
+    },
+    {
+      "slot": "Rostral",
+      "asset_id": "9461df2eb3d482dc",
+      "model_id": "00000ee803e38811",
+      "model_arena_id": "99fd3f0b428a0ed1",
+      "low_model_id": "00000ee903e38811",
+      "low_model_arena_id": "d009e2ecab1bca60",
+      "material_id": "2c7f3817001715dc",
+      "tint": [0.72, 0.57, 0.49],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "blurmask": "00001e8403e38818",
+        "specular": "2c7f381800171ebf",
+        "normal": "2c7f381800171ec3",
+        "decal": "2c7f3818001702f8",
+        "diffuse": "2c7f3818001714ee"
+      }
+    },
+    {
+      "slot": "SkateBoard",
+      "asset_id": "a841a65d5c4dd593",
+      "model_id": "0000157803e38811",
+      "model_arena_id": "b593dc0feab56475",
+      "low_model_id": "0000157903e38811",
+      "low_model_arena_id": "98009e1d35783be4",
+      "material_id": "000044e603e38817",
+      "tint": [1.0, 1.0, 1.0],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "normal": "0000128503e38818",
+        "decal": "00000f9603e38818",
+        "diffuse": "0000136403e38818",
+        "decal2": "0000135c03e38818"
+      }
+    },
+    {
+      "slot": "SkateTruck",
+      "asset_id": "c6f01c93097b7fb5",
+      "model_id": "0000157a03e38811",
+      "model_arena_id": "dfecb509271926a2",
+      "low_model_id": "0000157b03e38811",
+      "low_model_arena_id": "88391098cbc316f1",
+      "material_id": "000048e603e38817",
+      "tint": [1.0, 1.0, 1.0],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "normal": "0000137203e38818",
+        "diffuse": "000013a703e38818"
+      }
+    },
+    {
+      "slot": "SkateWheel",
+      "asset_id": "87d0fa0ea0366b23",
+      "model_id": "0000157c03e38811",
+      "model_arena_id": "c114bcf0f996c74e",
+      "low_model_id": "0000157d03e38811",
+      "low_model_arena_id": "ea8500ad6cdc5ed9",
+      "material_id": "00004acc03e38817",
+      "tint": [1.0, 1.0, 1.0],
+      "alpha_mode": "OPAQUE",
+      "textures": {
+        "normal": "0000128303e38818",
+        "diffuse": "000015b703e38818"
+      }
+    }
+  ],
+  "model_sha256": {
+    "00000dce03e38811": "F17AAA8A44A78FF5844950C953E15AE817458F11EE34856874D1EB9EBFC50FD3",
+    "2c7f381100170192": "1321D50D9984C2A771EF0CC48FFB9BE9A63DAEAED0308D4909CC1A4BBF8AC196",
+    "00000de203e38811": "B8A440AD58EAE3B5F375354892B18E4EE518B14CF841AE8862B8E9D0686E3E61",
+    "00000e1a03e38811": "E56AE27BE3BA883F2DE73695192E80955DAE9DAD2E552CC170D7254F1D19550B",
+    "00000ec603e38811": "6DF415A645383F7366BA08CCB473058B5DBD6C9B9186761124816D44FE210AB9",
+    "2c7f381100170177": "5B47EC40843B34CEB253EA6E8FCD48B4AF8C0B526176D6131EC7E7F5AD4D5837",
+    "00000ee803e38811": "C8D5BA552DE1405812BAA1124F8E97E7B8A79385DBA15CEF559100AB3672CB5B",
+    "0000157803e38811": "83EF4A2DAAFF090DDA2DFC6E23876D5DB05AEA8389C1C8BE9950E60141E6F623",
+    "0000157a03e38811": "25BEE11C762E727ACE291424423EE9D3F5059D546822D8E1868FD38542874AAA",
+    "0000157c03e38811": "6B1410C35219D7C70389F1596AB5849E3D4B51A8981B358EB11F9229BD1B65E5"
+  },
+  "texture_sha256": {
+    "0000228f03e38818": "7A2FB8AB8FF4A2CE6C6F7B0E4B3DC126F48A4AC75ADD22DAB389A07DCDFF0ED3",
+    "0000216603e38818": "23A592E8560194F8939E9C6EFD4B1F64881E1B91CA894F163071F79ADC22053D",
+    "0000229103e38818": "43C1F235E50D1D49A46439FC853BC64A948DF609F14C8F19EF7B1A3A285D9E65",
+    "00000e7403e38818": "5F09CB277E1DB524B3F978C1D4E76D4920C6C9CF55C04DE88C1167ECBF2CAA5E",
+    "0000228c03e38818": "FFAF5C5CB95B035496E4A86EDF8F91A0314FD63EBF625BB37B211E0F36A4CE3E",
+    "2c7f3818000201de": "42BBAC8091AB6FC95D99F325E59A4B5A495CC96209599C7A45A40BD61EC0A213",
+    "2c7f381800171957": "C5F22146986A49E03FBEF414690BA6CF32FEAF05A7C79B83CEE3E9816A2C49CB",
+    "2c7f381800171958": "E351F7C0BFDCC91ED5628BDA4A20F9B92162CCDBF024CE271656D913486875A1",
+    "2c7f3818001702f9": "78AC84D4FC1A7DA287CC4A63433F33DF10C5B2C0CAF23428AFE1434329E75759",
+    "00000b8e03e38818": "6BDBC0C40BA7BD8A9CCCA12BCE0B25318FA3641C53774B9B639B80E6A5FF76CA",
+    "00000b8d03e38818": "4F4071BDB9298A22568BE1989EA514004617B910706674B36BA8616239022859",
+    "00000b8c03e38818": "EC07B105F8842F6A2A63671BD46CDCA86DB8E7B901592D6958720A9B36A238E9",
+    "00000bb903e38818": "3D4FC691AA70D0C8DD4D70106C9EDD53EB47CF74C3CD9E611712E855C4837C6E",
+    "000000ae03e38818": "F6F38E5BB43AC97F5C4E208E3083AE0074F87444B207A44F134F75140522E1E7",
+    "00000bb803e38818": "F0D650314F1E981E093583D557CF33E7A402D7642CD35833E8BFB63AA09398C2",
+    "00000fa103e38818": "E27819073F5DD7E7E1C245C0F249D3593D7036F41F5E07376A80598D3AA1BC11",
+    "00000fa203e38818": "4A9DA44B56BD0DCA89E011FBA7883D2C0243FC77B5B8C216605B9717A00285AE",
+    "00000bc103e38818": "F39F911381D41C0D0869FCB59C0D734E2FD089501B81EE7CEBC80EE98D3FB834",
+    "2c7f3818001718aa": "7EB3158D87604F79555B194EDB8877A2AF0B939F157E036F4C36F4EEA2F9234D",
+    "2c7f3818001718a9": "CA0BB1EF315091D85248BA2FDB98F0C114A3D38C1BC84E19D6F60282CF7DAF4E",
+    "00001e8403e38818": "E17457281CBDFCF77DEA241A1AEBFEE5A2773CEA349B62B3EB3104A6BEDAB105",
+    "2c7f381800171ebf": "82F82A90B84378DA741B7AA88E72CB4EF483D15E976754BCC8B3E3D83C37C29A",
+    "2c7f381800171ec3": "0FC45251F55ECA1F9E15FB33E290EFEF0CA27F324460003C794A7DF6E06F2691",
+    "2c7f3818001702f8": "516D9C45B1A4957321A2AEA3CBCEEB1AB44D3BA3BDD0BABD492B903F28236338",
+    "2c7f3818001714ee": "3C58F5070B8DD0ACAD5E1151168E8E7FA4414FADDC1C148D39BAD45382C6C2F6",
+    "0000128503e38818": "16DCB338A728877AEB6F5080F080AF83432B77825ECE2F0FA82AEB150B3BC4EF",
+    "00000f9603e38818": "07387C6EC3600D8A5D665553260F89263C502F89DFC814C50FE78A14609266DA",
+    "0000136403e38818": "00D8BCAE2F18204E05A23D681580E72A01814490E56A26BD9D37B6959F9DD7E4",
+    "0000135c03e38818": "36A17CEE8EB7A033C42E32A6A489FEC60B6EB1708971320176401B6C2E1C2AA7",
+    "0000137203e38818": "1A0565A75F33AF0E0CDC12863875619E5F78CDBA8A0B218436BDBDE1E50FD4EF",
+    "000013a703e38818": "4C0EC4D1C440FB2608C5B26D76C10D9D077E209373274294C93A24B19E255EB7",
+    "0000128303e38818": "2344E415184292C4FD5AD550DD19EFD9BDA046691E1A5F67AD7546263B19B88B",
+    "000015b703e38818": "A94F3754D662E01EEF887B4F11D9944444557F0DA5451DE4AFB97411EBF21AE7"
+  },
+  "rig_evidence": {
+    "retail_cac_bone_count": 131,
+    "cac_skeleton_sha256": "29199C2013441880D1FDE75EDFC5381046A55CCA69B8BED442D80F8CD9ACF34A",
+    "selected_unique_rx2_bones_including_board": 110,
+    "selected_vertices": 9415,
+    "selected_triangles": 14584,
+    "runtime_policy": "Map shipped vertex influences by retail bone name into the existing compact OnBoard/OffBoard carrier; absent helper/finger channels resolve to the nearest retail ancestor while the full 131-channel bind evidence is validated offline."
+  }
+}
