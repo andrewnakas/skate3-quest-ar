@@ -85,7 +85,12 @@ impl Plugin for ScoringHudPlugin {
         ))
         .add_systems(
             PostStartup,
-            setup.after(crate::graphics_menu::PresentationSetup),
+            setup
+                .after(crate::graphics_menu::PresentationSetup)
+                // A flat-screen overlay: in XR nothing shows it, and loading
+                // it stalled the first frame ~4.5 s on Quest (input queued
+                // that long is an ANR).
+                .run_if(|config: Res<Config>| config.xr.is_none()),
         )
         .add_systems(
             FixedUpdate,

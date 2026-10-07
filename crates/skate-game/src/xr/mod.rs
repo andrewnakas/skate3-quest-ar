@@ -87,7 +87,8 @@ impl Plugin for XrPlugin {
             })
             .add_systems(PostUpdate, headset_only_rendering)
             .add_observer(no_window_surface)
-            .add_observer(no_eye_occlusion_culling);
+            .add_observer(no_eye_occlusion_culling)
+            .add_observer(no_eye_indirect_drawing);
     }
 }
 
@@ -102,6 +103,17 @@ fn no_window_surface(add: On<Add, bevy::window::RawHandleWrapper>, mut commands:
     commands
         .entity(add.entity)
         .remove::<bevy::window::RawHandleWrapper>();
+}
+
+/// Draw the eye views with CPU-built batches instead of GPU preprocessing
+/// and indirect draws. On device the Adreno hung at the same command-buffer
+/// offset every frame from the first XR frame on, and the indirect path is
+/// the one the vendored bevy_pbr patch changes. The component must be there
+/// before the camera first renders, hence an observer on spawn.
+fn no_eye_indirect_drawing(add: On<Add, bevy_mod_xr::camera::XrCamera>, mut commands: Commands) {
+    commands
+        .entity(add.entity)
+        .insert(bevy::render::view::NoIndirectDrawing);
 }
 
 /// The graphics menu puts GPU occlusion culling on every `Camera3d`. The eye
@@ -121,8 +133,8 @@ fn no_eye_occlusion_culling(
 }
 
 /// Quest's GPU only has budget for the two eye views. The flat-screen
-/// gameplay camera (re-activated every frame by `camera::present`) and the
-/// window HUD cameras render where nobody can see them, and shadow cascades
+/// gameplay camera and the window HUD cameras render where nobody can see
+/// them (`camera::present` leaves the gameplay one off in XR), and shadow cascades
 /// per eye were most of the remaining cost (13 fps vs 72 on device).
 fn headset_only_rendering(
     mut cameras: Query<&mut Camera, Without<bevy_mod_xr::camera::XrCamera>>,
