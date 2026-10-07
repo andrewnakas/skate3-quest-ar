@@ -81,6 +81,7 @@ pub(crate) fn present(
     virtual_time: Res<Time<Virtual>>,
     mut vehicle_blend: Local<VehicleCameraBlend>,
     customiser: Option<Res<crate::customiser::Customiser>>,
+    config: Res<Config>,
     mut cameras: Query<(&mut Camera, &mut Transform, &mut Projection), With<GameplayCamera>>,
 ) {
     if let Ok(window) = windows.single() {
@@ -144,7 +145,8 @@ pub(crate) fn present(
         // Vehicle motion is already interpolated with the rider/chassis. A separate
         // follow filter introduces relative motion and makes fixed ticks visible.
         vehicle_blend.previous = Some(*transform);
-        camera.is_active = true;
+        // In XR the eye cameras are the only views (see `xr::headset_only_rendering`).
+        camera.is_active = config.xr.is_none();
     }
 }
 

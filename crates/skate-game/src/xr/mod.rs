@@ -44,14 +44,19 @@ pub(crate) fn plugins(base: PluginGroupBuilder) -> PluginGroupBuilder {
     {
         exts.raw_mut().khr_android_create_instance = true;
     }
-    add_xr_plugins(base).set(OxrInitPlugin {
-        app_info: AppInfo {
-            name: "Skate 3 AR".into(),
-            ..AppInfo::BEVY
-        },
-        exts,
-        ..default()
-    })
+    add_xr_plugins(base)
+        .set(OxrInitPlugin {
+            app_info: AppInfo {
+                name: "Skate 3 AR".into(),
+                ..AppInfo::BEVY
+            },
+            exts,
+            ..default()
+        })
+        // Every bevy_mod_openxr example runs without it. With it, the OpenXR
+        // frame loop is split across two threads; that is a suspect in the
+        // Adreno GPU hangs.
+        .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
 }
 
 pub(crate) struct XrPlugin(pub XrOptions);
@@ -80,7 +85,38 @@ impl Plugin for XrPlugin {
             .add_systems(PostStartup, |mut clear: ResMut<ClearColor>| {
                 clear.0 = Color::NONE;
             })
-            .add_systems(PostUpdate, headset_only_rendering);
+            .add_systems(PostUpdate, headset_only_rendering)
+            .add_observer(no_window_surface)
+            .add_observer(no_eye_occlusion_culling);
+    }
+}
+
+/// Nothing is ever drawn to the Android window, but bevy_render still builds
+/// a Vulkan swapchain on it for any window with a `RawHandleWrapper`, holds
+/// an acquired image forever and presents one undefined frame. That surface
+/// shares the NativeActivity window with the OpenXR runtime and is torn
+/// down and rebuilt on every pause/resume. Without the wrapper the window is
+/// never extracted, so no surface exists. bevy_winit re-inserts the wrapper
+/// on each Android resume, which re-triggers this.
+fn no_window_surface(add: On<Add, bevy::window::RawHandleWrapper>, mut commands: Commands) {
+    commands
+        .entity(add.entity)
+        .remove::<bevy::window::RawHandleWrapper>();
+}
+
+/// The graphics menu puts GPU occlusion culling on every `Camera3d`. The eye
+/// cameras skip it: the scene is a few props, and the indirect/preprocess
+/// path it enables is a suspect in the Adreno GPU hangs.
+fn no_eye_occlusion_culling(
+    add: On<Add, bevy::render::experimental::occlusion_culling::OcclusionCulling>,
+    eyes: Query<(), With<bevy_mod_xr::camera::XrCamera>>,
+    mut commands: Commands,
+) {
+    if eyes.contains(add.entity) {
+        commands.entity(add.entity).remove::<(
+            bevy::core_pipeline::prepass::DepthPrepass,
+            bevy::render::experimental::occlusion_culling::OcclusionCulling,
+        )>();
     }
 }
 

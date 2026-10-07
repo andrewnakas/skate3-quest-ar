@@ -24,21 +24,47 @@ const PERMISSIONS: [&str; 2] = [
     "com.oculus.permission.USE_ANCHOR_API",
 ];
 
-/// Fire-and-forget: shows the OS consent dialog if it hasn't been answered
-/// yet. The grant lands asynchronously (there's no `onRequestPermissionsResult`
-/// handler here), so callers just keep retrying the OpenXR call until it
-/// stops returning a permission error.
+/// `PackageManager.PERMISSION_GRANTED`.
+const PERMISSION_GRANTED: i32 = 0;
+
+/// Fire-and-forget: shows the OS consent dialog for any permission that
+/// isn't granted yet. The grant lands asynchronously (there's no
+/// `onRequestPermissionsResult` handler here), so callers just keep retrying
+/// the OpenXR call until it stops returning a permission error.
+///
+/// Already-granted permissions are skipped and, when nothing is missing, no
+/// request is made at all: `requestPermissions` always starts
+/// GrantPermissionsActivity (a Quest "exclusive system dialog"), which pauses
+/// and stops this activity mid-startup even when it has nothing to ask.
 pub fn request_scene_permissions() {
     let Some(app) = bevy::android::ANDROID_APP.get() else {
         eprintln!("skate_quest: ANDROID_APP not set yet, skipping permission request");
         return;
     };
     let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) };
-    let result = vm.attach_current_thread(|env| -> jni::errors::Result<()> {
+    let result = vm.attach_current_thread(|env| -> jni::errors::Result<Vec<&'static str>> {
         let activity = unsafe { JObject::from_raw(&*env, app.activity_as_ptr().cast()) };
-        let first = JString::from_str(env, PERMISSIONS[0])?;
-        let array = JObjectArray::<JString>::new(env, PERMISSIONS.len(), &first)?;
-        for (i, name) in PERMISSIONS.iter().enumerate().skip(1) {
+        let mut missing = Vec::new();
+        for name in PERMISSIONS {
+            let jname = JString::from_str(env, name)?;
+            let state = env
+                .call_method(
+                    &activity,
+                    jni_str!("checkSelfPermission"),
+                    jni_sig!("(Ljava/lang/String;)I"),
+                    &[JValue::from(&jname)],
+                )?
+                .i()?;
+            if state != PERMISSION_GRANTED {
+                missing.push(name);
+            }
+        }
+        let Some(first) = missing.first() else {
+            return Ok(missing);
+        };
+        let first = JString::from_str(env, first)?;
+        let array = JObjectArray::<JString>::new(env, missing.len(), &first)?;
+        for (i, name) in missing.iter().enumerate().skip(1) {
             let jname = JString::from_str(env, name)?;
             array.set_element(env, i, &jname)?;
         }
@@ -48,10 +74,13 @@ pub fn request_scene_permissions() {
             jni_sig!("([Ljava/lang/String;I)V"),
             &[JValue::from(&array), JValue::from(0i32)],
         )?;
-        Ok(())
+        Ok(missing)
     });
     match result {
-        Ok(()) => eprintln!("skate_quest: requested {PERMISSIONS:?}"),
+        Ok(missing) if missing.is_empty() => {
+            eprintln!("skate_quest: {PERMISSIONS:?} already granted")
+        }
+        Ok(missing) => eprintln!("skate_quest: requested {missing:?}"),
         Err(e) => eprintln!("skate_quest: requestPermissions failed: {e}"),
     }
 }
