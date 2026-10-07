@@ -53,8 +53,146 @@ mod world;
 #[cfg(feature = "xr")]
 mod xr;
 
+/// Startup loading. `Err` is the exit to return, including the asset
+/// check's success.
+fn load() -> Result<Loaded, bevy::app::AppExit> {
+    eprintln!("REPORT_META stage=configuration_and_installation");
+    let config = match bevy::log::info_span!("load_configuration_and_map")
+        .in_scope(config::Config::from_env)
+    {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("{error}");
+            return Err(bevy::app::AppExit::error());
+        }
+    };
+    profiling::map_metadata(&config);
+    eprintln!(
+        "REPORT_META startup=map_fingerprint:{:016x} difficulty:{} multiplayer_requested:{} custom_appearance:{} renderer:Vulkan",
+        config.map_fingerprint,
+        config.difficulty.key(),
+        config.multiplayer.host.is_some() || config.multiplayer.direct.is_some(),
+        config.multiplayer.appearance.is_some()
+    );
+    eprintln!("REPORT_META stage=gameplay_configuration");
+    if let Err(error) = skate_data::input_config::StockGameplayConfig::load(&config.asset_root) {
+        eprintln!("{error}");
+        return Err(bevy::app::AppExit::error());
+    }
+    eprintln!("REPORT_META stage=asset_manifest");
+    let manifest = match bevy::log::info_span!("load_manifest")
+        .in_scope(|| skate_data::GameAssets::load(&config.asset_root))
+    {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            eprintln!("{error}");
+            return Err(bevy::app::AppExit::error());
+        }
+    };
+    eprintln!("REPORT_META stage=stock_graphs");
+    let graphs = match bevy::log::info_span!("load_graphs")
+        .in_scope(|| graph_runtime::StockGraphs::load(&config.asset_root, &manifest))
+    {
+        Ok(graphs) => graphs,
+        Err(error) => {
+            eprintln!("{error}");
+            return Err(bevy::app::AppExit::error());
+        }
+    };
+    eprintln!("REPORT_META stage=map_validation");
+    if let Some(map) = &config.map {
+        if let Err(error) = skate_world::validate_runtime(map) {
+            eprintln!("{error}");
+            return Err(bevy::app::AppExit::error());
+        }
+    }
+    eprintln!(
+        "SKATE_DIFFICULTY mode={} native_index={}",
+        config.difficulty.key(),
+        config.difficulty as u32
+    );
+    eprintln!("REPORT_META stage=physics_initialization");
+    let mut physics = match bevy::log::info_span!("load_physics").in_scope(|| {
+        physics::GamePhysics::load_with_difficulty(
+            &config.asset_root,
+            config.map.as_ref(),
+            config.difficulty,
+        )
+    }) {
+        Ok(physics) => physics,
+        Err(error) => {
+            eprintln!("{error}");
+            return Err(bevy::app::AppExit::error());
+        }
+    };
+    if config.multiplayer.spawn_offset != 0.0 {
+        let mut spawn =
+            physics.board.part_transforms()[skate_core::physics::board::BodyId::Deck.index()];
+        spawn.translation.x += config.multiplayer.spawn_offset;
+        physics.board.set_transform(spawn);
+    }
+    eprintln!("REPORT_META stage=skater_initialization");
+    let skater = match bevy::log::info_span!("load_skater").in_scope(|| {
+        physics::SkaterRuntime::load(
+            &config.asset_root,
+            &graphs,
+            &physics,
+            config.difficulty.key(),
+        )
+    }) {
+        Ok(skater) => skater,
+        Err(error) => {
+            eprintln!("{error}");
+            return Err(bevy::app::AppExit::error());
+        }
+    };
+    eprintln!("REPORT_META stage=controls_initialization");
+    let controls = match physics::PlayerControls::load(&config.asset_root) {
+        Ok(controls) => controls,
+        Err(error) => {
+            eprintln!("{error}");
+            return Err(bevy::app::AppExit::error());
+        }
+    };
+    if config.check_assets {
+        if let Err(error) = camera::CameraRuntime::load(&config.asset_root) {
+            eprintln!("{error}");
+            return Err(bevy::app::AppExit::error());
+        }
+        eprintln!("SKATE_ASSETS_READY");
+        return Err(bevy::app::AppExit::Success);
+    }
+    Ok(Loaded {
+        config,
+        manifest,
+        graphs,
+        physics,
+        skater,
+        controls,
+    })
+}
+
 /// The whole game; the `skate3rust` binary and the Quest library both start here.
 pub fn run() -> bevy::app::AppExit {
+    run_with(None)
+}
+
+/// Everything startup loads before the app is built.
+struct Loaded {
+    config: config::Config,
+    manifest: skate_data::GameAssets,
+    graphs: graph_runtime::StockGraphs,
+    physics: physics::GamePhysics,
+    skater: physics::SkaterRuntime,
+    controls: physics::PlayerControls,
+}
+
+/// [`run`], optionally loading on a worker thread while `pump` is called
+/// repeatedly on this one. Android needs that: until this thread services
+/// the Activity's looper, the Java UI thread is blocked in onStart and the
+/// window is never shown (an ANR on the first key press), and loading takes
+/// seconds.
+pub fn run_with(pump: Option<&mut dyn FnMut()>) -> bevy::app::AppExit {
     #[cfg(target_os = "android")]
     if let Err(error) = android::prepare() {
         eprintln!("{error}");
@@ -83,115 +221,44 @@ pub fn run() -> bevy::app::AppExit {
         }
     };
     let _startup = bevy::log::info_span!("startup").entered();
-    eprintln!("REPORT_META stage=configuration_and_installation");
-    let config = match bevy::log::info_span!("load_configuration_and_map")
-        .in_scope(config::Config::from_env)
-    {
-        Ok(config) => config,
-        Err(error) => {
-            eprintln!("{error}");
-            return bevy::app::AppExit::error();
-        }
+    let loaded = match pump {
+        None => load(),
+        Some(pump) => std::thread::scope(|scope| {
+            let loader = std::thread::Builder::new()
+                .name("startup-loader".into())
+                .stack_size(64 << 20)
+                .spawn_scoped(scope, load)
+                .expect("could not start the startup loader thread");
+            while !loader.is_finished() {
+                pump();
+            }
+            loader
+                .join()
+                .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+        }),
     };
-    profiling::map_metadata(&config);
-    eprintln!(
-        "REPORT_META startup=map_fingerprint:{:016x} difficulty:{} multiplayer_requested:{} custom_appearance:{} renderer:Vulkan",
-        config.map_fingerprint,
-        config.difficulty.key(),
-        config.multiplayer.host.is_some() || config.multiplayer.direct.is_some(),
-        config.multiplayer.appearance.is_some()
-    );
-    eprintln!("REPORT_META stage=gameplay_configuration");
-    if let Err(error) = skate_data::input_config::StockGameplayConfig::load(&config.asset_root) {
-        eprintln!("{error}");
-        return bevy::app::AppExit::error();
-    }
-    eprintln!("REPORT_META stage=asset_manifest");
-    let manifest = match bevy::log::info_span!("load_manifest")
-        .in_scope(|| skate_data::GameAssets::load(&config.asset_root))
-    {
-        Ok(manifest) => manifest,
-        Err(error) => {
-            eprintln!("{error}");
-            return bevy::app::AppExit::error();
-        }
+    let Loaded {
+        config,
+        manifest,
+        graphs,
+        physics,
+        skater,
+        controls,
+    } = match loaded {
+        Ok(loaded) => loaded,
+        Err(exit) => return exit,
     };
-    eprintln!("REPORT_META stage=stock_graphs");
-    let graphs = match bevy::log::info_span!("load_graphs")
-        .in_scope(|| graph_runtime::StockGraphs::load(&config.asset_root, &manifest))
-    {
-        Ok(graphs) => graphs,
-        Err(error) => {
-            eprintln!("{error}");
-            return bevy::app::AppExit::error();
-        }
-    };
-    eprintln!("REPORT_META stage=map_validation");
-    if let Some(map) = &config.map {
-        if let Err(error) = skate_world::validate_runtime(map) {
-            eprintln!("{error}");
-            return bevy::app::AppExit::error();
-        }
-    }
-    eprintln!(
-        "SKATE_DIFFICULTY mode={} native_index={}",
-        config.difficulty.key(),
-        config.difficulty as u32
-    );
-    eprintln!("REPORT_META stage=physics_initialization");
-    let mut physics = match bevy::log::info_span!("load_physics").in_scope(|| {
-        physics::GamePhysics::load_with_difficulty(
-            &config.asset_root,
-            config.map.as_ref(),
-            config.difficulty,
-        )
-    }) {
-        Ok(physics) => physics,
-        Err(error) => {
-            eprintln!("{error}");
-            return bevy::app::AppExit::error();
-        }
-    };
-    if config.multiplayer.spawn_offset != 0.0 {
-        let mut spawn =
-            physics.board.part_transforms()[skate_core::physics::board::BodyId::Deck.index()];
-        spawn.translation.x += config.multiplayer.spawn_offset;
-        physics.board.set_transform(spawn);
-    }
-    eprintln!("REPORT_META stage=skater_initialization");
-    let skater = match bevy::log::info_span!("load_skater").in_scope(|| {
-        physics::SkaterRuntime::load(
-            &config.asset_root,
-            &graphs,
-            &physics,
-            config.difficulty.key(),
-        )
-    }) {
-        Ok(skater) => skater,
-        Err(error) => {
-            eprintln!("{error}");
-            return bevy::app::AppExit::error();
-        }
-    };
-    eprintln!("REPORT_META stage=controls_initialization");
-    let controls = match physics::PlayerControls::load(&config.asset_root) {
-        Ok(controls) => controls,
-        Err(error) => {
-            eprintln!("{error}");
-            return bevy::app::AppExit::error();
-        }
-    };
-    if config.check_assets {
-        if let Err(error) = camera::CameraRuntime::load(&config.asset_root) {
-            eprintln!("{error}");
-            return bevy::app::AppExit::error();
-        }
-        eprintln!("SKATE_ASSETS_READY");
-        return bevy::app::AppExit::Success;
-    }
     eprintln!("REPORT_META stage=renderer_and_app_initialization");
     let mut app = app::build(config, manifest, graphs, physics, skater);
     app.insert_resource(controls);
+    // The winit runner would do this first thing; doing it here puts its
+    // cost (render/OpenXR plugin setup, before the Android looper is ever
+    // serviced) in the startup log.
+    if app.plugins_state() == bevy::app::PluginsState::Ready {
+        eprintln!("REPORT_META stage=plugins_finish");
+        app.finish();
+        app.cleanup();
+    }
     eprintln!("REPORT_META stage=app_run");
     drop(_startup);
     app.run()

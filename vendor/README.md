@@ -22,8 +22,20 @@ so this one can't be dropped, and the app learns the real focus state instead
 of being stuck at whatever it guessed before the window existed. No other
 behavior changes.
 
-`winit` is the unmodified crates.io 0.30.13 source except for this one
-change. Its original Apache 2.0 license is included.
+That patch alone did not stop the ANR. Its actual cause is that
+android-activity blocks the Java UI thread inside onStart/onResume/onPause and
+the window and input-queue callbacks until the native thread polls the
+looper, and the game loaded for ~8 s before starting its event loop. On
+device, `wm_on_start_called` reported onStart taking 13.5 s, so the window was
+never added. The second patch adds `winit::platform::android::pump_lifecycle`,
+which the Quest entry point calls in a loop while loading runs on another
+thread. Resume, window and focus state it consumes are stored in statics.
+`EventLoop::new` takes the resumed state from them, and the first loop
+iteration replays `Resumed` + `Focused` if a window already exists. Input that
+arrives before the loop is reported handled and dropped.
+
+`winit` is the unmodified crates.io 0.30.13 source except for these two
+changes. Its original Apache 2.0 license is included.
 
 ## Bindless material resource reuse
 

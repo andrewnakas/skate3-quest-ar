@@ -20,6 +20,9 @@ libc = "0.2"
 # loads, so this doesn't drag in a second copy of the crate.
 jni = "0.22"
 ndk-context = "0.1"
+# The vendored copy (see vendor/README.md) bevy_winit already uses; this
+# crate calls its `pump_lifecycle` while the game loads.
+winit = { version = "0.30.13", default-features = false }
 
 # A plain, non-secret debug key (standard "androiddebugkey" alias/password,
 # like Android Studio's own ~/.android/debug.keystore) so `--release` builds

@@ -22,6 +22,22 @@ pub fn main() {
         // engine startup.
         permissions::request_scene_permissions();
     }
+    #[cfg(target_os = "android")]
+    let exit = {
+        let app = bevy::android::ANDROID_APP
+            .get()
+            .expect("bevy_main stores the AndroidApp before calling main")
+            .clone();
+        // Keep the Activity lifecycle moving while the game loads; see
+        // `winit::platform::android::pump_lifecycle`.
+        skate_game::run_with(Some(&mut || {
+            winit::platform::android::pump_lifecycle(
+                &app,
+                Some(std::time::Duration::from_millis(16)),
+            )
+        }))
+    };
+    #[cfg(not(target_os = "android"))]
     let exit = skate_game::run();
     eprintln!("skate_game::run exited: {exit:?}");
 }

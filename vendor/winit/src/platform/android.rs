@@ -116,6 +116,13 @@ impl ActiveEventLoopExtAndroid for ActiveEventLoop {
     }
 }
 
+/// Service the Activity lifecycle before the event loop is created; see
+/// the implementation for why. (Local patch, not upstream winit.)
+#[cfg(android_platform)]
+pub fn pump_lifecycle(app: &AndroidApp, timeout: Option<std::time::Duration>) {
+    crate::platform_impl::pump_lifecycle(app, timeout)
+}
+
 /// Additional methods on [`WindowAttributes`] that are specific to Android.
 pub trait WindowAttributesExtAndroid {}
 

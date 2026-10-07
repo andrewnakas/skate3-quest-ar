@@ -34,6 +34,41 @@ pub(crate) use crate::icon::NoIcon as PlatformIcon;
 
 static HAS_FOCUS: AtomicBool = AtomicBool::new(true);
 
+// Lifecycle state seen by `pump_lifecycle` before the event loop existed,
+// handed to the loop when it starts (the events themselves were consumed).
+static EARLY_RESUMED: AtomicBool = AtomicBool::new(false);
+static EARLY_WINDOW: AtomicBool = AtomicBool::new(false);
+
+/// Service the Activity's lifecycle before an [`EventLoop`] exists.
+///
+/// android-activity blocks the Java UI thread in onStart/onResume/onPause,
+/// window and input-queue callbacks until this thread polls the looper.
+/// An app that spends seconds loading before it starts its event loop
+/// therefore keeps its window from ever being added, and a key press in that
+/// time is an ANR ("does not have a focused window"). Calling this in a loop
+/// while loading on another thread keeps the Activity moving. Window, resume
+/// and focus state are replayed to the event loop when it starts; input
+/// arriving before then is dropped (reported handled, so Back does not
+/// finish the Activity).
+pub fn pump_lifecycle(app: &AndroidApp, timeout: Option<Duration>) {
+    app.poll_events(timeout, |event| {
+        if let android_activity::PollEvent::Main(event) = event {
+            match event {
+                MainEvent::Resume { .. } => EARLY_RESUMED.store(true, Ordering::Relaxed),
+                MainEvent::Pause => EARLY_RESUMED.store(false, Ordering::Relaxed),
+                MainEvent::InitWindow { .. } => EARLY_WINDOW.store(true, Ordering::Relaxed),
+                MainEvent::TerminateWindow { .. } => EARLY_WINDOW.store(false, Ordering::Relaxed),
+                MainEvent::GainedFocus => HAS_FOCUS.store(true, Ordering::Relaxed),
+                MainEvent::LostFocus => HAS_FOCUS.store(false, Ordering::Relaxed),
+                _ => {},
+            }
+        }
+    });
+    if let Ok(mut input) = app.input_events_iter() {
+        while input.next(|_| InputStatus::Handled) {}
+    }
+}
+
 /// Returns the minimum `Option<Duration>`, taking into account that `None`
 /// equates to an infinite timeout, not a zero timeout (so can't just use
 /// `Option::min`)
@@ -143,6 +178,7 @@ pub struct EventLoop<T: 'static> {
     cause: StartCause,
     ignore_volume_keys: bool,
     combining_accent: Option<char>,
+    early_window: bool, // `pump_lifecycle` consumed an InitWindow; replay it
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -187,11 +223,12 @@ impl<T: 'static> EventLoop<T> {
             user_events_sender,
             user_events_receiver: PeekableReceiver::from_recv(user_events_receiver),
             loop_running: false,
-            running: false,
+            running: EARLY_RESUMED.load(Ordering::Relaxed),
             pending_redraw: false,
             cause: StartCause::Init,
             ignore_volume_keys: attributes.ignore_volume_keys,
             combining_accent: None,
+            early_window: EARLY_WINDOW.swap(false, Ordering::Relaxed),
         })
     }
 
@@ -206,6 +243,17 @@ impl<T: 'static> EventLoop<T> {
         let mut resized = false;
 
         callback(event::Event::NewEvents(cause), self.window_target());
+
+        if std::mem::take(&mut self.early_window) {
+            callback(event::Event::Resumed, self.window_target());
+            callback(
+                event::Event::WindowEvent {
+                    window_id: window::WindowId(WindowId),
+                    event: event::WindowEvent::Focused(HAS_FOCUS.load(Ordering::Relaxed)),
+                },
+                self.window_target(),
+            );
+        }
 
         if let Some(event) = main_event {
             trace!("Handling main event {:?}", event);
