@@ -55,7 +55,7 @@
 //! arguments disagreed on only 4 calls in 2,000. Measured by patching the layer and re-running, not
 //! argued.
 
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result, fp};

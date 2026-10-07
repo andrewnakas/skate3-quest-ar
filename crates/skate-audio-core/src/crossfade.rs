@@ -96,7 +96,7 @@
 
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result, dsp, fp, stage};
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 /// `((imm & 0xFFFF) << 16)` — the `lis` half of an address, **computed**.
 const fn lis(imm: i32) -> u32 {
@@ -256,7 +256,7 @@ pub fn crossfade(
 }
 
 #[allow(clippy::too_many_arguments)]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn crossfade_body(
     g: &mut Guest,
     count: i32,

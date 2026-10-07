@@ -245,6 +245,23 @@ impl GamePhysics {
         &self.world
     }
 
+    /// AR passthrough: replace the static collision with the test course's
+    /// props on real-world surfaces (world-space quads, room-mesh triangles
+    /// and ledge edges).
+    #[cfg_attr(not(feature = "xr"), allow(dead_code))]
+    pub(crate) fn set_real_surfaces(
+        &mut self,
+        quads: Vec<[skate_core::math::Vector3; 4]>,
+        triangles: Vec<[skate_core::math::Vector3; 3]>,
+        edges: Vec<(skate_core::math::Vector3, skate_core::math::Vector3)>,
+    ) -> Result<(), String> {
+        let world =
+            ground::course_on_real_world(self.settings.floor_material, quads, triangles, edges);
+        self.offboard_grab_scene = offboard::grab_scene::Registry::new(&world, Vec::new(), Vec::new())?;
+        self.world = world;
+        Ok(())
+    }
+
     /// Flat-world convenience used by private-asset integration tests.
     #[cfg(test)]
     pub fn load(asset_root: &std::path::Path) -> Result<Self, String> {

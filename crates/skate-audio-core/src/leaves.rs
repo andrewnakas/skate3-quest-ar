@@ -93,7 +93,6 @@ pub const FIELD_460: u32 = 460;
 /// An object of 0, or a slot base of 0, returns `Err` here: the store would go through a
 /// null-based address. The harness declines those calls too (`Windows()` returns false), so no
 /// recorded vector can contain one, and this is the one input where the two bodies part company.
-#[cfg(target_arch = "x86_64")]
 pub fn stamp_slot(g: &mut Guest, record: u32) -> Result<u64> {
     let object = g.u32(record + RECORD_OBJECT)?; // lwz r11,4(r3)
     let index = g.u32(record + RECORD_INDEX)?; // lwz r9,8(r3)
@@ -237,7 +236,6 @@ pub const COMMAND_TARGET: u32 = 4;
 
 /// Publish the single at `record + 8` onto `target + 56`, and return the record size, 12
 /// (`sub_82B49268`). A command-ring handler, like [`stamp_slot`].
-#[cfg(target_arch = "x86_64")]
 pub fn publish_float(g: &mut Guest, record: u32) -> Result<u64> {
     let target = g.u32(record + COMMAND_TARGET)?; // lwz r11,4(r3)
     let mut fpscr = crate::vmx::Fpscr::capture();
@@ -250,7 +248,6 @@ pub fn publish_float(g: &mut Guest, record: u32) -> Result<u64> {
 
 /// Store the image's zero into the two singles at `+16` and `+20` (`sub_82B3D578`, **thin**: ten
 /// calls a session). The cell is read live rather than assumed to be `0.0`.
-#[cfg(target_arch = "x86_64")]
 pub fn zero_two_fields(g: &mut Guest, object: u32) -> Result<()> {
     let mut fpscr = crate::vmx::Fpscr::capture();
     fpscr.disable_flush_mode_unconditional();
@@ -334,7 +331,6 @@ const _: () = assert!(
 /// `+108` and zeroes the flag bytes at `+113` and `+112`. Otherwise the "set" form stores the double
 /// at `+56`, A at `+64`, B at `+68`, the word at `+72`, and sets `+112`. The double comparison is
 /// unordered, so a NaN takes the set form; and single A is only read when the double matched.
-#[cfg(target_arch = "x86_64")]
 pub fn publish_command(g: &mut Guest, record: u32) -> Result<u64> {
     let mut fpscr = crate::vmx::Fpscr::capture();
     fpscr.disable_flush_mode_unconditional(); // emitted before the lfd
@@ -398,7 +394,6 @@ const _: () = assert!(RAMP_LOWER_LIMIT == 0x8206_0C50);
 /// time. The five points are an arithmetic progression from `first`, each `fadds` single-rounded from
 /// the one before rather than computed as `first + k*step`, and the span is stored at `+20` before the
 /// points are.
-#[cfg(target_arch = "x86_64")]
 pub fn five_point_ramp(g: &mut Guest, rate_field: u32, out: u32) -> Result<u64> {
     let mut fpscr = crate::vmx::Fpscr::capture();
     fpscr.disable_flush_mode_unconditional();
@@ -1117,7 +1112,6 @@ mod tests {
         g.set_u32(RECORD + RECORD_VALUE, value_bits).unwrap();
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn the_marker_and_the_value_land_in_the_indexed_slot() {
         for index in [0u32, 1, 7, 63] {
@@ -1141,7 +1135,6 @@ mod tests {
         }
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn the_index_is_scaled_by_eight_in_thirty_two_bits() {
         // The `rlwinm ...,3,0,28` drops the top three bits, so 2^29 aliases index 0 exactly. A
@@ -1153,7 +1146,6 @@ mod tests {
         assert_eq!(g.f32(SLOTS + 4).unwrap(), 1.0);
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn the_value_round_trips_through_a_double() {
         // Every finite single survives `lfs` then `stfs` exactly, which is what this asserts and all
@@ -1181,7 +1173,6 @@ mod tests {
         // either answer would be asserting this crate's profile flags.
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn a_null_object_is_refused_before_anything_is_written() {
         let mut g = guest();
@@ -1320,7 +1311,6 @@ mod tests {
         assert_eq!(pair_record_size(&mut g, u32::MAX, L2).unwrap(), 88);
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn publish_float_lands_on_the_target_and_returns_twelve() {
         let mut g = small();
@@ -1332,7 +1322,6 @@ mod tests {
         assert_eq!(g.u32(target + 60).unwrap(), 0, "one word, not two");
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn the_two_fields_take_the_image_zero_read_live() {
         let mut g = small();
@@ -1418,7 +1407,6 @@ mod tests {
         );
     }
 
-    #[cfg(target_arch = "x86_64")]
     fn command(g: &mut Guest, value: f64, a: f32, b: f32, word: u32) -> (u32, u32) {
         let (record, target) = (L2, L2 + 0x100);
         g.set_u32(record + COMMAND_TARGET, target).unwrap();
@@ -1432,7 +1420,6 @@ mod tests {
         (record, target)
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn a_command_publishes_the_set_form_unless_it_is_the_clear_one() {
         // Not the sentinel: the set form.
@@ -1504,7 +1491,6 @@ mod tests {
         );
     }
 
-    #[cfg(target_arch = "x86_64")]
     fn ramp_guest(rate: f32) -> Guest {
         let mut g = Guest::single(BASE, 0x400);
         for (addr, v) in [
@@ -1523,14 +1509,12 @@ mod tests {
         g
     }
 
-    #[cfg(target_arch = "x86_64")]
     fn ramp_points(g: &Guest) -> Vec<f32> {
         (0..6u32)
             .map(|k| g.f32(BASE + 0x40 + 4 * k).unwrap())
             .collect()
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn the_ramp_is_an_arithmetic_progression_from_the_scaled_rate() {
         let mut g = ramp_guest(10_000.0);
@@ -1556,7 +1540,6 @@ mod tests {
         );
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn the_rate_clamps_both_ways_and_a_nan_takes_the_lower_limit() {
         for (rate, want) in [(90_000.0f32, 48_000.0f32), (1.0, 2.0), (f32::NAN, 2.0)] {
@@ -1576,7 +1559,6 @@ mod tests {
         }
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn a_span_past_the_ceiling_restarts_from_the_pool_base() {
         let mut g = ramp_guest(40_000.0); // first 40, span 160 > 100

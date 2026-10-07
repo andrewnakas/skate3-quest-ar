@@ -24,7 +24,7 @@
 //! reciprocal refinements, the acos) through [`crate::vmx`] under the VMX mode. Vectors are the
 //! guest's `[x, y, z, w]` element order.
 
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 use crate::fp::{self, fctiwz_low_word, frsp, fsel, mul_single};
 use crate::vmx::{self, Fpscr};
@@ -75,13 +75,13 @@ fn f(bits: u32) -> f32 {
 /// PPC element `i` lives in SSE lane `3 - i` (RexGlue's register layout; `vmx::vmsum3fp`'s mask
 /// relies on it).
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn load(v: Vec4) -> __m128 {
-    _mm_set_ps(v[0], v[1], v[2], v[3])
+    unsafe { _mm_set_ps(v[0], v[1], v[2], v[3]) }
 }
 
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn lanes(v: __m128) -> Vec4 {
     let mut a = [0f32; 4];
     unsafe { _mm_storeu_ps(a.as_mut_ptr(), v) };
@@ -89,32 +89,32 @@ unsafe fn lanes(v: __m128) -> Vec4 {
 }
 
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn el(v: __m128, i: usize) -> f32 {
     unsafe { lanes(v)[i] }
 }
 
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn splat(x: f32) -> __m128 {
-    _mm_set1_ps(x)
+    unsafe { _mm_set1_ps(x) }
 }
 
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn spl(v: __m128, i: usize) -> __m128 {
     unsafe { splat(el(v, i)) }
 }
 
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn words(w: [u32; 4]) -> __m128 {
     unsafe { load([f(w[0]), f(w[1]), f(w[2]), f(w[3])]) }
 }
 
 /// `vsel` of a float by a lane mask.
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn select(a: __m128, b: __m128, mask: __m128) -> __m128 {
     unsafe {
         _mm_castsi128_ps(vmx::vsel(
@@ -128,7 +128,7 @@ unsafe fn select(a: __m128, b: __m128, mask: __m128) -> __m128 {
 /// The reciprocal square root every site spells out: `vrsqrtefp` then two Newton steps,
 /// `x' = x + (x·½)(1 − s·x²)` as `vmulfp`/`vnmsubfp`/`vmaddfp` (two roundings each).
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn rsqrt2(s: __m128) -> __m128 {
     unsafe {
         let (one, half) = (splat(1.0), splat(0.5));
@@ -145,7 +145,7 @@ unsafe fn rsqrt2(s: __m128) -> __m128 {
 
 /// `s · rsqrt(s)`, 0 where `s == 0` (`vcmpeqfp128 0,s ; vsel`).
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn length_of_square(s: __m128) -> __m128 {
     unsafe {
         let r = vmx::vmulfp(s, rsqrt2(s));
@@ -155,7 +155,7 @@ unsafe fn length_of_square(s: __m128) -> __m128 {
 
 /// `|a − b|` over x, y, z: `vsubfp`, `vmsum3fp128`, the length idiom.
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn distance(a: Vec4, b: Vec4) -> f32 {
     unsafe {
         let d = vmx::vsubfp(load(a), load(b));
@@ -183,7 +183,7 @@ fn horizontal(v: Vec4) -> Vec4 {
 
 /// `sub_82453298`: the vector acos (argument and result in `v1`), straight-line polynomial with a
 /// `vrsqrtefp`-refined `sqrt(1 − |x|)`.
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn acos(v1: __m128) -> __m128 {
     unsafe {
         let v60 = vmx::vmulfp(v1, v1);
@@ -242,7 +242,7 @@ fn all(v: Vec4) -> bool {
 /// The shared body of `sub_824AE178` / `sub_824AE418`: the angle between the horizontal vectors
 /// `a` and `b` as `fctiwz(acos(â·b̂) × 65535 × 1/2π)`, or `None` when either is shorter than
 /// 0.0001. Returns the angle and the cross term `b̂.x·â.y − b̂.y·â.x` (lane 0) the callers test.
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn plane_angle(a: Vec4, b: Vec4) -> Option<(i32, f32)> {
     unsafe {
         let (v63, v62) = (load(a), load(b));

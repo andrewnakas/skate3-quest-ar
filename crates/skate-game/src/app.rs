@@ -50,6 +50,24 @@ pub(crate) fn build(
             None,
         ),
     );
+    // Bevy's Android default `AssetReader` only ever reads from inside the
+    // APK's bundled `assets/` (via `AssetManager`); it ignores
+    // `AssetPlugin::file_path` entirely. The Quest build instead pushes a
+    // converted installation to the app's external files directory (see
+    // scripts/quest/push-assets.sh), so the default source needs a plain
+    // filesystem reader pointed there, registered before `AssetPlugin`
+    // builds its own (platform) default.
+    #[cfg(target_os = "android")]
+    {
+        let path = config.asset_root.clone();
+        app.register_asset_source(
+            bevy::asset::io::AssetSourceId::Default,
+            bevy::asset::io::AssetSourceBuilder::new(move || {
+                Box::new(bevy::asset::io::file::FileAssetReader::new(path.clone()))
+                    as Box<dyn bevy::asset::io::ErasedAssetReader>
+            }),
+        );
+    }
     let plugins = DefaultPlugins
             .set(AssetPlugin {
                 file_path: config.asset_root.to_string_lossy().into_owned(),

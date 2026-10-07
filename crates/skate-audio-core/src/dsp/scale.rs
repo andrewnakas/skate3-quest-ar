@@ -66,7 +66,7 @@
 use crate::fp;
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result};
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 /// `(r3 | r4) & 0x7F` — both buffers on a 128-byte boundary.
 pub const ALIGN_MASK: u32 = 0x7F;
@@ -128,7 +128,7 @@ pub fn scale_accumulate(g: &mut Guest, dst: u32, src: u32, count: u32, k: f64) -
 
 // ------------------------------------------------------------------------------ the vector paths
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn scale_vector(g: &mut Guest, dst: u32, src: u32, span: u32, k: f64) -> Result<()> {
     let src_end = src.wrapping_add(span);
 
@@ -175,7 +175,7 @@ unsafe fn scale_vector(g: &mut Guest, dst: u32, src: u32, span: u32, k: f64) -> 
     }
 }
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn accumulate_vector(g: &mut Guest, dst: u32, src: u32, span: u32, k: f64) -> Result<()> {
     let src_end = src.wrapping_add(span);
 
@@ -227,7 +227,7 @@ unsafe fn accumulate_vector(g: &mut Guest, dst: u32, src: u32, span: u32, k: f64
 }
 
 /// Eight `lvx128` at `s + 0 … s + 112`, in that order.
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 unsafe fn load_block(g: &Guest, s: u32) -> Result<[__m128; 8]> {
     let mut a = [unsafe { _mm_setzero_ps() }; 8];
     for i in 0..8u32 {
@@ -254,7 +254,7 @@ fn scalar_shape(len: u32) -> (i32, u32) {
     (floats, groups)
 }
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn scale_scalar(g: &mut Guest, dst: u32, src: u32, count: u32, k: f64) -> Result<()> {
     // rlwinm r9,r6,2,0,29 ; add r9,r9,r11 — the destination end, count*4 bytes on.
     let dst_end = dst.wrapping_add((count << 2) & 0xFFFF_FFFC);
@@ -318,7 +318,7 @@ unsafe fn scale_scalar(g: &mut Guest, dst: u32, src: u32, count: u32, k: f64) ->
     }
 }
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn accumulate_scalar(g: &mut Guest, dst: u32, src: u32, count: u32, k: f64) -> Result<()> {
     let dst_end = dst.wrapping_add((count << 2) & 0xFFFF_FFFC);
     if dst >= dst_end {

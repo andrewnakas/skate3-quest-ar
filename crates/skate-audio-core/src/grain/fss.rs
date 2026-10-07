@@ -30,7 +30,7 @@
 //! multiply-adds go through [`crate::vmx`], which rounds them twice as the recomp does; scalar
 //! `fmadds`/`fnmsubs` are single-rounded (`std::fma` in the lifted scalar code).
 
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 use crate::dsp::biquad::biquad;
 use crate::dsp::sine::sine4_value;
@@ -178,7 +178,7 @@ const COS_B: u32 = 0x822F_97F0; // addi -26640
 const COS_C: u32 = 0x822F_9800; // addi -26624
 const COS_D: u32 = 0x822F_9810; // addi -26608
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn cosine4_impl(g: &Guest, x: [u32; 4]) -> Result<[u32; 4]> {
     unsafe {
         use crate::vmx::{SPLAT_W0, SPLAT_W1, SPLAT_W2, SPLAT_W3, vspltw128};

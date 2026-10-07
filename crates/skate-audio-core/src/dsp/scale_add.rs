@@ -63,7 +63,7 @@
 use crate::fp;
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result};
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 /// `clrlwi r10,r6,28` — the source's low four bits, and the whole of the path selection.
 pub const SOURCE_ALIGN_MASK: u32 = 0xF;
@@ -141,7 +141,7 @@ pub fn scale_add_with_copy(
     unsafe { scalar_tail(g, n, y, x, z, w, gain, done) }
 }
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn vector_body(
     g: &mut Guest,
     y: u32,

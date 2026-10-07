@@ -167,11 +167,73 @@ pub(crate) fn flat_world(material: RetailContactMaterial) -> BoardWorld {
     build_world(material, flat_surfaces(), Vec::new())
 }
 
+/// Broadphase cell for real-world geometry, in game metres. A room mesh is
+/// thousands of triangles; per-cell query meshes keep each tick's contact
+/// queries to the cells near the board.
+const REAL_CELL: f32 = 8.0;
+
+/// AR passthrough: the course's props standing on real-world surfaces. The
+/// real geometry takes the landing floor's place (tag 0); the course's own
+/// floor is dropped. Real quads use the course winding (normal `w x u`, see
+/// `xr::real_world`); real triangles are taken as given. Real edges (table and
+/// furniture tops) are ledges.
+pub(crate) fn course_on_real_world(
+    material: RetailContactMaterial,
+    real_quads: Vec<[Vector3; 4]>,
+    real_triangles: Vec<[Vector3; 3]>,
+    real_edges: Vec<(Vector3, Vector3)>,
+) -> BoardWorld {
+    let [_floor, platform, half_pipe, climbing] = surfaces();
+    let mut triangles = course_triangles(material, [vec![], platform, half_pipe, climbing]);
+    let mut ranges = vec![0..triangles.len()];
+
+    let mut real: Vec<WorldTriangle> = real_quads
+        .iter()
+        .flat_map(|q| [[0, 2, 1], [0, 3, 2]].map(|i| i.map(|i| q[i])))
+        .chain(real_triangles)
+        .map(|vertices| WorldTriangle {
+            triangle: triangle_from_volume(vertices, 0.0, [1.0; 3], TriangleFeature::ONE_SIDED),
+            material,
+            tag: 0,
+        })
+        .collect();
+    let cell = |t: &WorldTriangle| {
+        let [a, b, c] = t.triangle.vertices;
+        [(a.x + b.x + c.x), (a.y + b.y + c.y), (a.z + b.z + c.z)]
+            .map(|sum| (sum / (3.0 * REAL_CELL)).floor() as i32)
+    };
+    real.sort_by_key(cell);
+    for chunk in real.chunk_by(|a, b| cell(a) == cell(b)) {
+        let start = triangles.len();
+        triangles.extend_from_slice(chunk);
+        ranges.push(start..triangles.len());
+    }
+
+    let mut edges = query_edges();
+    edges.extend(real_edges.into_iter().filter_map(|(start, end)| {
+        Some(EdgeSegment {
+            start,
+            end,
+            local_bounds: Bounds::from_points([start, end])?,
+        })
+    }));
+    assemble(triangles, ranges, edges)
+}
+
 fn build_world(
     material: RetailContactMaterial,
     surfaces: [Vec<[Vector3; 4]>; 4],
     edges: Vec<EdgeSegment>,
 ) -> BoardWorld {
+    let triangles = course_triangles(material, surfaces);
+    let ranges = vec![0..triangles.len()];
+    assemble(triangles, ranges, edges)
+}
+
+fn course_triangles(
+    material: RetailContactMaterial,
+    surfaces: [Vec<[Vector3; 4]>; 4],
+) -> Vec<WorldTriangle> {
     let mut triangles = Vec::new();
     let rail_faces = crate::grind_world::surfaces();
     for (tag, quads) in surfaces.into_iter().enumerate() {
@@ -196,25 +258,38 @@ fn build_world(
             }
         }
     }
+    triangles
+}
+
+fn assemble(
+    triangles: Vec<WorldTriangle>,
+    ranges: Vec<std::ops::Range<usize>>,
+    edges: Vec<EdgeSegment>,
+) -> BoardWorld {
     //This test level explicitly authors material0/category0/upper flags0.
     //This is host metadata, not a claim that the stock material is concrete,
     //and not derived from the neutral contact coefficients or rendering tag.
-    let metadata = QueryMetadata {
-        packed_surfaces: vec![0u16; triangles.len()],
-        meshes: vec![QueryMesh {
-            triangle_range: 0..triangles.len(),
-            local_to_world: RetailAffineTransform::IDENTITY,
-            world_to_local: RetailAffineTransform::IDENTITY,
+    let meshes = ranges
+        .into_iter()
+        .filter(|range| !range.is_empty())
+        .map(|range| QueryMesh {
             local_bounds: Bounds::from_points(
-                triangles.iter().flat_map(|entry| entry.triangle.vertices),
+                triangles[range.clone()].iter().flat_map(|entry| entry.triangle.vertices),
             )
             .expect("Authored level contains collision triangles"),
+            triangle_range: range,
+            local_to_world: RetailAffineTransform::IDENTITY,
+            world_to_local: RetailAffineTransform::IDENTITY,
             matching_group: -1,
             // This authored static collision mesh accepts trajectory queries.
             rejection_flags: 0,
             geometry: 1,
             pool: QueryPool::Ground,
-        }],
+        })
+        .collect();
+    let metadata = QueryMetadata {
+        packed_surfaces: vec![0u16; triangles.len()],
+        meshes,
         static_edges: edges,
         //No island or conditional meshes exist in the current static level.
         island_flags: 0,

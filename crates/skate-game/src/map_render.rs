@@ -100,10 +100,15 @@ pub(crate) struct PreparedScene {
     retail: StagedAssets<RetailWorldMaterial>,
     sky: StagedAssets<RetailSkyMaterial>,
     images: StagedAssets<Image>,
+    /// AR passthrough: the real surface stands in for the test course's floor.
+    hide_test_floor: bool,
 }
 impl PreparedScene {
     pub fn new(world: &World) -> Self {
         Self {
+            hide_test_floor: world
+                .get_resource::<crate::config::Config>()
+                .is_some_and(|config| config.xr.is_some()),
             commands: Default::default(),
             meshes: StagedAssets::new(world),
             materials: StagedAssets::new(world),
@@ -169,6 +174,7 @@ impl PreparedScene {
                 &mut self.commands,
                 &mut self.meshes,
                 &mut self.materials,
+                self.hide_test_floor,
             );
         }
     }

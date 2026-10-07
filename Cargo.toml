@@ -37,3 +37,4 @@ opt-level = 3
 [patch.crates-io]
 bevy_pbr = { path = "vendor/bevy_pbr" }
 bevy_core_pipeline = { path = "vendor/bevy_core_pipeline" }
+winit = { path = "vendor/winit" }

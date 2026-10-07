@@ -81,8 +81,8 @@
 // as necessary has already moved once under this code.
 #![allow(unused_unsafe)]
 
+use crate::simd::*;
 use crate::{Error, Guest, Result};
-use core::arch::x86_64::*;
 
 // ---------------------------------------------------------------------------- feature gate
 
@@ -92,8 +92,18 @@ use core::arch::x86_64::*;
 /// reference assumes SSE4.1 and FMA are simply present. Here they are checked once per call at the
 /// kernel boundary rather than assumed, because this crate is a library and its caller chooses the
 /// build flags.
+///
+/// On aarch64 this is unconditionally `true`: Advanced SIMD (NEON) is mandatory baseline on every
+/// AArch64 core, nothing to detect. See [`crate::simd`] for what "supported" means there — a
+/// reasoned, unverified translation rather than the bit-exact, harness-checked x86_64 path.
+#[cfg(target_arch = "x86_64")]
 pub fn supported() -> bool {
     is_x86_feature_detected!("sse4.1") && is_x86_feature_detected!("fma")
+}
+
+#[cfg(target_arch = "aarch64")]
+pub fn supported() -> bool {
+    true
 }
 
 /// The error a kernel returns rather than running without SSE4.1 and FMA.
@@ -110,30 +120,80 @@ pub fn unsupported() -> Error {
 
 // ------------------------------------------------------------------------------- MXCSR / FPSCR
 
+/// The control-register word [`Fpscr`] saves, forces bits in, and restores. MXCSR on x86_64 (32
+/// bits); AArch64's FPCR is architecturally 64 bits wide, so the two widths differ too.
+#[cfg(target_arch = "x86_64")]
+pub type CsrWord = u32;
+#[cfg(target_arch = "aarch64")]
+pub type CsrWord = u64;
+
 /// MXCSR `FZ`. `rex::platform::FPSCRPlatform::FlushMask` is this or'd with [`DENORMALS_ZERO`].
-pub const FLUSH_ZERO: u32 = 0x8000;
-/// MXCSR `DAZ`.
-pub const DENORMALS_ZERO: u32 = 0x0040;
+///
+/// AArch64's FPCR has one `FZ` bit (bit 24) that flushes *both* denormal inputs and denormal
+/// results for single/double precision — the combination x86 needs two separate bits
+/// (`FLUSH_ZERO` for results, `DAZ` for inputs) to get. So on aarch64 this one constant stands in
+/// for both: [`DENORMALS_ZERO`] is simply `0` there, since `FLUSH_ZERO` already covers it.
+#[cfg(target_arch = "x86_64")]
+pub const FLUSH_ZERO: CsrWord = 0x8000;
+#[cfg(target_arch = "aarch64")]
+pub const FLUSH_ZERO: CsrWord = 1 << 24;
+
+/// MXCSR `DAZ`. See [`FLUSH_ZERO`]: folded into it on aarch64.
+#[cfg(target_arch = "x86_64")]
+pub const DENORMALS_ZERO: CsrWord = 0x0040;
+#[cfg(target_arch = "aarch64")]
+pub const DENORMALS_ZERO: CsrWord = 0;
+
 /// MXCSR `IM|DM|ZM|OM|UM|PM` — `FPSCRPlatform::ExceptionMask`, every FP exception masked.
-pub const EXCEPTION_MASK: u32 = (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12);
-/// MXCSR `RC`.
-pub const ROUND_MASK: u32 = 0x6000;
-/// `SIMDE_MM_ROUND_NEAREST`, which is what `GuestToHost[kRoundNearest]` maps to.
-pub const ROUND_NEAREST: u32 = 0x0000;
+///
+/// FPCR's exception-enable bits default to `0` (masked/untrapped) at reset and nothing in this
+/// crate ever sets them, so there is nothing to force here on aarch64 — the mask is `0`.
+#[cfg(target_arch = "x86_64")]
+pub const EXCEPTION_MASK: CsrWord =
+    (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 12);
+#[cfg(target_arch = "aarch64")]
+pub const EXCEPTION_MASK: CsrWord = 0;
+
+/// MXCSR `RC`. FPCR's `RMode` field (bits 22-23) is the aarch64 equivalent.
+#[cfg(target_arch = "x86_64")]
+pub const ROUND_MASK: CsrWord = 0x6000;
+#[cfg(target_arch = "aarch64")]
+pub const ROUND_MASK: CsrWord = 0b11 << 22;
+/// `SIMDE_MM_ROUND_NEAREST`, which is what `GuestToHost[kRoundNearest]` maps to. `0` on both
+/// architectures: round-to-nearest-even is each one's all-zero encoding.
+pub const ROUND_NEAREST: CsrWord = 0;
 
 /// The value `InitHost` computes for `vmx_csr`: flush-to-zero, round to nearest, no traps.
-pub const VMX_CSR: u32 = FLUSH_ZERO | DENORMALS_ZERO | EXCEPTION_MASK | ROUND_NEAREST;
+pub const VMX_CSR: CsrWord = FLUSH_ZERO | DENORMALS_ZERO | EXCEPTION_MASK | ROUND_NEAREST;
 
+#[cfg(target_arch = "x86_64")]
 #[inline]
-pub fn get_mxcsr() -> u32 {
+pub fn get_mxcsr() -> CsrWord {
     let mut v: u32 = 0;
     unsafe { core::arch::asm!("stmxcsr [{}]", in(reg) &mut v, options(nostack)) };
     v
 }
 
+#[cfg(target_arch = "x86_64")]
 #[inline]
-pub fn set_mxcsr(v: u32) {
+pub fn set_mxcsr(v: CsrWord) {
     unsafe { core::arch::asm!("ldmxcsr [{}]", in(reg) &v, options(nostack)) };
+}
+
+/// Reads AArch64's FPCR (`MRS`) — the `get_mxcsr` of this architecture.
+#[cfg(target_arch = "aarch64")]
+#[inline]
+pub fn get_mxcsr() -> CsrWord {
+    let v: u64;
+    unsafe { core::arch::asm!("mrs {}, fpcr", out(reg) v, options(nostack, nomem)) };
+    v
+}
+
+/// Writes AArch64's FPCR (`MSR`) — the `set_mxcsr` of this architecture.
+#[cfg(target_arch = "aarch64")]
+#[inline]
+pub fn set_mxcsr(v: CsrWord) {
+    unsafe { core::arch::asm!("msr fpcr, {}", in(reg) v, options(nostack, nomem)) };
 }
 
 /// `ctx.fpscr` — the two MXCSR values a lifted function switches between, and the switch itself.
@@ -174,9 +234,9 @@ pub fn set_mxcsr(v: u32) {
 /// operation — checked one by one, not assumed — and it is named here rather than hidden because
 /// it is a difference from the reference.
 pub struct Fpscr {
-    entry: u32,
-    fpu_csr: u32,
-    vmx_csr: u32,
+    entry: CsrWord,
+    fpu_csr: CsrWord,
+    vmx_csr: CsrWord,
     vmx_mode: bool,
 }
 
@@ -228,9 +288,9 @@ impl Fpscr {
         }
     }
 
-    /// The MXCSR in force right now, for tests that assert which mode a body left behind.
+    /// The MXCSR/FPCR in force right now, for tests that assert which mode a body left behind.
     #[inline]
-    pub fn current(&self) -> u32 {
+    pub fn current(&self) -> CsrWord {
         get_mxcsr()
     }
 }
@@ -290,7 +350,7 @@ pub static VECTOR_MASK_R: [u8; 256] = [
 /// # Safety
 /// Requires SSE2. `row` must be 0..16.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn mask_l(row: usize) -> __m128i {
     unsafe { _mm_loadu_si128(VECTOR_MASK_L.as_ptr().add(row * 16) as *const __m128i) }
 }
@@ -300,7 +360,7 @@ pub unsafe fn mask_l(row: usize) -> __m128i {
 /// # Safety
 /// Requires SSE2. `row` must be 0..16.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn mask_r(row: usize) -> __m128i {
     unsafe { _mm_loadu_si128(VECTOR_MASK_R.as_ptr().add(row * 16) as *const __m128i) }
 }
@@ -388,7 +448,7 @@ pub fn ppc_vmsumfp_result_scalar(value: f32) -> f32 {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 unsafe fn vmsumfp_result(v: __m128) -> __m128 {
     unsafe {
         let mut l = [0f32; 4];
@@ -402,7 +462,7 @@ unsafe fn vmsumfp_result(v: __m128) -> __m128 {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn cvtepu32_ps(src1: __m128i) -> __m128 {
     unsafe {
         let xmm1 = _mm_add_epi32(src1, _mm_set1_epi32(127));
@@ -422,7 +482,7 @@ pub unsafe fn cvtepu32_ps(src1: __m128i) -> __m128 {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn perm_epi8(a: __m128i, b: __m128i, c: __m128i) -> __m128i {
     unsafe {
         let d = _mm_set1_epi8(0x0F);
@@ -440,7 +500,7 @@ pub unsafe fn perm_epi8(a: __m128i, b: __m128i, c: __m128i) -> __m128i {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vctsxs(src1: __m128) -> __m128i {
     unsafe {
         let xmm2 = _mm_cmpunord_ps(src1, src1);
@@ -461,7 +521,7 @@ pub unsafe fn vctsxs(src1: __m128) -> __m128i {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vctuxs(src1: __m128) -> __m128i {
     unsafe {
         let nan_mask = _mm_cmpunord_ps(src1, src1);
@@ -498,7 +558,7 @@ macro_rules! vop {
         /// # Safety
         /// Requires SSE4.1 and FMA.
         #[inline]
-        #[target_feature(enable = "sse4.1,fma")]
+        #[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
         pub unsafe fn $name($a: __m128 $(, $b: __m128)*) -> __m128 {
             unsafe { $body }
         }
@@ -590,7 +650,7 @@ vop! {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vrsqrtefp(v: __m128) -> __m128 {
     unsafe {
         let mut l = [0f32; 4];
@@ -612,7 +672,7 @@ pub unsafe fn vrsqrtefp(v: __m128) -> __m128 {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vexptefp(v: __m128) -> __m128 {
     unsafe {
         let mut l = [0f32; 4];
@@ -629,7 +689,7 @@ pub unsafe fn vexptefp(v: __m128) -> __m128 {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vlogefp(v: __m128) -> __m128 {
     unsafe {
         let mut l = [0f32; 4];
@@ -651,7 +711,7 @@ pub unsafe fn vlogefp(v: __m128) -> __m128 {
 /// # Safety
 /// Requires SSE4.1 and FMA.
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 pub unsafe fn vcsxwfp<const N: u32>(a: __m128i) -> __m128 {
     unsafe {
         let converted = _mm_cvtepi32_ps(a);
@@ -669,7 +729,7 @@ pub unsafe fn vcsxwfp<const N: u32>(a: __m128i) -> __m128 {
 /// # Safety
 /// Requires SSE4.1 and FMA.
 #[inline]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 pub unsafe fn vcuxwfp<const N: u32>(a: __m128i) -> __m128 {
     unsafe {
         let converted = cvtepu32_ps(a);
@@ -687,7 +747,7 @@ pub unsafe fn vcuxwfp<const N: u32>(a: __m128i) -> __m128 {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vcfpsxws(a: __m128) -> __m128i {
     unsafe { vctsxs(a) }
 }
@@ -697,7 +757,7 @@ pub unsafe fn vcfpsxws(a: __m128) -> __m128i {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vcfpuxws(a: __m128) -> __m128i {
     unsafe { vctuxs(a) }
 }
@@ -711,7 +771,7 @@ macro_rules! iop {
         /// # Safety
         /// Requires SSE4.1.
         #[inline]
-        #[target_feature(enable = "sse4.1")]
+        #[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
         pub unsafe fn $name($a: __m128i $(, $b: __m128i)*) -> __m128i {
             unsafe { $body }
         }
@@ -790,7 +850,7 @@ iop! {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vsraw<const N: i32>(a: __m128i) -> __m128i {
     unsafe { _mm_srai_epi32::<N>(a) }
 }
@@ -800,7 +860,7 @@ pub unsafe fn vsraw<const N: i32>(a: __m128i) -> __m128i {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vslw<const N: i32>(a: __m128i) -> __m128i {
     unsafe { _mm_slli_epi32::<N>(a) }
 }
@@ -810,7 +870,7 @@ pub unsafe fn vslw<const N: i32>(a: __m128i) -> __m128i {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vsrw<const N: i32>(a: __m128i) -> __m128i {
     unsafe { _mm_srli_epi32::<N>(a) }
 }
@@ -823,7 +883,7 @@ pub unsafe fn vsrw<const N: i32>(a: __m128i) -> __m128i {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vsldoi<const N: i32>(a: __m128i, b: __m128i) -> __m128i {
     unsafe { _mm_alignr_epi8::<N>(a, b) }
 }
@@ -863,7 +923,7 @@ const _: () = assert!(splat_imm(3) == SPLAT_W3);
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn vspltw128<const IMM8: i32>(a: __m128i) -> __m128i {
     unsafe { _mm_shuffle_epi32::<IMM8>(a) }
 }
@@ -871,7 +931,7 @@ pub unsafe fn vspltw128<const IMM8: i32>(a: __m128i) -> __m128i {
 // ------------------------------------------------------------------------------- guest memory
 
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 unsafe fn bytes_of(v: __m128i) -> [u8; 16] {
     let mut out = [0u8; 16];
     unsafe { _mm_storeu_si128(out.as_mut_ptr() as *mut __m128i, v) };
@@ -887,7 +947,7 @@ unsafe fn bytes_of(v: __m128i) -> [u8; 16] {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn lvx128(g: &Guest, ea: u32) -> Result<__m128i> {
     let block = ea & !0xF;
     let src = g.span(block, 16)?;
@@ -904,7 +964,7 @@ pub unsafe fn lvx128(g: &Guest, ea: u32) -> Result<__m128i> {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn lvx128_ps(g: &Guest, ea: u32) -> Result<__m128> {
     unsafe { Ok(_mm_castsi128_ps(lvx128(g, ea)?)) }
 }
@@ -914,7 +974,7 @@ pub unsafe fn lvx128_ps(g: &Guest, ea: u32) -> Result<__m128> {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn stvx128(g: &mut Guest, ea: u32, value: __m128i) -> Result<()> {
     let block = ea & !0xF;
     let swapped = unsafe { bytes_of(_mm_shuffle_epi8(value, mask_l(0))) };
@@ -926,7 +986,7 @@ pub unsafe fn stvx128(g: &mut Guest, ea: u32, value: __m128i) -> Result<()> {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn stvx128_ps(g: &mut Guest, ea: u32, value: __m128) -> Result<()> {
     unsafe { stvx128(g, ea, _mm_castps_si128(value)) }
 }
@@ -937,7 +997,7 @@ pub unsafe fn stvx128_ps(g: &mut Guest, ea: u32, value: __m128) -> Result<()> {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn lvlx128(g: &Guest, ea: u32) -> Result<__m128i> {
     let block = ea & !0xF;
     let src = g.span(block, 16)?;
@@ -958,7 +1018,7 @@ pub unsafe fn lvlx128(g: &Guest, ea: u32) -> Result<__m128i> {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn lvrx128(g: &Guest, ea: u32) -> Result<__m128i> {
     if (ea & 0xF) == 0 {
         return Ok(unsafe { _mm_setzero_si128() });
@@ -986,7 +1046,7 @@ pub unsafe fn lvrx128(g: &Guest, ea: u32) -> Result<__m128i> {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn stvlx128(g: &mut Guest, ea: u32, value: __m128i) -> Result<()> {
     let lanes = unsafe { bytes_of(value) };
     let n = 16 - (ea & 0xF) as usize;
@@ -1009,7 +1069,7 @@ pub unsafe fn stvlx128(g: &mut Guest, ea: u32, value: __m128i) -> Result<()> {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 pub unsafe fn stvrx128(g: &mut Guest, ea: u32, value: __m128i) -> Result<()> {
     let lanes = unsafe { bytes_of(value) };
     let n = (ea & 0xF) as usize;
@@ -1430,13 +1490,21 @@ mod tests {
             (quarter - 0.5).abs() < 1.0 / 4096.0,
             "1/sqrt(4), got {quarter}"
         );
-        // And it is not _mm_rsqrt_ps: the two differ in the low mantissa bits on most inputs.
+        // And it is not the host's own hardware estimate: the two differ in the low mantissa bits
+        // on most inputs. x86's is `_mm_rsqrt_ps`; aarch64's analogous FRSQRTE is `vrsqrteq_f32`.
         assert!(supported());
+        #[cfg(target_arch = "x86_64")]
         let hw = unsafe { lanes_ps(_mm_rsqrt_ps(from_f32([3.0; 4])))[0] };
+        #[cfg(target_arch = "aarch64")]
+        let hw = unsafe {
+            let v = core::arch::aarch64::vrsqrteq_f32(core::arch::aarch64::vdupq_n_f32(3.0));
+            core::arch::aarch64::vgetq_lane_f32::<0>(v)
+        }
+        .to_bits();
         let table = ppc_vrsqrtefp_bits(3.0f32.to_bits());
         assert_ne!(
             hw, table,
-            "if these agreed, substituting rsqrtps would go unnoticed"
+            "if these agreed, substituting the hardware estimate would go unnoticed"
         );
     }
 

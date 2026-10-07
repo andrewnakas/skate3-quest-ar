@@ -111,7 +111,7 @@
 
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result, fp, mem};
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 // ------------------------------------------------------- sub_82B399D0: the three stack arguments
 
@@ -209,7 +209,7 @@ fn quarter_to_zero(count: i32) -> i32 {
 ///
 /// # Safety
 /// Requires SSE4.1.
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 unsafe fn perm_control(g: &Guest, offset: u32) -> Result<__m128i> {
     let w0 = g.u32(PERM_TABLE.wrapping_add(offset))? as i32; // lwzx r11,r4,r11
     let w1 = g.u32(PERM_TABLE.wrapping_add(offset).wrapping_add(4))? as i32; // lwzx r25,r4,r27
@@ -223,7 +223,7 @@ unsafe fn perm_control(g: &Guest, offset: u32) -> Result<__m128i> {
 /// # Safety
 /// Requires SSE4.1.
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 unsafe fn window(lo: __m128i, hi: __m128i, control: __m128i) -> __m128 {
     unsafe { _mm_castsi128_ps(vmx::perm_epi8(lo, hi, control)) }
 }
@@ -296,7 +296,7 @@ pub fn one_pole_stage(
 }
 
 #[allow(clippy::too_many_arguments)]
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn kernel(
     g: &mut Guest,
     count: i32,

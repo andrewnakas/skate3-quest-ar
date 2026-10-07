@@ -23,7 +23,7 @@
 //! is never checked for alignment, as in the original. The square-root writer also leaves `v29..v31`
 //! as its last loop iteration left them; this crate has no register file, so that is not modelled.
 
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result, fp, mem};

@@ -18,6 +18,7 @@
 //! controller and the pad is neutral; press A to set it down. A new session
 //! starts in placement mode.
 use super::actions::{Hand, LatestTouch};
+use super::planes::DetectedPlanes;
 use super::XrOptions;
 use crate::input::ExternalPad;
 use bevy::prelude::*;
@@ -32,7 +33,8 @@ const CHORD_STICK: f32 = 0.3;
 #[derive(Resource, Debug)]
 pub(crate) struct Rig {
     pub scale: f32,
-    /// World point shown at the anchor: the spawn's wheel-ground point.
+    /// World point shown at the anchor: the map spawn's ground point, or the
+    /// test course's landing floor under the spawn.
     pub world_origin: Vec3,
     /// Tracking-space anchor position and yaw.
     pub anchor: Option<(Vec3, f32)>,
@@ -90,7 +92,9 @@ impl Plugin for RigPlugin {
 fn spawn_ground(config: &crate::config::Config) -> Vec3 {
     match &config.map {
         Some(map) => Vec3::from_array(map.spawn),
-        None => Vec3::new(0.0, crate::physics::ground::HEIGHT, 0.0),
+        // The test course's (hidden) landing floor sits on the real surface;
+        // the spawn platform, ramp, half pipe, rails and ledge stand on it.
+        None => Vec3::new(0.0, crate::physics::ground::FLOOR_HEIGHT, 0.0),
     }
 }
 
@@ -98,6 +102,7 @@ fn placement(
     touch: Res<LatestTouch>,
     time: Res<Time<Real>>,
     hands: Query<(&Hand, &Transform)>,
+    planes: Res<DetectedPlanes>,
     mut rig: ResMut<Rig>,
     mut pad: ResMut<ExternalPad>,
     mut hold: Local<Option<f32>>,
@@ -136,7 +141,10 @@ fn placement(
     let Some((_, aim)) = hands.iter().find(|(hand, _)| matches!(hand, Hand::Right)) else {
         return;
     };
-    rig.anchor = Some((aim.translation, heading(aim.rotation)));
+    // Height comes from the real surface under the controller (table or
+    // floor), heading from where the controller points.
+    let position = planes.snap(aim.translation).unwrap_or(aim.translation);
+    rig.anchor = Some((position, heading(aim.rotation)));
     if a_pressed {
         rig.placing = false;
         info!("XR miniature placed at {:?}", rig.anchor);

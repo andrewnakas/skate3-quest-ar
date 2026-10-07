@@ -25,7 +25,7 @@
 //! Nothing in `docs/rw_audio_structs.h` names the object; the offsets are numbers, and the names
 //! below describe what the code does with each field.
 
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result, fp, layout, mem};

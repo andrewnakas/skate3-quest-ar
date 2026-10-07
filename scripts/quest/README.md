@@ -65,6 +65,11 @@ under the `skate3` tag.
 | Left menu held 1 s (alone) | Placement mode: the miniature follows your right controller, A sets it down |
 
 A new session starts in placement mode: touch the right controller to the
-table where the skater should start and press A.
+table where the skater should start and press A. While placing, the app
+scans the room for real surfaces (`XR_EXT_plane_detection`) and snaps the
+miniature flush onto whichever table or floor you're pointing at, rather
+than wherever the controller happens to be tilted. The headset will ask for
+one-time Spatial Data consent the first time this runs; until it's granted,
+placement falls back to the raw controller pose.
 
 The miniature is 12x smaller than life by default (a 1.8 m skater is 15 cm).

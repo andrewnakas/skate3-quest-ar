@@ -85,7 +85,7 @@
 use crate::fp;
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result};
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 // The rodata singles. Each address is `((lis_imm & 0xFFFF) << 16) + offset`, computed from the
 // immediate rather than read off the disassembly: one misread digit in `sub_82B2FE00` cost this
@@ -194,7 +194,7 @@ pub fn gain_ramp_copy(
     unsafe { gain_ramp_copy_impl(g, dst, src, gain, step) }
 }
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn gain_ramp_copy_impl(
     g: &mut Guest,
     dst: u32,
@@ -388,7 +388,7 @@ pub fn gain_ramp_accumulate(
     unsafe { gain_ramp_accumulate_impl(g, dst, src, gain, step) }
 }
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn gain_ramp_accumulate_impl(
     g: &mut Guest,
     dst: u32,
@@ -538,7 +538,7 @@ unsafe fn gain_ramp_accumulate_impl(
 }
 
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 unsafe fn lanes_ps(v: __m128) -> [u32; 4] {
     let mut out = [0u32; 4];
     unsafe { _mm_storeu_si128(out.as_mut_ptr() as *mut __m128i, _mm_castps_si128(v)) };

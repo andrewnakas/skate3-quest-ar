@@ -45,7 +45,7 @@
 
 use crate::vmx::{self, Fpscr};
 use crate::{Guest, Result};
-use core::arch::x86_64::*;
+use crate::simd::*;
 
 /// `lis -32208` — the one high half all four addresses are formed from, computed from the
 /// immediate rather than transcribed.
@@ -118,7 +118,7 @@ pub fn sine4_value(g: &Guest, x: [u32; 4]) -> Result<[u32; 4]> {
     Ok(sine4(g, x)?.v1)
 }
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn sine4_impl(g: &Guest, x: [u32; 4]) -> Result<SineResult> {
     unsafe {
         // The four lvx128 come before any float work and are pure integer loads, so no flush mode
@@ -207,7 +207,7 @@ unsafe fn sine4_impl(g: &Guest, x: [u32; 4]) -> Result<SineResult> {
 }
 
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 unsafe fn lanes(v: __m128i) -> [u32; 4] {
     let mut out = [0u32; 4];
     unsafe { _mm_storeu_si128(out.as_mut_ptr() as *mut __m128i, v) };
@@ -215,7 +215,7 @@ unsafe fn lanes(v: __m128i) -> [u32; 4] {
 }
 
 #[inline]
-#[target_feature(enable = "sse4.1")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1"))]
 unsafe fn lanes_ps(v: __m128) -> [u32; 4] {
     unsafe { lanes(_mm_castps_si128(v)) }
 }

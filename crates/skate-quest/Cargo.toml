@@ -16,6 +16,20 @@ bevy = { workspace = true, features = ["android-native-activity"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 libc = "0.2"
+# Matches the version android-activity (pulled in by bevy_winit) already
+# loads, so this doesn't drag in a second copy of the crate.
+jni = "0.22"
+ndk-context = "0.1"
+
+# A plain, non-secret debug key (standard "androiddebugkey" alias/password,
+# like Android Studio's own ~/.android/debug.keystore) so `--release` builds
+# don't need a personal signing setup. Regenerate with:
+#   keytool -genkeypair -v -keystore debug.keystore -storepass android \
+#     -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 \
+#     -validity 10950 -dname "CN=Android Debug,O=Android,C=US"
+[package.metadata.android.signing.release]
+path = "debug.keystore"
+keystore_password = "android"
 
 # cargo-apk reads this block (see scripts/quest/README.md).
 [package.metadata.android]

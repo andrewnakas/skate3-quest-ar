@@ -867,7 +867,7 @@ pub fn advance_gain_ramp<T: crate::mathlib::Trig>(
     desc: u32,
 ) -> Result<u64> {
     use crate::fp::{fctiwz_low_word, load_single, mul_single, store_single};
-    use core::arch::x86_64::_mm_mul_ps;
+    use crate::simd::_mm_mul_ps;
     let at = |offset: u32| state.wrapping_add(offset);
     let mut fpscr = Fpscr::capture();
     fpscr.disable_flush_mode_unconditional();

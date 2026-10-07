@@ -325,12 +325,12 @@ fn vector_length(v: [f32; 4]) -> f32 {
 /// `v × rsqrt(|v|²)` with `vrsqrtefp` and two Newton steps, the recomp's two-rounding
 /// `vnmsubfp`/`vmaddfp` (`crate::vmx`), as `sub_824C8588` and `sub_824C6198` spell it. Returns the
 /// normalised vector and `|v|²`.
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn normalise(
-    v: std::arch::x86_64::__m128,
-) -> (std::arch::x86_64::__m128, std::arch::x86_64::__m128) {
+    v: crate::simd::__m128,
+) -> (crate::simd::__m128, crate::simd::__m128) {
     use crate::vmx;
-    use std::arch::x86_64::*;
+    use crate::simd::*;
     unsafe {
         let one = _mm_cvtepi32_ps(_mm_set1_epi32(1));
         let half = _mm_mul_ps(one, _mm_castsi128_ps(_mm_set1_epi32(0x3F00_0000)));
@@ -350,10 +350,10 @@ unsafe fn normalise(
 ///
 /// # Safety
 /// Requires SSE4.1 and FMA.
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn vector_length_vmx(v: [f32; 4]) -> f32 {
     use crate::vmx;
-    use std::arch::x86_64::*;
+    use crate::simd::*;
     unsafe {
         let v61 = _mm_loadu_ps(v.as_ptr());
         let (r, squared) = normalise(v61);
@@ -379,10 +379,10 @@ pub fn normalised_dot(a: [f32; 4], b: [f32; 4]) -> f32 {
     dot
 }
 
-#[target_feature(enable = "sse4.1,fma")]
+#[cfg_attr(target_arch = "x86_64", target_feature(enable = "sse4.1,fma"))]
 unsafe fn normalised_dot_vmx(a: [f32; 4], b: [f32; 4]) -> f32 {
     use crate::vmx;
-    use std::arch::x86_64::*;
+    use crate::simd::*;
     unsafe {
         let va = _mm_loadu_ps(a.as_ptr());
         let vb = _mm_loadu_ps(b.as_ptr());

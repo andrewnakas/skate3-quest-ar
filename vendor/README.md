@@ -1,5 +1,30 @@
 # Local Bevy patch
 
+## Android focus event dropped before the window exists
+
+`winit` 0.30.13's Android backend (`src/platform_impl/android/mod.rs`) can
+deliver `GainedFocus`/`LostFocus` before `InitWindow` ever fires — observed
+on Quest 3 around OpenXR session startup, where the system compositor churns
+the Activity through `onStart`/`onStop` while the native window doesn't exist
+yet. `bevy_winit` has no window to attribute those events to, drops them
+silently (`Skipped event Focused(...) for unknown winit Window Id`), and
+`winit`'s own `HAS_FOCUS` atomic ends up out of sync with whatever the app's
+window-tracking believes — permanently, since nothing ever corrects it later.
+Observed effect: the window never gets marked focused at the OS level, and
+Android ANRs the activity (`Input dispatching timed out ... does not have a
+focused window`) a few seconds later, even though the simulation itself is
+still running fine underneath.
+
+`MainEvent::InitWindow`'s handler in `single_iteration` now also emits a
+`WindowEvent::Focused` event carrying `HAS_FOCUS`'s *current* value right
+after sending `Resumed` — by that point the window exists and is registered,
+so this one can't be dropped, and the app learns the real focus state instead
+of being stuck at whatever it guessed before the window existed. No other
+behavior changes.
+
+`winit` is the unmodified crates.io 0.30.13 source except for this one
+change. Its original Apache 2.0 license is included.
+
 ## Bindless material resource reuse
 
 `bevy_pbr/src/material_bind_groups.rs` chooses a fitting slab requiring the fewest
