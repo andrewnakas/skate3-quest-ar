@@ -92,6 +92,16 @@ struct SceneSurface {
     label: String,
 }
 
+/// Space Setup ("scan your room") launched from inside the app. Set
+/// `requested` to start one; when it completes, the Scene is queried again.
+#[derive(Resource, Default)]
+pub(crate) struct SceneCapture {
+    pub requested: bool,
+    pending: Option<sys::AsyncRequestIdFB>,
+    /// The automatic capture for a room with no scan runs once per launch.
+    auto_requested: bool,
+}
+
 #[derive(Resource, Default)]
 struct SceneQuery {
     pending: Option<sys::AsyncRequestIdFB>,
@@ -139,10 +149,11 @@ impl Plugin for PlanesPlugin {
             .init_resource::<RoomMesh>()
             .init_resource::<SceneRevision>()
             .init_resource::<SceneQuery>()
+            .init_resource::<SceneCapture>()
             .add_oxr_event_handler(on_scene_event)
             .add_systems(
                 PreUpdate,
-                (query_scene.run_if(scene_enabled), locate_surfaces)
+                (capture_scene, query_scene.run_if(scene_enabled), locate_surfaces)
                     .chain()
                     .run_if(openxr_session_running),
             );
@@ -221,13 +232,57 @@ fn query_scene(
     }
 }
 
+fn capture_scene(
+    instance: Res<OxrInstance>,
+    session: Res<OxrSession>,
+    mut capture: ResMut<SceneCapture>,
+) {
+    if !capture.requested || capture.pending.is_some() {
+        return;
+    }
+    capture.requested = false;
+    let Some(fp) = instance.exts().fb_scene_capture.as_ref() else {
+        warn!("Room scan unavailable: XR_FB_scene_capture is not enabled");
+        return;
+    };
+    let info = sys::SceneCaptureRequestInfoFB {
+        ty: sys::SceneCaptureRequestInfoFB::TYPE,
+        next: ptr::null(),
+        request_byte_count: 0,
+        request: ptr::null(),
+    };
+    let mut request = sys::AsyncRequestIdFB::from_raw(0);
+    match cvt(unsafe { (fp.request_scene_capture)(session.as_raw(), &info, &mut request) }) {
+        Ok(_) => {
+            info!("Room scan: Space Setup requested");
+            capture.pending = Some(request);
+        }
+        Err(e) => warn!("Room scan: xrRequestSceneCaptureFB failed: {e:?}"),
+    }
+}
+
 fn on_scene_event(
     event: OxrEventIn,
     instance: Res<OxrInstance>,
     session: Option<Res<OxrSession>>,
     mut query: ResMut<SceneQuery>,
+    mut capture: ResMut<SceneCapture>,
 ) {
     match *event {
+        openxr::Event::SceneCaptureCompleteFB(e) if capture.pending == Some(e.request_id()) => {
+            capture.pending = None;
+            if let Err(err) = cvt(e.result()) {
+                warn!("Room scan: Space Setup ended with {err:?}");
+            }
+            // Query again even on failure/cancel: the old scan may still be
+            // there. The old handles are released first.
+            for surface in query.surfaces.drain(..) {
+                unsafe { (instance.fp().destroy_space)(surface.space) };
+            }
+            query.since_attempt = None;
+            query.attempt = 0;
+            info!("Room scan: complete, re-querying the Scene");
+        }
         openxr::Event::SpaceQueryResultsAvailableFB(e) if query.pending == Some(e.request_id()) => {
             let Some(session) = session else { return };
             let surfaces = retrieve_surfaces(&instance, &session, e.request_id());
@@ -250,6 +305,12 @@ fn on_scene_event(
                 warn!("Scene has no surfaces (run Space Setup); using the floor only");
             } else {
                 info!("Scene: {} entities", query.surfaces.len());
+            }
+            let scanned = query.surfaces.iter().any(|s| s.label.contains("FLOOR"));
+            if !scanned && !capture.auto_requested {
+                capture.auto_requested = true;
+                capture.requested = true;
+                info!("Room scan: no room scan found, starting Space Setup");
             }
         }
         _ => {}
