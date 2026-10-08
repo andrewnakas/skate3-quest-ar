@@ -7,7 +7,8 @@
 //!   controller shows them; the chosen one is raised)
 //! - right controller: point; a ghost of the piece shows where it would go
 //! - right trigger: drop it there
-//! - right stick left/right: turn it in 15° steps; up/down: resize it
+//! - right stick left/right: turn it in 15° steps (it lines up with a table
+//!   edge when within 10°); up/down: resize it
 //! - right grip on a placed piece: pick it up, release to put it down
 //! - B on a placed piece: delete it
 //! - Y: rescan the room (Quest Space Setup)
@@ -18,10 +19,11 @@
 //! rails are built by `xr::real_world`.
 mod layout;
 pub(crate) mod pieces;
+mod snap;
 
 use self::pieces::{MAX_SIZE, MIN_SIZE, Piece, PieceGeometry, PieceKind};
 use super::actions::{Hand, LatestTouch, TouchRead};
-use super::planes::SceneCapture;
+use super::planes::{SceneCapture, SceneShapes, Shape};
 use super::rig::{Rig, heading};
 use super::spawn::ray_triangle;
 use crate::input::ExternalPad;
@@ -111,6 +113,8 @@ struct BuildState {
     selected: usize,
     sizes: [f32; PieceKind::ALL.len()],
     yaw: f32,
+    /// `yaw`, lined up with a table edge when the ghost is on one.
+    placed_yaw: f32,
     /// World-space ray (origin, end, lands on a ground-like face).
     ray: Option<(Vec3, Vec3, bool)>,
     /// Where the selected piece would go (tracking position, world point).
@@ -129,6 +133,7 @@ impl Default for BuildState {
             selected: 0,
             sizes: [1.0; PieceKind::ALL.len()],
             yaw: 0.0,
+            placed_yaw: 0.0,
             ray: None,
             ghost: None,
             target: None,
@@ -217,6 +222,7 @@ fn build_controls(
     rig: Res<Rig>,
     hands: Query<(&Hand, &Transform)>,
     physics: Option<Res<GamePhysics>>,
+    shapes: Res<SceneShapes>,
     mut pad: ResMut<ExternalPad>,
     mut state: ResMut<BuildState>,
     mut placed: ResMut<PlacedPieces>,
@@ -304,13 +310,24 @@ fn build_controls(
         None => (origin, origin + direction * MISS_LENGTH, false),
     });
     state.ghost = valid.map(|h| (to_tracking.transform_point3(h.point), h.point));
+    state.placed_yaw = match state.ghost {
+        Some((position, _)) => snap::snap_yaw(
+            shapes.0.iter().filter_map(|s| match *s {
+                Shape::Box { pose, half } => Some((pose.rotation, pose.translation, half)),
+                Shape::Plane { .. } => None,
+            }),
+            position,
+            state.yaw,
+        ),
+        None => state.yaw,
+    };
 
     if let Some(id) = placed.dragging {
         if let (Some((position, _)), Some(item)) =
             (state.ghost, placed.items.iter_mut().find(|p| p.id == id))
         {
             item.position = position.to_array();
-            item.yaw = state.yaw;
+            item.yaw = state.placed_yaw;
         }
         if !now.grip {
             placed.dragging = None;
@@ -338,7 +355,7 @@ fn build_controls(
     if pressed(now.trigger, previous.trigger) {
         if let Some((position, _)) = state.ghost {
             let piece = state.piece();
-            let yaw = state.yaw;
+            let yaw = state.placed_yaw;
             let id = placed.add(piece, position, yaw);
             info!("BUILD placed {:?} size {:.2} as piece {id} at {position:?}", piece.kind, piece.size);
         }
@@ -588,7 +605,7 @@ fn show_build(
             }
             *ghost_tf = Transform {
                 translation: point,
-                rotation: root.rotation * Quat::from_rotation_y(state.yaw),
+                rotation: root.rotation * Quat::from_rotation_y(state.placed_yaw),
                 scale: Vec3::ONE,
             };
             *ghost_vis = Visibility::Visible;
