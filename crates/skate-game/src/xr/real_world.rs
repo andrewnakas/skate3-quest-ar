@@ -5,7 +5,7 @@
 //! plane or box already covers it: the mesh is lumpy, so the flat faces are
 //! what gets ridden wherever they exist. Rebuilt when the course is placed
 //! and whenever the set of located Scene entities changes.
-use super::planes::{LocatedMesh, RoomMesh, SceneShapes, Shape};
+use super::planes::{LocatedMesh, RoomMesh, SceneRevision, SceneShapes, Shape};
 use super::rig::Rig;
 use crate::physics::GamePhysics;
 use bevy::prelude::*;
@@ -34,8 +34,9 @@ fn rebuild_collision(
     rig: Res<Rig>,
     shapes: Res<SceneShapes>,
     room: Res<RoomMesh>,
+    revision: Res<SceneRevision>,
     physics: Option<ResMut<GamePhysics>>,
-    mut built: Local<Option<((Vec3, f32), usize, bool)>>,
+    mut built: Local<Option<((Vec3, f32), u64)>>,
 ) {
     let (Some(anchor), Some(root), Some(mut physics)) = (rig.anchor, rig.root_transform(), physics)
     else {
@@ -43,7 +44,7 @@ fn rebuild_collision(
     };
     // Re-located poses wobble by tracking noise every frame; only a new
     // placement or a different set of entities is worth a rebuild.
-    let key = (anchor, shapes.0.len(), room.0.is_some());
+    let key = (anchor, revision.0);
     if rig.placing || shapes.0.is_empty() || *built == Some(key) {
         return;
     }

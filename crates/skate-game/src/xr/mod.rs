@@ -38,6 +38,11 @@ pub(crate) fn plugins(base: PluginGroupBuilder) -> PluginGroupBuilder {
     raw.fb_scene = true;
     // The room's triangle mesh, for objects Scene has no plane or box for.
     raw.meta_spatial_entity_mesh = true;
+    // In-app "rescan the room" (runs Space Setup).
+    raw.fb_scene_capture = true;
+    // Probe only: Oculus 206 didn't offer it. bevy_mod_openxr drops any
+    // extension the runtime lacks; `log_scene_extensions` reports the result.
+    raw.ext_plane_detection = true;
     // Without this the runtime never receives the Activity (bevy_mod_openxr
     // doesn't enable it), and the session stays IDLE forever on Quest.
     #[cfg(target_os = "android")]
@@ -85,10 +90,25 @@ impl Plugin for XrPlugin {
             .add_systems(PostStartup, |mut clear: ResMut<ClearColor>| {
                 clear.0 = Color::NONE;
             })
+            .add_systems(Startup, log_scene_extensions)
             .add_systems(PostUpdate, headset_only_rendering)
             .add_observer(no_window_surface)
             .add_observer(no_eye_occlusion_culling)
             .add_observer(no_eye_indirect_drawing);
+    }
+}
+
+fn log_scene_extensions(exts: Option<Res<bevy_mod_openxr::exts::OxrEnabledExtensions>>) {
+    if let Some(e) = exts {
+        info!(
+            "XR scene extensions: spatial_entity={} query={} scene={} mesh={} scene_capture={} plane_detection={}",
+            e.fb_spatial_entity,
+            e.fb_spatial_entity_query,
+            e.fb_scene,
+            e.meta_spatial_entity_mesh,
+            e.fb_scene_capture,
+            e.ext_plane_detection
+        );
     }
 }
 

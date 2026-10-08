@@ -66,6 +66,12 @@ pub(crate) enum Shape {
 #[derive(Resource, Default)]
 pub(crate) struct SceneShapes(pub Vec<Shape>);
 
+/// Bumped whenever [`SceneShapes`] or [`RoomMesh`] gains or loses entities,
+/// so collision rebuilds when located entities arrive (not just on
+/// placement).
+#[derive(Resource, Default)]
+pub(crate) struct SceneRevision(pub u64);
+
 /// Space Setup's triangle mesh of the whole room (`XR_META_spatial_entity_mesh`),
 /// in its own space; `pose` places it in tracking space.
 #[derive(Clone)]
@@ -131,6 +137,7 @@ impl Plugin for PlanesPlugin {
         app.init_resource::<DetectedPlanes>()
             .init_resource::<SceneShapes>()
             .init_resource::<RoomMesh>()
+            .init_resource::<SceneRevision>()
             .init_resource::<SceneQuery>()
             .add_oxr_event_handler(on_scene_event)
             .add_systems(
@@ -286,6 +293,9 @@ fn retrieve_surfaces(
         return Vec::new();
     }
     buf.truncate(results.result_count_output as usize);
+    for r in &buf {
+        enable_locatable(instance, r.space);
+    }
     let session = session.as_raw();
     buf.into_iter()
         .filter_map(|r| {
@@ -315,6 +325,45 @@ fn retrieve_surfaces(
             })
         })
         .collect()
+}
+
+/// Queried spaces can't be located until their LOCATABLE component is
+/// enabled: until then `xrLocateSpace` reports no valid pose, and every Scene
+/// entity was dropped (only the fallback floor survived). The enable is
+/// asynchronous; `locate_surfaces` picks the entities up once it lands.
+fn enable_locatable(instance: &OxrInstance, space: sys::Space) {
+    let Some(fp) = instance.exts().fb_spatial_entity.as_ref() else {
+        return;
+    };
+    let mut status = sys::SpaceComponentStatusFB {
+        ty: sys::SpaceComponentStatusFB::TYPE,
+        next: ptr::null_mut(),
+        enabled: sys::FALSE,
+        change_pending: sys::FALSE,
+    };
+    let known = cvt(unsafe {
+        (fp.get_space_component_status)(space, sys::SpaceComponentTypeFB::LOCATABLE, &mut status)
+    });
+    if known.is_ok() && (status.enabled == sys::TRUE || status.change_pending == sys::TRUE) {
+        return;
+    }
+    let info = sys::SpaceComponentStatusSetInfoFB {
+        ty: sys::SpaceComponentStatusSetInfoFB::TYPE,
+        next: ptr::null(),
+        component_type: sys::SpaceComponentTypeFB::LOCATABLE,
+        enabled: sys::TRUE,
+        timeout: sys::Duration::NONE,
+    };
+    let mut request = sys::AsyncRequestIdFB::from_raw(0);
+    match unsafe { (fp.set_space_component_status)(space, &info, &mut request) } {
+        sys::Result::ERROR_SPACE_COMPONENT_STATUS_ALREADY_SET_FB
+        | sys::Result::ERROR_SPACE_COMPONENT_STATUS_PENDING_FB => {}
+        result => {
+            if let Err(e) = cvt(result) {
+                warn!("Enabling LOCATABLE on a Scene space failed: {e:?}");
+            }
+        }
+    }
 }
 
 fn triangle_mesh(
@@ -399,12 +448,15 @@ fn locate_surfaces(
     mut planes: ResMut<DetectedPlanes>,
     mut shapes: ResMut<SceneShapes>,
     mut room: ResMut<RoomMesh>,
+    mut revision: ResMut<SceneRevision>,
+    mut was_located: Local<Vec<Option<bool>>>,
 ) {
     let Some(frame_state) = frame_state else { return };
+    was_located.resize(query.surfaces.len(), None);
     let base = sys::Space::from_raw(primary_space.as_raw());
     let mut located = Vec::new();
     let mut room_mesh = None;
-    for surface in &query.surfaces {
+    for (i, surface) in query.surfaces.iter().enumerate() {
         if IGNORED_LABELS.iter().any(|l| surface.label.contains(l)) {
             continue;
         }
@@ -423,10 +475,14 @@ fn locate_surfaces(
             )
         };
         let flags = location.location_flags;
-        if cvt(result).is_err()
-            || !flags.contains(sys::SpaceLocationFlags::POSITION_VALID)
-            || !flags.contains(sys::SpaceLocationFlags::ORIENTATION_VALID)
-        {
+        let ok = cvt(result).is_ok()
+            && flags.contains(sys::SpaceLocationFlags::POSITION_VALID)
+            && flags.contains(sys::SpaceLocationFlags::ORIENTATION_VALID);
+        if was_located[i] != Some(ok) {
+            was_located[i] = Some(ok);
+            info!("Scene: {:?} located={ok} ({result:?}, {flags:?})", surface.label);
+        }
+        if !ok {
             continue;
         }
         if let Some((vertices, indices)) = &surface.mesh {
@@ -465,6 +521,9 @@ fn locate_surfaces(
             half: Vec2::splat(FLOOR_HALF_EXTENT_M),
             floor: true,
         });
+    }
+    if shapes.0.len() != located.len() || room.0.is_some() != room_mesh.is_some() {
+        revision.0 += 1;
     }
     room.0 = room_mesh;
     planes.0 = located.iter().filter_map(upward_surface).collect();
