@@ -81,6 +81,7 @@ fn spawn_visuals(
 fn aim_and_spawn(
     touch: Res<LatestTouch>,
     rig: Res<Rig>,
+    build: Res<super::build::BuildMode>,
     hands: Query<(&Hand, &Transform)>,
     physics: Option<Res<GamePhysics>>,
     skater: Option<ResMut<SkaterRuntime>>,
@@ -88,7 +89,7 @@ fn aim_and_spawn(
     mut aim: ResMut<Aim>,
 ) {
     let touch = &touch.0;
-    let held = touch.left_grip >= SQUEEZE && touch.left_trigger >= SQUEEZE && !rig.placing;
+    let held = touch.left_grip >= SQUEEZE && touch.left_trigger >= SQUEEZE && !build.active;
     if !held {
         aim.ray = None;
         if let (Some((point, forward)), Some(mut skater)) = (aim.target.take(), skater) {
@@ -170,7 +171,7 @@ fn raycast(triangles: &[WorldTriangle], origin: Vec3, direction: Vec3) -> Option
 }
 
 /// Möller-Trumbore, both faces.
-fn ray_triangle(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
+pub(super) fn ray_triangle(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
     let (e1, e2) = (b - a, c - a);
     let p = direction.cross(e2);
     let det = e1.dot(p);

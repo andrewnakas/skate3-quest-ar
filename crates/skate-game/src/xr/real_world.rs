@@ -3,9 +3,13 @@
 //! tops (and table planes) are ledges. The room's scanned triangle mesh fills
 //! in everything else (chairs, shelves, clutter), but only where no clean
 //! plane or box already covers it: the mesh is lumpy, so the flat faces are
-//! what gets ridden wherever they exist. Rebuilt when the course is placed
-//! and whenever the set of located Scene entities changes.
+//! what gets ridden wherever they exist. The player's placed pieces
+//! (`xr::build`) are added on top. Rebuilt whenever the set of located Scene
+//! entities changes or the layout is edited.
 use super::planes::{LocatedMesh, RoomMesh, SceneRevision, SceneShapes, Shape};
+use super::build::PlacedPieces;
+use crate::physics::ground::PlacedSurfaces;
+use crate::physics::SkaterRuntime;
 use super::rig::Rig;
 use crate::physics::GamePhysics;
 use bevy::prelude::*;
@@ -35,41 +39,66 @@ fn rebuild_collision(
     shapes: Res<SceneShapes>,
     room: Res<RoomMesh>,
     revision: Res<SceneRevision>,
+    placed: Res<PlacedPieces>,
     physics: Option<ResMut<GamePhysics>>,
-    mut built: Local<Option<((Vec3, f32), u64)>>,
+    skater: Option<ResMut<SkaterRuntime>>,
+    mut built: Local<Option<((Vec3, f32), u64, u64)>>,
 ) {
-    let (Some(anchor), Some(root), Some(mut physics)) = (rig.anchor, rig.root_transform(), physics)
+    let (Some(anchor), Some(root), Some(mut physics), Some(mut skater)) =
+        (rig.anchor, rig.root_transform(), physics, skater)
     else {
         return;
     };
     // Re-located poses wobble by tracking noise every frame; only a new
-    // placement or a different set of entities is worth a rebuild.
-    let key = (anchor, revision.0);
-    if rig.placing || shapes.0.is_empty() || *built == Some(key) {
+    // anchor, a different set of entities or an edited layout is worth a
+    // rebuild. A piece being dragged rebuilds when it is dropped, and grind
+    // state refers to the current rails, so a grind finishes first.
+    let key = (anchor, revision.0, placed.revision);
+    if shapes.0.is_empty() || *built == Some(key) || placed.dragging.is_some() || skater.is_grinding() {
         return;
     }
     *built = Some(key);
-    let (quads, edges) = real_geometry(&shapes.0);
+    let started = std::time::Instant::now();
+    let (quads, real_edges) = real_geometry(&shapes.0);
     let triangles = room
         .0
         .as_ref()
         .map(|mesh| mesh_triangles(mesh, &shapes.0))
         .unwrap_or_default();
-    let to_world = |p: Vec3| {
-        let w = root.transform_point(p);
-        Vector3::new(w.x, w.y, w.z)
-    };
+    let v = |w: Vec3| Vector3::new(w.x, w.y, w.z);
+    let to_world = |p: Vec3| v(root.transform_point(p));
     let (quad_count, triangle_count) = (quads.len(), triangles.len());
     let quads = quads.into_iter().map(|q| q.map(to_world)).collect();
     let triangles = triangles.into_iter().map(|t| t.map(to_world)).collect();
-    let edges = edges.into_iter().map(|(a, b)| (to_world(a), to_world(b))).collect();
-    match physics.set_real_surfaces(quads, triangles, edges) {
-        Ok(()) => info!(
-            "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} shapes",
-            shapes.0.len()
-        ),
-        Err(e) => error!("AR collision rebuild failed: {e}"),
+    let edges: Vec<_> = real_edges.iter().map(|&(a, b)| (to_world(a), to_world(b))).collect();
+    // Table and furniture tops are grindable ledges.
+    let mut rails: Vec<Vec<Vector3>> = edges.iter().map(|&(a, b)| vec![a, b]).collect();
+    let mut pieces = Vec::with_capacity(placed.items.len());
+    for item in &placed.items {
+        let at = item.world_transform(&root);
+        let local = |p: Vec3| v(at.transform_point(p));
+        let geometry = item.piece.geometry();
+        rails.extend(geometry.rails.iter().map(|r| r.iter().map(|&p| local(p)).collect()));
+        pieces.push(PlacedSurfaces {
+            quads: geometry.quads.iter().map(|q| q.map(local)).collect(),
+            rail_quads: geometry.rail_quads.iter().map(|q| q.map(local)).collect(),
+            edges: geometry.edges.iter().map(|&(a, b)| (local(a), local(b))).collect(),
+        });
     }
+    let piece_count = pieces.len();
+    if let Err(e) = physics.set_real_surfaces(quads, triangles, edges, pieces) {
+        error!("AR collision rebuild failed: {e}");
+        return;
+    }
+    if let Err(e) = physics.set_grind_rails(&rails, &mut skater) {
+        error!("AR grind rails rebuild failed: {e}");
+    }
+    info!(
+        "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} shapes, {piece_count} placed pieces, {} grind rails ({:.1} ms)",
+        shapes.0.len(),
+        rails.len(),
+        started.elapsed().as_secs_f32() * 1000.0
+    );
 }
 
 /// Tracking-space room-mesh triangles not already covered by a Scene plane

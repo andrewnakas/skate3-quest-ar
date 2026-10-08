@@ -172,20 +172,56 @@ pub(crate) fn flat_world(material: RetailContactMaterial) -> BoardWorld {
 /// queries to the cells near the board.
 const REAL_CELL: f32 = 8.0;
 
-/// AR passthrough: the course's props standing on real-world surfaces. The
-/// real geometry takes the landing floor's place (tag 0); the course's own
-/// floor is dropped. Real quads use the course winding (normal `w x u`, see
-/// `xr::real_world`); real triangles are taken as given. Real edges (table and
-/// furniture tops) are ledges.
+/// A piece the player placed in AR, already in world space. `rail_quads` are
+/// grind-tube faces and get the convex rail collision flags.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PlacedSurfaces {
+    pub quads: Vec<[Vector3; 4]>,
+    pub rail_quads: Vec<[Vector3; 4]>,
+    pub edges: Vec<(Vector3, Vector3)>,
+}
+
+/// AR passthrough: the real room plus whatever the player placed in it. The
+/// real geometry is the floor (tag 0). Real quads use the course winding
+/// (normal `w x u`, see `xr::real_world`); real triangles are taken as given.
+/// Real edges (table and furniture tops) are ledges. Each placed piece is its
+/// own query mesh (tag 1).
 pub(crate) fn course_on_real_world(
     material: RetailContactMaterial,
     real_quads: Vec<[Vector3; 4]>,
     real_triangles: Vec<[Vector3; 3]>,
     real_edges: Vec<(Vector3, Vector3)>,
+    pieces: Vec<PlacedSurfaces>,
 ) -> BoardWorld {
-    let [_floor, platform, half_pipe, climbing] = surfaces();
-    let mut triangles = course_triangles(material, [vec![], platform, half_pipe, climbing]);
-    let mut ranges = vec![0..triangles.len()];
+    let mut triangles = Vec::new();
+    let mut ranges = Vec::new();
+    let mut piece_edges = Vec::new();
+    for piece in pieces {
+        let start = triangles.len();
+        for (quads, rail) in [(piece.quads, false), (piece.rail_quads, true)] {
+            for vertices in quads {
+                for (half, indices) in [[0, 2, 1], [0, 3, 2]].into_iter().enumerate() {
+                    let convex = match (rail, half) {
+                        (false, _) => 0,
+                        (true, 0) => 0x60,
+                        (true, _) => 0xc0,
+                    };
+                    triangles.push(WorldTriangle {
+                        triangle: triangle_from_volume(
+                            indices.map(|i| vertices[i]),
+                            0.0,
+                            [1.0; 3],
+                            TriangleFeature::ONE_SIDED | convex,
+                        ),
+                        material,
+                        tag: 1,
+                    });
+                }
+            }
+        }
+        ranges.push(start..triangles.len());
+        piece_edges.extend(piece.edges);
+    }
 
     let mut real: Vec<WorldTriangle> = real_quads
         .iter()
@@ -209,15 +245,14 @@ pub(crate) fn course_on_real_world(
         ranges.push(start..triangles.len());
     }
 
-    let mut edges = query_edges();
-    edges.extend(real_edges.into_iter().filter_map(|(start, end)| {
+    let edges = real_edges.into_iter().chain(piece_edges).filter_map(|(start, end)| {
         Some(EdgeSegment {
             start,
             end,
             local_bounds: Bounds::from_points([start, end])?,
         })
-    }));
-    assemble(triangles, ranges, edges)
+    });
+    assemble(triangles, ranges, edges.collect())
 }
 
 fn build_world(

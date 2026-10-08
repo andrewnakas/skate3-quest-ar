@@ -13,22 +13,12 @@
 //! in the room, with world -Z along the anchor's forward direction, and the
 //! whole world `k` times smaller than life.
 //!
-//! Placement mode: hold the left menu button for a second (without using it
-//! as a D-pad/Back chord). While placing, the miniature follows the right
-//! controller and the pad is neutral; press A to set it down. A new session
-//! starts in placement mode.
-use super::actions::{Hand, LatestTouch};
-use super::planes::DetectedPlanes;
+//! The anchor is the STAGE origin (the Guardian's floor centre) facing STAGE
+//! -Z, so the world is pinned to the room the same way every launch: a saved
+//! layout (`xr::build`) comes back on the same tables.
 use super::XrOptions;
-use crate::input::ExternalPad;
 use bevy::prelude::*;
-use bevy_mod_openxr::openxr_session_running;
-use bevy_mod_xr::session::{XrSessionCreated, XrTrackingRoot};
-use skate_core::input::xbox::XboxState;
-
-const HOLD_TO_PLACE_SECONDS: f32 = 1.0;
-/// Left stick deflection that makes a menu hold a D-pad chord instead.
-const CHORD_STICK: f32 = 0.3;
+use bevy_mod_xr::session::XrTrackingRoot;
 
 #[derive(Resource, Debug)]
 pub(crate) struct Rig {
@@ -38,7 +28,6 @@ pub(crate) struct Rig {
     pub world_origin: Vec3,
     /// Tracking-space anchor position and yaw.
     pub anchor: Option<(Vec3, f32)>,
-    pub placing: bool,
 }
 
 impl Rig {
@@ -71,17 +60,8 @@ impl Plugin for RigPlugin {
         app.insert_resource(Rig {
             scale: self.0.scale,
             world_origin,
-            anchor: None,
-            placing: true,
+            anchor: Some((Vec3::ZERO, 0.0)),
         })
-        .add_systems(XrSessionCreated, |mut rig: ResMut<Rig>| rig.placing = true)
-        .add_systems(
-            PreUpdate,
-            placement
-                .after(super::actions::TouchRead)
-                .before(crate::input::poll_controllers)
-                .run_if(openxr_session_running),
-        )
         .add_systems(
             PostUpdate,
             apply_root.before(bevy::transform::TransformSystems::Propagate),
@@ -92,62 +72,8 @@ impl Plugin for RigPlugin {
 fn spawn_ground(config: &crate::config::Config) -> Vec3 {
     match &config.map {
         Some(map) => Vec3::from_array(map.spawn),
-        // The test course's (hidden) landing floor sits on the real surface;
-        // the spawn platform, ramp, half pipe, rails and ledge stand on it.
+        // The test course's landing-floor height sits on the real floor.
         None => Vec3::new(0.0, crate::physics::ground::FLOOR_HEIGHT, 0.0),
-    }
-}
-
-fn placement(
-    touch: Res<LatestTouch>,
-    time: Res<Time<Real>>,
-    hands: Query<(&Hand, &Transform)>,
-    planes: Res<DetectedPlanes>,
-    mut rig: ResMut<Rig>,
-    mut pad: ResMut<ExternalPad>,
-    mut hold: Local<Option<f32>>,
-    mut toggled: Local<bool>,
-    mut a_was_down: Local<bool>,
-) {
-    let touch = &touch.0;
-    let chording = touch.x
-        || touch.left_stick[0].abs() > CHORD_STICK
-        || touch.left_stick[1].abs() > CHORD_STICK;
-    *hold = match (*hold, touch.menu && !chording) {
-        (_, false) => {
-            *toggled = false;
-            None
-        }
-        (None, true) => Some(0.0),
-        (Some(t), true) => Some(t + time.delta_secs()),
-    };
-    if hold.is_some_and(|t| t >= HOLD_TO_PLACE_SECONDS) && !*toggled {
-        *toggled = true;
-        rig.placing = !rig.placing;
-        info!("XR placement mode: {}", rig.placing);
-    }
-
-    let a_pressed = touch.a && !*a_was_down;
-    *a_was_down = touch.a;
-    if !rig.placing {
-        return;
-    }
-    pad.set(XboxState {
-        buttons: 0,
-        triggers: [0, 0],
-        left: [0, 0],
-        right: [0, 0],
-    });
-    let Some((_, aim)) = hands.iter().find(|(hand, _)| matches!(hand, Hand::Right)) else {
-        return;
-    };
-    // Height comes from the real surface under the controller (table or
-    // floor), heading from where the controller points.
-    let position = planes.snap(aim.translation).unwrap_or(aim.translation);
-    rig.anchor = Some((position, heading(aim.rotation)));
-    if a_pressed {
-        rig.placing = false;
-        info!("XR miniature placed at {:?}", rig.anchor);
     }
 }
 

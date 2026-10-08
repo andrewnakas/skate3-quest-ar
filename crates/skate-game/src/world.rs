@@ -49,9 +49,10 @@ pub(crate) fn spawn_test_world(
         Color::srgb(0.30, 0.43, 0.48),
         Color::srgb(0.24, 0.48, 0.31),
     ];
-    // Index 0 is the landing floor; it stays in the collision world either way.
+    // `hide_floor` is AR: the real room is the floor and the player builds
+    // the course (`xr::build`), so none of the test course is drawn there.
     let groups = crate::physics::ground::surfaces().into_iter().zip(colors);
-    for (quads, color) in groups.skip(usize::from(hide_floor)) {
+    for (quads, color) in groups.take(if hide_floor { 0 } else { 4 }) {
         let positions: Vec<[f32; 3]> = quads
             .into_iter()
             .flat_map(|vertices| {

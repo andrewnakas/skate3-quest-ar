@@ -245,20 +245,60 @@ impl GamePhysics {
         &self.world
     }
 
-    /// AR passthrough: replace the static collision with the test course's
-    /// props on real-world surfaces (world-space quads, room-mesh triangles
-    /// and ledge edges).
+    /// AR passthrough: replace the static collision with the real room
+    /// (world-space quads, room-mesh triangles and ledge edges) plus the
+    /// pieces the player placed.
     #[cfg_attr(not(feature = "xr"), allow(dead_code))]
     pub(crate) fn set_real_surfaces(
         &mut self,
         quads: Vec<[skate_core::math::Vector3; 4]>,
         triangles: Vec<[skate_core::math::Vector3; 3]>,
         edges: Vec<(skate_core::math::Vector3, skate_core::math::Vector3)>,
+        pieces: Vec<ground::PlacedSurfaces>,
     ) -> Result<(), String> {
-        let world =
-            ground::course_on_real_world(self.settings.floor_material, quads, triangles, edges);
+        let world = ground::course_on_real_world(
+            self.settings.floor_material,
+            quads,
+            triangles,
+            edges,
+            pieces,
+        );
         self.offboard_grab_scene = offboard::grab_scene::Registry::new(&world, Vec::new(), Vec::new())?;
         self.world = world;
+        Ok(())
+    }
+
+    /// AR passthrough: replace the grind splines (placed rails, ledge and
+    /// coping edges, real table edges; world-space polylines). The skater's
+    /// air trajectory holds its own handle and is re-bound. Callers must not
+    /// swap while the skater is grinding: grind state refers to the old
+    /// provider's primitives.
+    #[cfg_attr(not(feature = "xr"), allow(dead_code))]
+    pub(crate) fn set_grind_rails(
+        &mut self,
+        rails: &[Vec<skate_core::math::Vector3>],
+        skater: &mut SkaterRuntime,
+    ) -> Result<(), String> {
+        let authored: Vec<_> = rails
+            .iter()
+            .filter(|points| points.len() >= 2)
+            .enumerate()
+            .map(|(i, points)| skate_data::skate_map::Rail {
+                name: format!("ar_rail_{i}"),
+                closed: false,
+                points: points.iter().map(|p| [p.x, p.y, p.z]).collect(),
+                native: None,
+            })
+            .collect();
+        let provider = if authored.is_empty() {
+            crate::grind_world::StaticProvider::new(None)?
+        } else {
+            crate::grind_world::StaticProvider::authored(&authored)?
+        };
+        self.grind_world = std::sync::Arc::new(provider);
+        skater
+            .trajectory
+            .bind_grind_world(std::sync::Arc::clone(&self.grind_world));
         Ok(())
     }
 
@@ -672,6 +712,13 @@ mod offboard_jump_playback_tests;
 mod offboard_root_trace;
 
 impl SkaterRuntime {
+    /// Grind state refers to the grind provider's primitives, so the provider
+    /// must not be swapped while this is true.
+    #[cfg_attr(not(feature = "xr"), allow(dead_code))]
+    pub(crate) fn is_grinding(&self) -> bool {
+        self.grind.active_family().is_some()
+    }
+
     /// Observe the current grind publication without adding a second grind owner.
     pub(crate) fn mod_grind(&self) -> (bool, &str, u32, f32) {
         let out = &self.player_input.physical.grinds;
