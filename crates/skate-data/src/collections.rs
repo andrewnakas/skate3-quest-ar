@@ -1,6 +1,10 @@
 //! Typed access to converted stock skater XML values, without engine objects.
 use serde::Deserialize;
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+    sync::OnceLock,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct Field {
@@ -36,6 +40,11 @@ pub struct Collection {
 pub struct Collections {
     version: u32,
     collections: Vec<Collection>,
+    /// (class id, key id) -> first collection with that identity, built on
+    /// first lookup. Matching by scan formatted two hash names per
+    /// collection per lookup: ~6 s of the Quest's startup.
+    #[serde(skip)]
+    index: OnceLock<HashMap<(u64, u64), usize>>,
 }
 
 impl Collections {
@@ -56,8 +65,8 @@ impl Collections {
         let mut identities = std::collections::BTreeSet::new();
         for item in &data.collections {
             if !identities.insert((
-                crate::attrib_hash::numeric_name(&item.class_name),
-                crate::attrib_hash::numeric_name(&item.key),
+                crate::attrib_hash::numeric_id(&item.class_name),
+                crate::attrib_hash::numeric_id(&item.key),
             )) {
                 return Err(format!(
                     "Duplicate collection {}/{}",
@@ -71,25 +80,28 @@ impl Collections {
     pub fn field(&self, class: &str, key: &str, name: &str) -> Result<&Field, String> {
         // Converted vaults can retain numeric identities when debug names were
         // unavailable. Both spellings identify the same native AttribSys entry.
-        let class_id = crate::attrib_hash::numeric_name(class);
-        let field_id = crate::attrib_hash::numeric_name(name);
+        use crate::attrib_hash::numeric_id;
+        let index = self.index.get_or_init(|| {
+            let mut index = HashMap::with_capacity(self.collections.len());
+            for (i, c) in self.collections.iter().enumerate() {
+                index
+                    .entry((numeric_id(&c.class_name), numeric_id(&c.key)))
+                    .or_insert(i);
+            }
+            index
+        });
+        let class_id = numeric_id(class);
+        let field_id = numeric_id(name);
         let mut current = key;
         for _ in 0..=self.collections.len() {
-            let current_id = crate::attrib_hash::numeric_name(current);
-            let item = self
-                .collections
-                .iter()
-                .find(|c| {
-                    (c.class_name == class
-                        || crate::attrib_hash::numeric_name(&c.class_name) == class_id)
-                        && (c.key == current
-                            || crate::attrib_hash::numeric_name(&c.key) == current_id)
-                })
+            let item = index
+                .get(&(class_id, numeric_id(current)))
+                .map(|&i| &self.collections[i])
                 .ok_or_else(|| format!("Missing stock collection {class}/{current}"))?;
             if let Some(field) = item.fields.get(name).or_else(|| {
                 item.fields
                     .iter()
-                    .find(|(key, _)| crate::attrib_hash::numeric_name(key) == field_id)
+                    .find(|(key, _)| numeric_id(key) == field_id)
                     .map(|(_, field)| field)
             }) {
                 return Ok(field);

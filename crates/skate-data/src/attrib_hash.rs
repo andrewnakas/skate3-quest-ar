@@ -32,10 +32,14 @@ pub fn hash(text: &str) -> u64 {
     mix(a, b, c).2
 }
 pub fn numeric_name(text: &str) -> String {
-    let key = text
-        .strip_prefix("Hash_")
+    format!("Hash_{:016X}", numeric_id(text))
+}
+
+/// The key [`numeric_name`] spells out, without allocating. Two names are
+/// the same AttribSys entry exactly when their ids are equal.
+pub fn numeric_id(text: &str) -> u64 {
+    text.strip_prefix("Hash_")
         .or_else(|| text.strip_prefix("0x"))
         .and_then(|hex| u64::from_str_radix(hex, 16).ok())
-        .unwrap_or_else(|| hash(text));
-    format!("Hash_{key:016X}")
+        .unwrap_or_else(|| hash(text))
 }
