@@ -14,6 +14,8 @@ use bevy_mod_openxr::{
 
 mod actions;
 mod build;
+mod mesh_planes;
+mod plane_view;
 mod planes;
 mod real_world;
 pub(crate) mod rig;
@@ -86,6 +88,7 @@ impl Plugin for XrPlugin {
                 real_world::RealWorldPlugin,
                 spawn::SpawnPlugin,
                 build::BuildPlugin,
+                plane_view::PlaneViewPlugin,
             ))
             // The world plugin sets an opaque clear colour at build time;
             // passthrough needs alpha 0 wherever nothing was drawn.

@@ -3,8 +3,10 @@
 //! Quest's runtime does not offer `XR_EXT_plane_detection`; its planes and
 //! objects are what the headset's Space Setup captured: floor and walls as 2D
 //! planes, furniture (tables, couches, beds, storage...) as 3D boxes. They are
-//! queried once (retried until the Scene permission is granted and results
-//! arrive) and re-located every frame. The tracking space is STAGE, so the real
+//! queried until results arrive (retried until the Scene permission is
+//! granted), then re-queried every [`REFRESH_SECONDS`] so a new or edited
+//! room scan shows up live, and re-located every frame. Flat things Space
+//! Setup did not label are found in its room mesh (`mesh_planes`). The tracking space is STAGE, so the real
 //! floor is always available at y = 0 even without a room scan.
 use bevy::prelude::*;
 use bevy_mod_openxr::{
@@ -72,6 +74,11 @@ pub(crate) struct SceneShapes(pub Vec<Shape>);
 #[derive(Resource, Default)]
 pub(crate) struct SceneRevision(pub u64);
 
+/// The Space Setup label of each [`SceneShapes`] entry, in the same order
+/// ("FLOOR" for the fallback floor).
+#[derive(Resource, Default)]
+pub(crate) struct SceneLabels(pub Vec<String>);
+
 /// Space Setup's triangle mesh of the whole room (`XR_META_spatial_entity_mesh`),
 /// in its own space; `pose` places it in tracking space.
 #[derive(Clone)]
@@ -108,6 +115,14 @@ struct SceneQuery {
     surfaces: Vec<SceneSurface>,
     since_attempt: Option<f32>,
     attempt: usize,
+    /// The query shape the runtime last accepted, reused for refreshes.
+    accepted: Option<QueryShape>,
+    /// A refresh is in flight; its results collect in `incoming`.
+    refreshing: bool,
+    incoming: Vec<SceneSurface>,
+    since_refresh: f32,
+    /// A refresh replaced `surfaces`; `locate_surfaces` bumps the revision.
+    changed: bool,
 }
 
 /// Quest runtimes reject some query shapes with ERROR_VALIDATION_FAILURE
@@ -123,6 +138,8 @@ const QUERY_SHAPES: [QueryShape; 3] =
     [QueryShape::All, QueryShape::Bounded2d, QueryShape::LocatableLocal];
 
 const RETRY_SECONDS: f32 = 5.0;
+/// How often the Scene is queried again for changes.
+pub(crate) const REFRESH_SECONDS: f32 = 15.0;
 const MAX_RESULTS: u32 = 128;
 /// Fallback floor when Space Setup has no FLOOR entity.
 const FLOOR_HALF_EXTENT_M: f32 = 10.0;
@@ -148,6 +165,7 @@ impl Plugin for PlanesPlugin {
             .init_resource::<SceneShapes>()
             .init_resource::<RoomMesh>()
             .init_resource::<SceneRevision>()
+            .init_resource::<SceneLabels>()
             .init_resource::<SceneQuery>()
             .init_resource::<SceneCapture>()
             .add_oxr_event_handler(on_scene_event)
@@ -170,21 +188,35 @@ fn query_scene(
     time: Res<Time<Real>>,
     mut query: ResMut<SceneQuery>,
 ) {
-    if query.pending.is_some() || !query.surfaces.is_empty() {
+    if query.pending.is_some() {
         return;
     }
-    if let Some(t) = query.since_attempt.as_mut() {
-        *t += time.delta_secs();
-        if *t < RETRY_SECONDS {
+    let shape = if !query.surfaces.is_empty() {
+        // Refresh: the same query again, to see whether the room changed.
+        query.since_refresh += time.delta_secs();
+        let Some(shape) = query.accepted else { return };
+        if query.since_refresh < REFRESH_SECONDS {
             return;
         }
-    }
-    query.since_attempt = Some(0.0);
+        query.since_refresh = 0.0;
+        query.refreshing = true;
+        shape
+    } else {
+        if let Some(t) = query.since_attempt.as_mut() {
+            *t += time.delta_secs();
+            if *t < RETRY_SECONDS {
+                return;
+            }
+        }
+        query.since_attempt = Some(0.0);
+        query.refreshing = false;
+        let shape = QUERY_SHAPES[query.attempt % QUERY_SHAPES.len()];
+        query.attempt += 1;
+        shape
+    };
     let Some(fp) = instance.exts().fb_spatial_entity_query.as_ref() else {
         return;
     };
-    let shape = QUERY_SHAPES[query.attempt % QUERY_SHAPES.len()];
-    query.attempt += 1;
     let storage = sys::SpaceStorageLocationFilterInfoFB {
         ty: sys::SpaceStorageLocationFilterInfoFB::TYPE,
         next: ptr::null(),
@@ -225,10 +257,16 @@ fn query_scene(
     };
     match cvt(result) {
         Ok(_) => {
-            info!("xrQuerySpacesFB accepted ({shape:?})");
+            if !query.refreshing {
+                info!("xrQuerySpacesFB accepted ({shape:?})");
+            }
+            query.accepted = Some(shape);
             query.pending = Some(request);
         }
-        Err(e) => warn!("xrQuerySpacesFB ({shape:?}): {e:?}, retrying"),
+        Err(e) => {
+            query.refreshing = false;
+            warn!("xrQuerySpacesFB ({shape:?}): {e:?}, retrying");
+        }
     }
 }
 
@@ -279,13 +317,20 @@ fn on_scene_event(
             for surface in query.surfaces.drain(..) {
                 unsafe { (instance.fp().destroy_space)(surface.space) };
             }
+            query.changed = true;
             query.since_attempt = None;
             query.attempt = 0;
             info!("Room scan: complete, re-querying the Scene");
         }
         openxr::Event::SpaceQueryResultsAvailableFB(e) if query.pending == Some(e.request_id()) => {
             let Some(session) = session else { return };
+            let started = std::time::Instant::now();
             let surfaces = retrieve_surfaces(&instance, &session, e.request_id());
+            if query.refreshing {
+                debug!("Scene refresh: {} spaces in {:.1} ms", surfaces.len(), started.elapsed().as_secs_f32() * 1000.0);
+                query.incoming.extend(surfaces);
+                return;
+            }
             for s in &surfaces {
                 info!(
                     "Scene: {:?} plane={} box={} mesh_triangles={}",
@@ -299,6 +344,27 @@ fn on_scene_event(
         }
         openxr::Event::SpaceQueryCompleteFB(e) if query.pending == Some(e.request_id()) => {
             query.pending = None;
+            if query.refreshing {
+                query.refreshing = false;
+                let incoming = std::mem::take(&mut query.incoming);
+                if cvt(e.result()).is_err() || incoming.is_empty() {
+                    release_unshared(&instance, &incoming, &query.surfaces);
+                    return;
+                }
+                if same_scene(&query.surfaces, &incoming) {
+                    release_unshared(&instance, &incoming, &query.surfaces);
+                } else {
+                    info!(
+                        "PLANES live update: Scene changed ({} -> {} entities)",
+                        query.surfaces.len(),
+                        incoming.len()
+                    );
+                    let old = std::mem::replace(&mut query.surfaces, incoming);
+                    release_unshared(&instance, &old, &query.surfaces);
+                    query.changed = true;
+                }
+                return;
+            }
             if let Err(err) = cvt(e.result()) {
                 warn!("Scene query failed: {err:?}");
             } else if query.surfaces.is_empty() {
@@ -315,6 +381,36 @@ fn on_scene_event(
         }
         _ => {}
     }
+}
+
+/// Destroys the spaces in `spaces` whose handles `kept` does not also hold
+/// (a re-query may hand back the handle of an already-loaded space).
+fn release_unshared(instance: &OxrInstance, spaces: &[SceneSurface], kept: &[SceneSurface]) {
+    for s in spaces {
+        if !kept.iter().any(|k| k.space == s.space) {
+            unsafe { (instance.fp().destroy_space)(s.space) };
+        }
+    }
+}
+
+/// Labels, bounds (to the millimetre) and mesh sizes, order-independent.
+fn same_scene(a: &[SceneSurface], b: &[SceneSurface]) -> bool {
+    fn key(s: &SceneSurface) -> (String, [i64; 10], usize) {
+        let mm = |v: f32| (v * 1000.0).round() as i64;
+        let r = s.rect.map_or([0; 4], |r| [r.offset.x, r.offset.y, r.extent.width, r.extent.height].map(mm));
+        let v = s.volume.map_or([0; 6], |v| {
+            [v.offset.x, v.offset.y, v.offset.z, v.extent.width, v.extent.height, v.extent.depth].map(mm)
+        });
+        let mut k = [0; 10];
+        k[..4].copy_from_slice(&r);
+        k[4..].copy_from_slice(&v);
+        (s.label.clone(), k, s.mesh.as_ref().map_or(0, |(v, i)| v.len() + i.len()))
+    }
+    let mut ka: Vec<_> = a.iter().map(key).collect();
+    let mut kb: Vec<_> = b.iter().map(key).collect();
+    ka.sort();
+    kb.sort();
+    ka == kb
 }
 
 fn retrieve_surfaces(
@@ -505,15 +601,22 @@ fn locate_surfaces(
     instance: Res<OxrInstance>,
     primary_space: Res<XrPrimaryReferenceSpace>,
     frame_state: Option<Res<OxrFrameState>>,
-    query: Res<SceneQuery>,
+    mut query: ResMut<SceneQuery>,
     mut planes: ResMut<DetectedPlanes>,
     mut shapes: ResMut<SceneShapes>,
+    mut labels: ResMut<SceneLabels>,
     mut room: ResMut<RoomMesh>,
     mut revision: ResMut<SceneRevision>,
     mut was_located: Local<Vec<Option<bool>>>,
 ) {
     let Some(frame_state) = frame_state else { return };
+    if query.changed {
+        query.changed = false;
+        was_located.clear();
+        revision.0 += 1;
+    }
     was_located.resize(query.surfaces.len(), None);
+    let mut located_labels = Vec::new();
     let base = sys::Space::from_raw(primary_space.as_raw());
     let mut located = Vec::new();
     let mut room_mesh = None;
@@ -562,6 +665,7 @@ fn locate_surfaces(
         if let Some(volume) = surface.volume {
             if let Some(shape) = to_box(location.pose, volume) {
                 located.push(shape);
+                located_labels.push(surface.label.clone());
             }
         } else if let Some(rect) = surface.rect {
             let shape = to_plane(location.pose, rect, surface.label.contains("FLOOR"));
@@ -569,6 +673,7 @@ fn locate_surfaces(
                 // Ceilings without a label still face down; skip them.
                 if (pose.rotation * Vec3::Y).y > -0.5 {
                     located.push(shape);
+                    located_labels.push(surface.label.clone());
                 }
             }
         }
@@ -582,6 +687,10 @@ fn locate_surfaces(
             half: Vec2::splat(FLOOR_HALF_EXTENT_M),
             floor: true,
         });
+        located_labels.push("FLOOR".into());
+    }
+    if labels.0 != located_labels {
+        labels.0 = located_labels;
     }
     if shapes.0.len() != located.len() || room.0.is_some() != room_mesh.is_some() {
         revision.0 += 1;

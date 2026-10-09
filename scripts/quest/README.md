@@ -62,14 +62,50 @@ under the `skate3` tag.
 | Left menu (tap) | Start |
 | Left menu held + left stick | D-pad |
 | Left menu held + X | Back |
-| Left menu held 1 s (alone) | Placement mode: the miniature follows your right controller, A sets it down |
+| Left menu held 1 s (alone) | Build mode (see below) |
 
-A new session starts in placement mode: touch the right controller to the
-table where the skater should start and press A. While placing, the app
-scans the room for real surfaces (`XR_EXT_plane_detection`) and snaps the
-miniature flush onto whichever table or floor you're pointing at, rather
-than wherever the controller happens to be tilted. The headset will ask for
-one-time Spatial Data consent the first time this runs; until it's granted,
-placement falls back to the raw controller pose.
+### Build mode
+
+Hold the left menu button for a second to enter or leave. The pad is neutral
+while building:
+
+| Touch | Build action |
+|---|---|
+| Left stick left/right | Choose a piece (wrist palette) |
+| Right controller | Point; a ghost shows where the piece goes |
+| Right trigger | Drop it there |
+| Right stick left/right / up-down | Turn 15° (snaps to table edges) / resize |
+| Right grip on a piece | Pick it up, release to put it down |
+| B on a piece | Delete it |
+| A | Keep the detected-planes overlay on outside build mode too |
+| Y | Rescan the room (Space Setup) |
+| Hold X | Clear every piece |
+
+### Planes
+
+The Quest runtime has no `XR_EXT_plane_detection`, so the app builds its own
+from Space Setup: the labelled floor, walls and furniture (`XR_FB_scene`),
+plus flat patches it finds in the scanned room mesh (steps, benches, boxes,
+shelves Space Setup didn't label). Mesh patches that fill their rectangle
+are ridden as flat surfaces with grindable edges. The Scene is re-queried
+every 15 s, so a rescan or edited room shows up without a restart.
+
+Build mode shows the detected planes: floor blue, furniture green, walls
+grey, mesh-found surfaces orange (yellow when only shown, not ridden). The
+overlay also flashes for a few seconds whenever the detected set changes.
+The headset asks for one-time Spatial Data consent the first time; without
+it only the real floor (y = 0) is used.
+
+### Sound
+
+The Quest build plays clean skate sounds (`crates/skate-game/clean-audio/`,
+from the skate3-cleanroom web build, extracted by
+`tools/extract_clean_audio.py`): rolling, grinds (metal on placed rails and
+copings), powerslides, pops, flips, catches, landings, pushes, footsteps and
+bails. 22 are CC0 recordings from freesound.org (credits in
+`clean-audio/CREDITS.json`: nolimitkid, Sheyvan, mbezzola, BlackNeon1234,
+visionear, neotronable, PHetish, Bruno_Garcez, C-V, bspiller5,
+jarrondesnudo, gerardcatala); the rest are resynthesised. `SKATE_AUDIO=retail`
+switches back to the retail player-audio runtime.
 
 The miniature is 12x smaller than life by default (a 1.8 m skater is 15 cm).

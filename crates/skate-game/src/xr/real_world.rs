@@ -8,6 +8,7 @@
 //! entities changes or the layout is edited.
 use super::planes::{LocatedMesh, RoomMesh, SceneRevision, SceneShapes, Shape};
 use super::build::PlacedPieces;
+use super::plane_view::MeshPlanes;
 use super::build::pieces::PieceKind;
 use crate::skate_audio::clean::SurfaceHints;
 use crate::physics::ground::PlacedSurfaces;
@@ -42,6 +43,7 @@ fn rebuild_collision(
     room: Res<RoomMesh>,
     revision: Res<SceneRevision>,
     placed: Res<PlacedPieces>,
+    mesh_planes: Res<MeshPlanes>,
     physics: Option<ResMut<GamePhysics>>,
     skater: Option<ResMut<SkaterRuntime>>,
     hints: Option<ResMut<SurfaceHints>>,
@@ -62,11 +64,14 @@ fn rebuild_collision(
     }
     *built = Some(key);
     let started = std::time::Instant::now();
-    let (quads, real_edges) = real_geometry(&shapes.0);
+    // Flat surfaces found in the room mesh ride like Scene planes, with
+    // grindable edges, and replace the lumpy triangles under them.
+    let all_shapes: Vec<Shape> = shapes.0.iter().copied().chain(mesh_planes.solid_shapes()).collect();
+    let (quads, real_edges) = real_geometry(&all_shapes);
     let triangles = room
         .0
         .as_ref()
-        .map(|mesh| mesh_triangles(mesh, &shapes.0))
+        .map(|mesh| mesh_triangles(mesh, &all_shapes))
         .unwrap_or_default();
     let v = |w: Vec3| Vector3::new(w.x, w.y, w.z);
     let to_world = |p: Vec3| v(root.transform_point(p));
@@ -117,8 +122,9 @@ fn rebuild_collision(
         *hints = sound;
     }
     info!(
-        "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} shapes, {piece_count} placed pieces, {} grind rails ({:.1} ms)",
+        "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} shapes ({} mesh planes), {piece_count} placed pieces, {} grind rails ({:.1} ms)",
         shapes.0.len(),
+        all_shapes.len() - shapes.0.len(),
         rails.len(),
         started.elapsed().as_secs_f32() * 1000.0
     );
@@ -148,7 +154,7 @@ pub(crate) fn mesh_triangles(mesh: &LocatedMesh, shapes: &[Shape]) -> Vec<[Vec3;
         .collect()
 }
 
-fn covers(shape: &Shape, point: Vec3) -> bool {
+pub(crate) fn covers(shape: &Shape, point: Vec3) -> bool {
     match *shape {
         Shape::Plane { pose, half, .. } => {
             let local = pose.rotation.inverse() * (point - pose.translation);
