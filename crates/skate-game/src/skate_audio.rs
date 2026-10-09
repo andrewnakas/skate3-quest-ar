@@ -53,6 +53,8 @@ use skate_data::audio::{self, ffmpeg::FfmpegDecoder};
 
 #[path = "player_audio.rs"]
 pub mod player;
+#[path = "player_audio_clean.rs"]
+pub(crate) mod clean;
 
 /// One completed local-player physics tick, ready for the player-audio runtime.
 ///
@@ -406,6 +408,17 @@ impl StreamPcm {
             return Duration::ZERO;
         }
         Duration::from_secs_f64(self.frames() as f64 / f64::from(self.sample_rate))
+    }
+
+    /// Interleaved 16-bit PCM; `looping` repeats the whole clip inline, forever.
+    pub(crate) fn from_i16(samples: Arc<Vec<i16>>, channels: u16, sample_rate: u32, looping: bool) -> Self {
+        let frames = if channels == 0 { 0 } else { samples.len() / usize::from(channels) };
+        Self {
+            samples,
+            channels,
+            sample_rate,
+            loop_range: (looping && frames > 0).then_some((0, frames)),
+        }
     }
 
     /// A short mono sine wave for verifying the host mixer and output device without game data.

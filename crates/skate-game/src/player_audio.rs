@@ -91,8 +91,13 @@ enum WorkerStatus {
 pub(super) fn install(app: &mut App) {
     // The session marker registers this too, but its plugin returns early when its validation
     // data will not load, and the multiplier sounds must not depend on that.
-    app.add_message::<crate::skate_audio::FrontEndSoundRequest>()
-        .add_systems(Startup, start)
+    app.add_message::<crate::skate_audio::FrontEndSoundRequest>();
+    if super::clean::enabled() {
+        info!("SKATE_PLAYER_AUDIO using the clean sounds (SKATE_AUDIO=retail for the retail runtime)");
+        super::clean::install(app);
+        return;
+    }
+    app.add_systems(Startup, start)
         .add_systems(Update, (forward, report));
 }
 

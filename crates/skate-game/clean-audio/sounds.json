@@ -1,0 +1,182 @@
+{
+ "rate": 32000,
+ "sounds": {
+  "roll_metal": {
+   "file": "roll_metal.wav",
+   "loop": true,
+   "gain": 1.0
+  },
+  "footstep_1": {
+   "file": "footstep_1.wav",
+   "loop": false,
+   "gain": 1.0
+  },
+  "footstep_2": {
+   "file": "footstep_2.wav",
+   "loop": false,
+   "gain": 1.0
+  },
+  "footstep_3": {
+   "file": "footstep_3.wav",
+   "loop": false,
+   "gain": 1.0
+  },
+  "footstep_4": {
+   "file": "footstep_4.wav",
+   "loop": false,
+   "gain": 1.0
+  },
+  "flip_1": {
+   "file": "flip_1.wav",
+   "loop": false,
+   "gain": 1.0
+  },
+  "flip_2": {
+   "file": "flip_2.wav",
+   "loop": false,
+   "gain": 1.0
+  },
+  "flip_3": {
+   "file": "flip_3.wav",
+   "loop": false,
+   "gain": 1.0
+  },
+  "chime": {
+   "file": "chime.wav",
+   "loop": false,
+   "gain": 1.0
+  },
+  "pop_1": {
+   "file": "pop_1.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "pop_2": {
+   "file": "pop_2.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "pop_3": {
+   "file": "pop_3.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "pop_4": {
+   "file": "pop_4.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "land_impact_1": {
+   "file": "land_impact_1.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "land_impact_2": {
+   "file": "land_impact_2.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "land_impact_3": {
+   "file": "land_impact_3.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "land_impact_4": {
+   "file": "land_impact_4.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "catch_1": {
+   "file": "catch_1.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "catch_2": {
+   "file": "catch_2.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "catch_3": {
+   "file": "catch_3.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "push_1": {
+   "file": "push_1.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "push_2": {
+   "file": "push_2.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "push_3": {
+   "file": "push_3.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "roll_smooth": {
+   "file": "roll_smooth.wav",
+   "loop": true,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "roll_rough": {
+   "file": "roll_rough.wav",
+   "loop": true,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "roll_wood": {
+   "file": "roll_wood.wav",
+   "loop": true,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "grind_metal": {
+   "file": "grind_metal.wav",
+   "loop": true,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "grind_concrete": {
+   "file": "grind_concrete.wav",
+   "loop": true,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "powerslide": {
+   "file": "powerslide.wav",
+   "loop": true,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "bail_1": {
+   "file": "bail_1.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  },
+  "bail_2": {
+   "file": "bail_2.wav",
+   "loop": false,
+   "gain": 1.0,
+   "source": "cc0"
+  }
+ }
+}

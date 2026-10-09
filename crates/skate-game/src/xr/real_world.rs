@@ -8,6 +8,8 @@
 //! entities changes or the layout is edited.
 use super::planes::{LocatedMesh, RoomMesh, SceneRevision, SceneShapes, Shape};
 use super::build::PlacedPieces;
+use super::build::pieces::PieceKind;
+use crate::skate_audio::clean::SurfaceHints;
 use crate::physics::ground::PlacedSurfaces;
 use crate::physics::SkaterRuntime;
 use super::rig::Rig;
@@ -42,6 +44,7 @@ fn rebuild_collision(
     placed: Res<PlacedPieces>,
     physics: Option<ResMut<GamePhysics>>,
     skater: Option<ResMut<SkaterRuntime>>,
+    hints: Option<ResMut<SurfaceHints>>,
     mut built: Local<Option<((Vec3, f32), u64, u64)>>,
 ) {
     let (Some(anchor), Some(root), Some(mut physics), Some(mut skater)) =
@@ -74,11 +77,28 @@ fn rebuild_collision(
     // Table and furniture tops are grindable ledges.
     let mut rails: Vec<Vec<Vector3>> = edges.iter().map(|&(a, b)| vec![a, b]).collect();
     let mut pieces = Vec::with_capacity(placed.items.len());
+    let mut sound = SurfaceHints::default();
     for item in &placed.items {
         let at = item.world_transform(&root);
         let local = |p: Vec3| v(at.transform_point(p));
         let geometry = item.piece.geometry();
         rails.extend(geometry.rails.iter().map(|r| r.iter().map(|&p| local(p)).collect()));
+        // Rails and ramp copings are metal; ramps and boxes are wood.
+        if matches!(item.piece.kind, PieceKind::Rail | PieceKind::QuarterPipe | PieceKind::HalfPipe) {
+            for rail in &geometry.rails {
+                let rail: Vec<Vec3> = rail.iter().map(|&p| at.transform_point(p)).collect();
+                sound.metal_rails.extend(rail.windows(2).map(|w| (w[0], w[1])));
+            }
+        }
+        if item.piece.kind != PieceKind::Rail {
+            let corners = geometry.quads.iter().flatten().map(|&p| at.transform_point(p));
+            let (min, max) = corners.fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(lo, hi), p| {
+                (lo.min(p), hi.max(p))
+            });
+            if min.x <= max.x {
+                sound.wood_boxes.push((min, max));
+            }
+        }
         pieces.push(PlacedSurfaces {
             quads: geometry.quads.iter().map(|q| q.map(local)).collect(),
             rail_quads: geometry.rail_quads.iter().map(|q| q.map(local)).collect(),
@@ -92,6 +112,9 @@ fn rebuild_collision(
     }
     if let Err(e) = physics.set_grind_rails(&rails, &mut skater) {
         error!("AR grind rails rebuild failed: {e}");
+    }
+    if let Some(mut hints) = hints {
+        *hints = sound;
     }
     info!(
         "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} shapes, {piece_count} placed pieces, {} grind rails ({:.1} ms)",
