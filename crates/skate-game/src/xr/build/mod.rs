@@ -5,10 +5,16 @@
 //!
 //! - left stick left/right: choose a piece (the wrist palette above the left
 //!   controller shows them; the chosen one is raised)
+//! - left stick up/down: grow or shrink the whole world (skater and pieces
+//!   together) against the real room; the skater stays where it was
+//! - left stick click: drop a starter park where the right controller points
+//! - left trigger: undo
 //! - right controller: point; a ghost of the piece shows where it would go
 //! - right trigger: drop it there
 //! - right stick left/right: turn it in 15° steps (it lines up with a table
-//!   edge when within 10°); up/down: resize it
+//!   edge when within 10°); up/down: resize it. Pointing at a placed piece,
+//!   the stick turns and resizes that piece instead
+//! - right stick click on a placed piece: copy it (kind, size, turn)
 //! - right grip on a placed piece: pick it up, release to put it down
 //! - B on a placed piece: delete it
 //! - Y: rescan the room (Quest Space Setup)
@@ -25,14 +31,15 @@ use self::pieces::{MAX_SIZE, MIN_SIZE, Piece, PieceGeometry, PieceKind};
 use super::actions::{Hand, LatestTouch, TouchRead};
 use super::planes::{SceneCapture, SceneShapes, Shape};
 use super::rig::{Rig, heading};
-use super::spawn::ray_triangle;
+use super::spawn::{ray_triangle, spawn_matrix};
 use crate::input::ExternalPad;
-use crate::physics::GamePhysics;
+use crate::physics::{GamePhysics, SkaterRuntime};
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy_mod_openxr::openxr_session_running;
 use serde::{Deserialize, Serialize};
 use skate_core::input::xbox::XboxState;
+use skate_core::physics::board::BodyId;
 
 const HOLD_TO_TOGGLE_SECONDS: f32 = 1.0;
 /// Left stick deflection that makes a menu hold a D-pad chord instead.
@@ -43,6 +50,15 @@ const FLICK: f32 = 0.6;
 const ROTATE_STEP: f32 = std::f32::consts::PI / 12.0;
 /// Size change per second at full stick deflection (multiplicative).
 const RESIZE_RATE: f32 = 0.8;
+/// Piece sizes are kept on this grid, so each kind has a bounded set of meshes.
+const SIZE_STEP: f32 = 0.05;
+/// World scale change per second at full stick deflection (multiplicative).
+const SCALE_RATE: f32 = 1.0;
+/// Game metres per real metre: 1 is life size, 60 is a tiny toy.
+pub(crate) const MIN_SCALE: f32 = 1.0;
+pub(crate) const MAX_SCALE: f32 = 60.0;
+const STICK_DEADZONE: f32 = 0.25;
+const UNDO_DEPTH: usize = 40;
 const CLEAR_HOLD_SECONDS: f32 = 1.0;
 /// Game-world units (metres at skater scale).
 const MAX_RANGE: f32 = 2000.0;
@@ -50,8 +66,8 @@ const MISS_LENGTH: f32 = 40.0;
 /// Pieces go on ground-like faces, not walls.
 const MIN_UP: f32 = 0.6;
 /// Wrist palette: real-world size of the largest icon, and spacing, metres.
-const ICON_SIZE_M: f32 = 0.03;
-const ICON_SPACING_M: f32 = 0.036;
+const ICON_SIZE_M: f32 = 0.024;
+const ICON_SPACING_M: f32 = 0.03;
 
 #[derive(Resource, Default)]
 pub(crate) struct BuildMode {
@@ -80,16 +96,49 @@ impl Placed {
 
 /// Everything the player has placed. `revision` changes on every committed
 /// edit (collision rebuild and save key off it); `dragging` is the piece
-/// following the controller, whose collision waits until it is dropped.
+/// following the controller, `resizing` the one being resized and
+/// `rescaling` the world scale being changed: collision waits until they end.
 #[derive(Resource, Default)]
 pub(crate) struct PlacedPieces {
     pub items: Vec<Placed>,
     pub revision: u64,
     pub dragging: Option<u64>,
+    pub resizing: Option<u64>,
+    pub rescaling: bool,
+    /// Earlier layouts, newest last, for undo.
+    history: Vec<Vec<Placed>>,
 }
 
 impl PlacedPieces {
+    pub(crate) fn busy(&self) -> bool {
+        self.dragging.is_some() || self.resizing.is_some() || self.rescaling
+    }
+
+    /// Remember the current layout before an edit.
+    fn checkpoint(&mut self) {
+        if self.history.len() == UNDO_DEPTH {
+            self.history.remove(0);
+        }
+        self.history.push(self.items.clone());
+    }
+
+    fn undo(&mut self) -> bool {
+        let Some(items) = self.history.pop() else {
+            return false;
+        };
+        self.items = items;
+        self.dragging = None;
+        self.resizing = None;
+        self.revision += 1;
+        true
+    }
+
     fn add(&mut self, piece: Piece, position: Vec3, yaw: f32) -> u64 {
+        self.checkpoint();
+        self.insert(piece, position, yaw)
+    }
+
+    fn insert(&mut self, piece: Piece, position: Vec3, yaw: f32) -> u64 {
         let id = self.items.iter().map(|p| p.id).max().map_or(1, |m| m + 1);
         self.items.push(Placed {
             id,
@@ -103,6 +152,7 @@ impl PlacedPieces {
 
     fn remove(&mut self, id: u64) -> Option<Placed> {
         let at = self.items.iter().position(|p| p.id == id)?;
+        self.checkpoint();
         self.revision += 1;
         Some(self.items.remove(at))
     }
@@ -124,6 +174,10 @@ struct BuildState {
     menu_hold: Option<f32>,
     toggled: bool,
     clear_hold: f32,
+    /// Where the skater's deck was in the room when a rescale began.
+    rescale_from: Option<(Vec3, Vec3)>,
+    /// Unsnapped size of the placed piece being resized.
+    resize_size: f32,
     previous: Buttons,
 }
 
@@ -140,6 +194,8 @@ impl Default for BuildState {
             menu_hold: None,
             toggled: false,
             clear_hold: 0.0,
+            rescale_from: None,
+            resize_size: 1.0,
             previous: Buttons::default(),
         }
     }
@@ -149,7 +205,7 @@ impl BuildState {
     fn piece(&self) -> Piece {
         Piece {
             kind: PieceKind::ALL[self.selected],
-            size: self.sizes[self.selected],
+            size: snap_size(self.sizes[self.selected]),
         }
     }
 }
@@ -160,6 +216,9 @@ struct Buttons {
     grip: bool,
     b: bool,
     y: bool,
+    undo: bool,
+    park: bool,
+    copy: bool,
     left_flick: i8,
     right_flick: i8,
 }
@@ -207,7 +266,7 @@ fn toggle_build(
     if state.menu_hold.is_some_and(|t| t >= HOLD_TO_TOGGLE_SECONDS) && !state.toggled {
         state.toggled = true;
         mode.active = !mode.active;
-        if !mode.active && placed.dragging.take().is_some() {
+        if !mode.active && (placed.dragging.take().is_some() | placed.resizing.take().is_some()) {
             placed.revision += 1;
         }
         info!("BUILD mode: {}", mode.active);
@@ -219,9 +278,10 @@ fn build_controls(
     touch: Res<LatestTouch>,
     time: Res<Time<Real>>,
     mode: Res<BuildMode>,
-    rig: Res<Rig>,
+    mut rig: ResMut<Rig>,
     hands: Query<(&Hand, &Transform)>,
     physics: Option<Res<GamePhysics>>,
+    skater: Option<ResMut<SkaterRuntime>>,
     shapes: Res<SceneShapes>,
     mut pad: ResMut<ExternalPad>,
     mut state: ResMut<BuildState>,
@@ -232,6 +292,9 @@ fn build_controls(
         state.ray = None;
         state.ghost = None;
         state.target = None;
+        if placed.rescaling {
+            finish_rescale(&rig, skater, &mut state, &mut placed);
+        }
         return;
     }
     pad.set(XboxState {
@@ -253,6 +316,9 @@ fn build_controls(
         grip: if previous.grip { touch.right_grip > RELEASE } else { touch.right_grip > PRESS },
         b: touch.b,
         y: touch.y,
+        undo: if previous.undo { touch.left_trigger > RELEASE } else { touch.left_trigger > PRESS },
+        park: touch.left_stick_click,
+        copy: touch.right_stick_click,
         left_flick: flick(touch.left_stick[0], previous.left_flick),
         right_flick: flick(touch.right_stick[0], previous.right_flick),
     };
@@ -264,29 +330,51 @@ fn build_controls(
         state.selected = (state.selected as i32 + now.left_flick as i32).rem_euclid(n) as usize;
         info!("BUILD selected {:?}", PieceKind::ALL[state.selected]);
     }
-    if now.right_flick != 0 && now.right_flick != previous.right_flick {
-        state.yaw -= ROTATE_STEP * now.right_flick as f32;
-    }
-    let resize = touch.right_stick[1];
-    if resize.abs() > 0.2 {
-        let selected = state.selected;
-        let size = state.sizes[selected] * (resize * RESIZE_RATE * time.delta_secs()).exp();
-        state.sizes[selected] = size.clamp(MIN_SIZE, MAX_SIZE);
-    }
     if pressed(now.y, previous.y) {
         capture.requested = true;
         info!("BUILD rescan requested");
     }
+    if pressed(now.undo, previous.undo) {
+        if placed.undo() {
+            info!("BUILD undo ({} pieces)", placed.items.len());
+        }
+        return;
+    }
     if touch.x {
         state.clear_hold += time.delta_secs();
         if state.clear_hold >= CLEAR_HOLD_SECONDS && !placed.items.is_empty() {
+            placed.checkpoint();
             placed.items.clear();
             placed.dragging = None;
+            placed.resizing = None;
             placed.revision += 1;
             info!("BUILD cleared");
         }
     } else {
         state.clear_hold = 0.0;
+    }
+
+    // World scale: up grows the skater and pieces in the room, down shrinks
+    // them. Collision and the skater follow once the stick is let go.
+    let [scale_x, scale_y] = touch.left_stick;
+    if scale_y.abs() > STICK_DEADZONE && scale_y.abs() > scale_x.abs() {
+        if !placed.rescaling {
+            placed.rescaling = true;
+            state.rescale_from = rig.root_transform().zip(physics.as_deref()).map(|(root, physics)| {
+                let deck = physics.board.part_transforms()[BodyId::Deck.index()];
+                let to_tracking = root.compute_affine().inverse();
+                let t = deck.translation;
+                let f = deck.basis.columns[2];
+                (
+                    to_tracking.transform_point3(Vec3::new(t.x, t.y, t.z)),
+                    to_tracking.transform_vector3(Vec3::new(f[0], f[1], f[2])),
+                )
+            });
+        }
+        let scale = rig.scale * (-scale_y * SCALE_RATE * time.delta_secs()).exp();
+        rig.scale = scale.clamp(MIN_SCALE, MAX_SCALE);
+    } else if placed.rescaling {
+        finish_rescale(&rig, skater, &mut state, &mut placed);
     }
 
     let (Some(root), Some(physics)) = (rig.root_transform(), physics) else {
@@ -303,13 +391,61 @@ fn build_controls(
     }
     let hit = cast(&physics, &placed, &root, origin, direction);
     let to_tracking = root.compute_affine().inverse();
-    state.target = hit.and_then(|h| h.piece);
+    // A piece being resized keeps the stick until it is let go.
+    state.target = placed.resizing.or(hit.and_then(|h| h.piece));
     let valid = hit.filter(|h| h.normal.y >= MIN_UP);
     state.ray = Some(match hit {
         Some(h) => (origin, h.point, valid.is_some()),
         None => (origin, origin + direction * MISS_LENGTH, false),
     });
     state.ghost = valid.map(|h| (to_tracking.transform_point3(h.point), h.point));
+
+    // Right stick: turn and resize the piece pointed at, or else the ghost.
+    let resize = touch.right_stick[1];
+    let resizing = resize.abs() > STICK_DEADZONE && resize.abs() > touch.right_stick[0].abs();
+    let turn = (now.right_flick != 0 && now.right_flick != previous.right_flick)
+        .then(|| -ROTATE_STEP * now.right_flick as f32);
+    let factor = (resize * RESIZE_RATE * time.delta_secs()).exp();
+    match state.target.filter(|_| placed.dragging.is_none()) {
+        Some(id) => {
+            if let Some(turn) = turn {
+                placed.checkpoint();
+                if let Some(item) = placed.items.iter_mut().find(|p| p.id == id) {
+                    item.yaw += turn;
+                }
+                placed.revision += 1;
+                info!("BUILD turned piece {id}");
+            }
+            if resizing {
+                if placed.resizing.is_none() {
+                    placed.checkpoint();
+                    placed.resizing = Some(id);
+                    state.resize_size = placed.items.iter().find(|p| p.id == id).map_or(1.0, |p| p.piece.size);
+                }
+                state.resize_size = (state.resize_size * factor).clamp(MIN_SIZE, MAX_SIZE);
+                let size = snap_size(state.resize_size);
+                if let Some(item) = placed.items.iter_mut().find(|p| p.id == id) {
+                    item.piece.size = size;
+                }
+            }
+        }
+        None => {
+            if let Some(turn) = turn {
+                state.yaw += turn;
+            }
+            if resizing {
+                let selected = state.selected;
+                state.sizes[selected] = (state.sizes[selected] * factor).clamp(MIN_SIZE, MAX_SIZE);
+            }
+        }
+    }
+    if !resizing {
+        if let Some(id) = placed.resizing.take() {
+            placed.revision += 1;
+            info!("BUILD resized piece {id}");
+        }
+    }
+
     state.placed_yaw = match state.ghost {
         Some((position, _)) => snap::snap_yaw(
             shapes.0.iter().filter_map(|s| match *s {
@@ -336,8 +472,12 @@ fn build_controls(
         }
         return;
     }
+    if placed.resizing.is_some() {
+        return;
+    }
     if pressed(now.grip, previous.grip) {
         if let Some(id) = state.target {
+            placed.checkpoint();
             placed.dragging = Some(id);
             if let Some(item) = placed.items.iter().find(|p| p.id == id) {
                 state.yaw = item.yaw;
@@ -346,9 +486,33 @@ fn build_controls(
         }
         return;
     }
+    if pressed(now.copy, previous.copy) {
+        if let Some(item) = state.target.and_then(|id| placed.items.iter().find(|p| p.id == id)) {
+            let selected = PieceKind::ALL.iter().position(|&k| k == item.piece.kind).unwrap_or(0);
+            state.selected = selected;
+            state.sizes[selected] = item.piece.size;
+            state.yaw = item.yaw;
+            info!("BUILD copied piece {} ({:?})", item.id, item.piece.kind);
+        }
+        return;
+    }
     if pressed(now.b, previous.b) {
         if let Some(removed) = state.target.and_then(|id| placed.remove(id)) {
             info!("BUILD deleted {:?} (piece {})", removed.piece.kind, removed.id);
+        }
+        return;
+    }
+    if pressed(now.park, previous.park) {
+        if let Some((position, _)) = state.ghost {
+            placed.checkpoint();
+            let yaw = state.placed_yaw;
+            for (kind, size, offset, turn) in STARTER_PARK {
+                // Offsets are game metres in the park's frame; positions are
+                // tracking metres.
+                let at = position + Quat::from_rotation_y(yaw) * Vec3::from_array(offset) / rig.scale;
+                placed.insert(Piece { kind, size }, at, yaw + turn);
+            }
+            info!("BUILD starter park at {position:?} ({} pieces)", placed.items.len());
         }
         return;
     }
@@ -359,6 +523,43 @@ fn build_controls(
             let id = placed.add(piece, position, yaw);
             info!("BUILD placed {:?} size {:.2} as piece {id} at {position:?}", piece.kind, piece.size);
         }
+    }
+}
+
+/// A small line to skate away from the player: kicker and rail side by side,
+/// a fun box, a ledge and a quarter pipe to turn on. (kind, size, offset in
+/// game metres with -z away from the player, extra turn).
+const STARTER_PARK: [(PieceKind, f32, [f32; 3], f32); 5] = [
+    (PieceKind::Kicker, 0.8, [-4.0, 0.0, -5.0], 0.0),
+    (PieceKind::Rail, 0.8, [4.0, 0.0, -6.0], std::f32::consts::FRAC_PI_2),
+    (PieceKind::FunBox, 1.0, [0.0, 0.0, -12.0], 0.0),
+    (PieceKind::Ledge, 0.8, [6.0, 0.0, -14.0], std::f32::consts::FRAC_PI_2),
+    (PieceKind::QuarterPipe, 1.0, [0.0, 0.0, -20.0], 0.0),
+];
+
+fn snap_size(size: f32) -> f32 {
+    ((size / SIZE_STEP).round() * SIZE_STEP).clamp(MIN_SIZE, MAX_SIZE)
+}
+
+/// The scale stick was let go: put the skater back on the same real spot at
+/// the new scale, and rebuild collision (and save) for it.
+fn finish_rescale(
+    rig: &Rig,
+    skater: Option<ResMut<SkaterRuntime>>,
+    state: &mut BuildState,
+    placed: &mut PlacedPieces,
+) {
+    placed.rescaling = false;
+    placed.revision += 1;
+    info!("BUILD world scale {:.2} (game metres per real metre)", rig.scale);
+    let (Some((deck, forward)), Some(root), Some(mut skater)) =
+        (state.rescale_from.take(), rig.root_transform(), skater)
+    else {
+        return;
+    };
+    let point = root.transform_point(deck);
+    if let Err(e) = skater.travel_to(spawn_matrix(point, root.rotation * forward)) {
+        warn!("BUILD rescale teleport: {e}");
     }
 }
 

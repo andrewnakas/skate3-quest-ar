@@ -195,7 +195,7 @@ pub(super) fn ray_triangle(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, c: V
 
 /// Row-major teleport matrix (axes in rows 0-2, position in row 3); the
 /// skater faces row 2.
-fn spawn_matrix(point: Vec3, aim: Vec3) -> [[f32; 4]; 4] {
+pub(super) fn spawn_matrix(point: Vec3, aim: Vec3) -> [[f32; 4]; 4] {
     let forward = aim.with_y(0.0).try_normalize().unwrap_or(Vec3::Z);
     let right = Vec3::Y.cross(forward);
     let p = point + Vec3::Y * SPAWN_LIFT;

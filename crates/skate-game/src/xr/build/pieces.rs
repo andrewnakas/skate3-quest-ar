@@ -18,10 +18,13 @@ pub(crate) enum PieceKind {
     Ledge,
     FunBox,
     Platform,
+    Bank,
+    Stairs,
+    Spine,
 }
 
 impl PieceKind {
-    pub(crate) const ALL: [Self; 7] = [
+    pub(crate) const ALL: [Self; 10] = [
         Self::Kicker,
         Self::QuarterPipe,
         Self::HalfPipe,
@@ -29,6 +32,9 @@ impl PieceKind {
         Self::Ledge,
         Self::FunBox,
         Self::Platform,
+        Self::Bank,
+        Self::Stairs,
+        Self::Spine,
     ];
 
     pub(crate) fn color(self) -> Color {
@@ -39,6 +45,9 @@ impl PieceKind {
             Self::Ledge => Color::srgb(0.6, 0.6, 0.62),
             Self::FunBox => Color::srgb(0.9, 0.35, 0.4),
             Self::Platform => Color::srgb(0.45, 0.75, 0.45),
+            Self::Bank => Color::srgb(0.8, 0.65, 0.35),
+            Self::Stairs => Color::srgb(0.7, 0.7, 0.68),
+            Self::Spine => Color::srgb(0.3, 0.5, 0.85),
         }
     }
 }
@@ -125,6 +134,44 @@ impl Piece {
             PieceKind::Ledge => grind_box(&mut g, Vec3::new(5.0 * s, 0.5, 0.8), [true, false, true, false]),
             PieceKind::FunBox => grind_box(&mut g, Vec3::new(3.0 * s, 0.5, 2.0), [true; 4]),
             PieceKind::Platform => grind_box(&mut g, Vec3::new(4.0 * s, 1.2, 4.0), [true; 4]),
+            PieceKind::Bank => {
+                // A flat slope up to a short deck, run in from +z like a kicker.
+                let (length, height, deck, width) = (4.0 * s, 1.0 * s, 1.0, 3.0);
+                let z0 = -length * 0.5;
+                extrude(&mut g, &[Vec2::new(z0, height), Vec2::new(z0 + deck, height), Vec2::new(-z0, 0.0)], width);
+                g.edges.push((Vec3::new(-width * 0.5, height, z0), Vec3::new(width * 0.5, height, z0)));
+            }
+            PieceKind::Stairs => {
+                // A top deck, then steps down towards +z, with a handrail
+                // alongside (outside +x) from the top step to the bottom.
+                let (steps, rise, run, deck, width) = (5, 0.17 * s, 0.35 * s, 1.5, 3.0);
+                let height = rise * steps as f32;
+                let z0 = -(deck + run * steps as f32) * 0.5;
+                let mut profile = vec![Vec2::new(z0, height), Vec2::new(z0 + deck, height)];
+                for i in 1..=steps {
+                    let z = z0 + deck + run * i as f32;
+                    profile.push(Vec2::new(z - run, height - rise * i as f32));
+                    profile.push(Vec2::new(z, height - rise * i as f32));
+                }
+                extrude(&mut g, &profile, width);
+                let (rail_x, above, tube) = (width * 0.5 + 0.35, 0.8, 0.08);
+                let top = Vec3::new(rail_x, height + above, z0 + deck);
+                let bottom = Vec3::new(rail_x, above, z0 + deck + run * steps as f32);
+                tube_quads(&mut g.rail_quads, top, bottom, tube);
+                for p in [top, bottom] {
+                    box_quads(&mut g.quads, Vec3::new(p.x - 0.04, 0.0, p.z - 0.04), Vec3::new(p.x + 0.04, p.y - tube, p.z + 0.04));
+                }
+                g.rails.push(vec![top, bottom]);
+                g.edges.push((Vec3::new(-width * 0.5, height, z0 + deck), Vec3::new(width * 0.5, height, z0 + deck)));
+            }
+            PieceKind::Spine => {
+                // Two quarter pipes back to back, sharing one coping.
+                let (radius, width) = (1.6 * s, 4.0);
+                let mut profile: Vec<Vec2> = transition(0.0, radius, -1.0).into_iter().rev().collect();
+                profile.extend(transition(0.0, radius, 1.0).into_iter().skip(1));
+                extrude(&mut g, &profile, width);
+                coping(&mut g, 0.0, radius, width);
+            }
         }
         g
     }
@@ -194,6 +241,23 @@ fn extrude(g: &mut PieceGeometry, profile: &[Vec2], width: f32) {
     let (first, last) = (profile[0], profile[profile.len() - 1]);
     push(&mut g.quads, [at(-x, first), at(x, first), at(x, first.with_y(0.0)), at(-x, first.with_y(0.0))], Vec3::NEG_Z);
     push(&mut g.quads, [at(-x, last), at(x, last), at(x, last.with_y(0.0)), at(-x, last.with_y(0.0))], Vec3::Z);
+}
+
+/// A square grind tube whose top centre line runs from `a` to `b` (any slope
+/// in the y-z plane), `size` thick.
+fn tube_quads(out: &mut Vec<[Vec3; 4]>, a: Vec3, b: Vec3, size: f32) {
+    let along = (b - a) * 0.5;
+    let up = along.normalize().cross(Vec3::X).normalize();
+    let up = if up.y < 0.0 { -up } else { up };
+    let centre = (a + b) * 0.5 - up * size * 0.5;
+    let axes = [Vec3::X * size * 0.5, up * size * 0.5, along];
+    for i in 0..3 {
+        let (aj, ak) = (axes[(i + 1) % 3], axes[(i + 2) % 3]);
+        for sign in [1.0, -1.0] {
+            let c = centre + axes[i] * sign;
+            push(out, [c - aj - ak, c + aj - ak, c + aj + ak, c - aj + ak], axes[i] * sign);
+        }
+    }
 }
 
 /// Six faces of an axis-aligned box, bottom included (rail tubes float).
@@ -308,6 +372,7 @@ mod tests {
             (PieceKind::FunBox, 4),
             (PieceKind::Platform, 4),
             (PieceKind::Kicker, 0),
+            (PieceKind::Spine, 1),
         ] {
             let g = Piece::new(kind).geometry();
             assert_eq!(g.rails.len(), rails, "{kind:?}");
@@ -317,6 +382,30 @@ mod tests {
                 assert!(rail.iter().all(|p| (p.y - top).abs() < 1e-4), "{kind:?} rail sits on top");
             }
         }
+    }
+
+    #[test]
+    fn stair_handrail_runs_down_the_steps_above_them() {
+        let g = Piece::new(PieceKind::Stairs).geometry();
+        assert_eq!(g.rails.len(), 1);
+        let (top, bottom) = (g.rails[0][0], g.rails[0][1]);
+        assert!(top.y > bottom.y && bottom.z > top.z, "slopes down towards +z");
+        let tube_top = g.rail_quads.iter().flatten().map(|p| p.y).fold(0.0, f32::max);
+        assert!((tube_top - top.y).abs() < 1e-4, "the rail is the tube's top");
+        let c = g.rail_quads.iter().flatten().sum::<Vec3>() / (g.rail_quads.len() * 4) as f32;
+        for q in &g.rail_quads {
+            let mid = q.iter().sum::<Vec3>() / 4.0;
+            assert!(quad_normal(q).dot(mid - c) > 0.0, "tube faces point out");
+        }
+        let steps_up = g.quads.iter().filter(|q| quad_normal(q).normalize().y > 0.99).count();
+        assert!(steps_up >= 6, "deck plus five treads");
+    }
+
+    #[test]
+    fn spine_peaks_at_its_coping() {
+        let g = Piece::new(PieceKind::Spine).geometry();
+        let top = g.all_quads().flatten().map(|p| p.y).fold(0.0, f32::max);
+        assert!(g.rails[0].iter().all(|p| p.z.abs() < 1e-5 && (p.y - top).abs() < 1e-4));
     }
 
     #[test]

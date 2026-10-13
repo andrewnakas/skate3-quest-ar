@@ -59,7 +59,7 @@ fn rebuild_collision(
     // rebuild. A piece being dragged rebuilds when it is dropped, and grind
     // state refers to the current rails, so a grind finishes first.
     let key = (anchor, revision.0, placed.revision);
-    if shapes.0.is_empty() || *built == Some(key) || placed.dragging.is_some() || skater.is_grinding() {
+    if shapes.0.is_empty() || *built == Some(key) || placed.busy() || skater.is_grinding() {
         return;
     }
     *built = Some(key);
@@ -88,14 +88,18 @@ fn rebuild_collision(
         let local = |p: Vec3| v(at.transform_point(p));
         let geometry = item.piece.geometry();
         rails.extend(geometry.rails.iter().map(|r| r.iter().map(|&p| local(p)).collect()));
-        // Rails and ramp copings are metal; ramps and boxes are wood.
-        if matches!(item.piece.kind, PieceKind::Rail | PieceKind::QuarterPipe | PieceKind::HalfPipe) {
+        // Rails, handrails and ramp copings are metal; ramps and boxes are
+        // wood; stairs roll like the concrete floor.
+        if matches!(
+            item.piece.kind,
+            PieceKind::Rail | PieceKind::QuarterPipe | PieceKind::HalfPipe | PieceKind::Spine | PieceKind::Stairs
+        ) {
             for rail in &geometry.rails {
                 let rail: Vec<Vec3> = rail.iter().map(|&p| at.transform_point(p)).collect();
                 sound.metal_rails.extend(rail.windows(2).map(|w| (w[0], w[1])));
             }
         }
-        if item.piece.kind != PieceKind::Rail {
+        if !matches!(item.piece.kind, PieceKind::Rail | PieceKind::Stairs) {
             let corners = geometry.quads.iter().flatten().map(|&p| at.transform_point(p));
             let (min, max) = corners.fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(lo, hi), p| {
                 (lo.min(p), hi.max(p))
