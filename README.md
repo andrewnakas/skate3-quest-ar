@@ -2,6 +2,20 @@
   <img src="docs/images/skating-crab.png" alt="Rust crab riding a skateboard" width="480">
 </p>
 
+# Skate 3 AR for Meta Quest 3 (alpha)
+
+The Skate 3 Rust engine running in passthrough AR on Quest 3: a skater in your
+real room, riding your floor, tables and furniture, plus ramps, rails and
+stairs you place with the Touch controllers. Grow or shrink the skater and
+the park to any size. Clean (CC0) skate sounds.
+
+**[Download the 0.01 alpha APK](https://github.com/andrewnakas/skate3-quest-ar/releases)**.
+It needs game data converted from your own Skate 3 disc; no EA assets are
+included. Install, controls and data setup are in
+[scripts/quest/README.md](scripts/quest/README.md).
+
+This is an early alpha built on the Skate 3 Rust Engine below.
+
 # Skate 3 Rust Engine
 
 A Rust and Bevy skating project built from Skate 3 reverse-engineering research.
@@ -61,3 +75,9 @@ not affiliated with EA.
 
 Windows builds support opt-in [performance timeline capture](docs/performance-tracing.md)
 through the `--trace` CLI option, including optional GPU pass diagnostics.
+
+## License
+
+GPL-3.0, the same as the upstream
+[Skate 3 Rust Engine](https://github.com/SK8-ENGINE/skate-3-rust-engine).
+Clean skate sounds are CC0 (credits in `crates/skate-game/clean-audio/CREDITS.json`).

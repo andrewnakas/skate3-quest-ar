@@ -71,10 +71,14 @@ while building:
 
 | Touch | Build action |
 |---|---|
-| Left stick left/right | Choose a piece (wrist palette) |
+| Left stick left/right | Choose a piece (wrist palette): kicker, quarter pipe, half pipe, rail, ledge, fun box, platform, bank, stairs + handrail, spine |
+| Left stick up/down | Grow / shrink the whole world (skater and pieces together); saved with the layout |
+| Left stick click | Drop a starter park where the right controller points |
+| Left trigger | Undo |
 | Right controller | Point; a ghost shows where the piece goes |
 | Right trigger | Drop it there |
-| Right stick left/right / up-down | Turn 15° (snaps to table edges) / resize |
+| Right stick left/right / up-down | Turn 15° (snaps to table edges) / resize; pointing at a placed piece, turns / resizes that piece |
+| Right stick click on a piece | Copy it (kind, size, turn) |
 | Right grip on a piece | Pick it up, release to put it down |
 | B on a piece | Delete it |
 | A | Keep the detected-planes overlay on outside build mode too |
@@ -108,4 +112,5 @@ visionear, neotronable, PHetish, Bruno_Garcez, C-V, bspiller5,
 jarrondesnudo, gerardcatala); the rest are resynthesised. `SKATE_AUDIO=retail`
 switches back to the retail player-audio runtime.
 
-The miniature is 12x smaller than life by default (a 1.8 m skater is 15 cm).
+The miniature is 12x smaller than life by default (a 1.8 m skater is 15 cm);
+in build mode the left stick rescales it anywhere from life size to 60x smaller.
