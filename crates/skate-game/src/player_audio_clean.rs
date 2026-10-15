@@ -14,9 +14,13 @@
 //!   state edges, with a random variant and a little pitch spread.
 //!
 //! `SKATE_AUDIO=clean|retail` overrides the default (clean on Android, retail elsewhere).
+//!
+//! In AR ([`SpatialSkateAudio`] present) every sound is a spatial emitter at the skater, heard
+//! through the headset's listener (`xr::spatial_audio`), so it pans and fades as the skater
+//! moves around the room.
 use std::sync::Arc;
 
-use bevy::audio::{AudioSinkPlayback, Volume};
+use bevy::audio::{AudioSinkPlayback, SpatialAudioSink, Volume};
 use bevy::prelude::*;
 use skate_core::physics::phase::PhysicsEvent;
 
@@ -171,8 +175,15 @@ fn segment_distance(p: Vec3, a: Vec3, b: Vec3) -> f32 {
     p.distance(a + ab * t)
 }
 
+/// Present when sounds should come from the skater in 3D (the XR build inserts it).
+#[derive(Resource, Default)]
+pub(crate) struct SpatialSkateAudio;
+
 #[derive(Resource)]
 struct CleanAudio {
+    spatial: bool,
+    /// The skater's latest world position, where spatial sounds are emitted.
+    source: Vec3,
     shots: Vec<(Shot, Vec<Handle<StreamPcm>>)>,
     loops: Vec<(Loop, Entity, f32)>,
     targets: [(f32, f32); 7],
@@ -199,7 +210,19 @@ struct Edges {
 pub(super) fn install(app: &mut App) {
     app.init_resource::<SurfaceHints>()
         .add_systems(Startup, setup)
-        .add_systems(Update, (observe, frontend, mix).chain());
+        .add_systems(Update, (observe, frontend, mix, follow_skater).chain());
+}
+
+/// Keep the looping emitters on the skater.
+fn follow_skater(audio: Option<Res<CleanAudio>>, mut transforms: Query<&mut Transform>) {
+    let Some(audio) = audio.filter(|a| a.spatial) else { return };
+    for (_, entity, _) in &audio.loops {
+        if let Ok(mut transform) = transforms.get_mut(*entity) {
+            if transform.translation != audio.source {
+                transform.translation = audio.source;
+            }
+        }
+    }
 }
 
 /// Mono or stereo 16-bit PCM from a canonical RIFF/WAVE file.
@@ -234,7 +257,12 @@ fn parse_wav(bytes: &[u8]) -> Option<(Vec<i16>, u16, u32)> {
     None
 }
 
-fn setup(mut commands: Commands, mut assets: ResMut<Assets<StreamPcm>>) {
+fn setup(
+    mut commands: Commands,
+    mut assets: ResMut<Assets<StreamPcm>>,
+    spatial: Option<Res<SpatialSkateAudio>>,
+) {
+    let spatial = spatial.is_some();
     let mut load = |name: &str, looping: bool| -> Option<Handle<StreamPcm>> {
         let (_, bytes) = WAVS.iter().find(|(n, _)| *n == name)?;
         let Some((samples, channels, rate)) = parse_wav(bytes) else {
@@ -251,7 +279,10 @@ fn setup(mut commands: Commands, mut assets: ResMut<Assets<StreamPcm>>) {
             let entity = commands
                 .spawn((
                     AudioPlayer(handle),
-                    PlaybackSettings::ONCE.with_volume(Volume::Linear(0.0)),
+                    PlaybackSettings::ONCE
+                        .with_volume(Volume::Linear(0.0))
+                        .with_spatial(spatial),
+                    Transform::default(),
                 ))
                 .id();
             loops.push((kind, entity, 0.0));
@@ -274,8 +305,10 @@ fn setup(mut commands: Commands, mut assets: ResMut<Assets<StreamPcm>>) {
         count += variants.len();
         shots.push((shot, variants));
     }
-    info!("SKATE_CLEAN_AUDIO loaded {count} sounds");
+    info!("SKATE_CLEAN_AUDIO loaded {count} sounds (spatial={spatial})");
     commands.insert_resource(CleanAudio {
+        spatial,
+        source: Vec3::ZERO,
         shots,
         loops,
         targets: [(0.0, 1.0); 7],
@@ -329,7 +362,9 @@ impl CleanAudio {
             AudioPlayer(handle),
             PlaybackSettings::DESPAWN
                 .with_volume(Volume::Linear((gain * MASTER).clamp(0.0, 1.5)))
-                .with_speed(pitch),
+                .with_speed(pitch)
+                .with_spatial(self.spatial),
+            Transform::from_translation(self.source),
         ));
         debug!("SKATE_CLEAN_AUDIO {} gain={gain:.2}", shot.prefix());
     }
@@ -382,6 +417,7 @@ fn observe(
             state: obs.state,
             ..Default::default()
         });
+        audio.source = Vec3::from_array(obs.retail.position);
         let wiped = obs.wiping_out || obs.events.iter().any(|e| matches!(e, PhysicsEvent::Wipeout));
         // Pop: leaving the ground or a grind for the air, by the skater's own doing.
         if is_air(obs.state) && (is_ground(prev.state) || is_grind(prev.state)) && !wiped {
@@ -475,6 +511,7 @@ fn frontend(
 fn mix(
     audio: Option<ResMut<CleanAudio>>,
     mut sinks: Query<&mut AudioSink>,
+    mut spatial_sinks: Query<&mut SpatialAudioSink>,
     time: Res<Time<bevy::time::Real>>,
 ) {
     let Some(mut audio) = audio else { return };
@@ -485,9 +522,14 @@ fn mix(
         let (target, pitch) = targets[i];
         let target = if paused { 0.0 } else { target };
         *volume += (target - *volume) * blend;
+        let level = Volume::Linear(*volume * LOOP_GAIN * MASTER);
+        let speed = pitch.clamp(0.5, 2.0);
         if let Ok(mut sink) = sinks.get_mut(*entity) {
-            sink.set_volume(Volume::Linear(*volume * LOOP_GAIN * MASTER));
-            sink.set_speed(pitch.clamp(0.5, 2.0));
+            sink.set_volume(level);
+            sink.set_speed(speed);
+        } else if let Ok(mut sink) = spatial_sinks.get_mut(*entity) {
+            sink.set_volume(level);
+            sink.set_speed(speed);
         }
     }
 }

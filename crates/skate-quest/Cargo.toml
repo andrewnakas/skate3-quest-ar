@@ -42,6 +42,9 @@ build_targets = ["aarch64-linux-android"]
 # Holds arm64-v8a/libopenxr_loader.so (Khronos loader; fetched by
 # scripts/quest/fetch-openxr-loader.sh, never committed).
 runtime_libs = "runtime_libs"
+# Holds core.pack, the skate3-cleanroom asset pack the app unpacks on first
+# launch (fetched by scripts/quest/fetch-clean-pack.sh, never committed).
+assets = "apk-assets"
 strip = "strip"
 
 [package.metadata.android.sdk]

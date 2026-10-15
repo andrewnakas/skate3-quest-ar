@@ -19,6 +19,7 @@ mod plane_view;
 mod planes;
 mod real_world;
 pub(crate) mod rig;
+mod spatial_audio;
 mod spawn;
 pub(crate) mod touch;
 
@@ -89,6 +90,7 @@ impl Plugin for XrPlugin {
                 spawn::SpawnPlugin,
                 build::BuildPlugin,
                 plane_view::PlaneViewPlugin,
+                spatial_audio::SpatialAudioPlugin,
             ))
             // The world plugin sets an opaque clear colour at build time;
             // passthrough needs alpha 0 wherever nothing was drawn.

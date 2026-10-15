@@ -1,6 +1,8 @@
 mod animation;
 #[cfg(target_os = "android")]
 mod android;
+#[cfg(any(target_os = "android", test))]
+mod clean_pack;
 mod animation_pose;
 mod app;
 mod apt_display;

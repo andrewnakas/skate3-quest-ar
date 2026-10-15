@@ -88,3 +88,6 @@ __pycache__/
 
 # Khronos OpenXR loader, fetched by scripts/quest/fetch-openxr-loader.sh
 /crates/skate-quest/runtime_libs/**/*.so
+
+# Clean-room asset pack bundled into the Quest APK (fetched, not committed).
+/crates/skate-quest/apk-assets/

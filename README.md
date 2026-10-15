@@ -9,10 +9,15 @@ real room, riding your floor, tables and furniture, plus ramps, rails and
 stairs you place with the Touch controllers. Grow or shrink the skater and
 the park to any size. Clean (CC0) skate sounds.
 
-**[Download the 0.01 alpha APK](https://github.com/andrewnakas/skate3-quest-ar/releases)**.
-It needs game data converted from your own Skate 3 disc; no EA assets are
-included. Install, controls and data setup are in
-[scripts/quest/README.md](scripts/quest/README.md).
+**[Download the APK](https://github.com/andrewnakas/skate3-quest-ar/releases)** and
+install it with `adb install -r`. Everything it needs is inside: the skater, animations and
+sounds come from the [skate3-cleanroom](https://github.com/andrewnakas/skate3-cleanroom)
+asset pack (regenerated model, textures and sounds), unpacked on first launch. No game files
+to import. Sounds are spatial: they come from the skater, wherever it is in your room.
+Controls are in [scripts/quest/README.md](scripts/quest/README.md).
+
+**Handing off to Snap Spectacles?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): how this
+maps onto the C++ port [skatecore-cpp](https://github.com/andrewnakas/skatecore-cpp).
 
 This is an early alpha built on the Skate 3 Rust Engine below.
 

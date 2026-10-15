@@ -14,6 +14,9 @@ export ANDROID_NDK_ROOT
 if [ ! -f crates/skate-quest/runtime_libs/arm64-v8a/libopenxr_loader.so ]; then
   scripts/quest/fetch-openxr-loader.sh
 fi
+if [ ! -f crates/skate-quest/apk-assets/core.pack ]; then
+  scripts/quest/fetch-clean-pack.sh
+fi
 # The workspace compiles at opt-level 3 and rustc needs a large stack for
 # the game crate (see the desktop build notes).
 export RUST_MIN_STACK="${RUST_MIN_STACK:-268435456}"

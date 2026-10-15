@@ -23,20 +23,24 @@ The headset must be in developer mode and visible to `adb devices`.
 scripts/quest/build-apk.sh --install
 ```
 
-## Game data (once, and after asset changes)
+## Game data
 
-The APK carries no game data. Copy the transfer bundle from the PC
-(`D:\skate3rustdesktopar\quest-data\`, made by `scripts/quest/make-bundle.ps1`)
-and push it:
+Nothing to push. The APK carries `core.pack`, the
+[skate3-cleanroom](https://github.com/andrewnakas/skate3-cleanroom) asset pack
+(regenerated skater model, textures and sounds; animations, graphs and tuning
+kept as facts), fetched into `crates/skate-quest/apk-assets/` by
+`scripts/quest/fetch-clean-pack.sh` (`build-apk.sh` runs it the first time).
+On the first launch of each build the app unpacks it into
+`/sdcard/Android/data/com.andrewnakas.skate3ar/files/clean/` (about 1 s;
+log line `SKATE_ANDROID unpacked the clean pack`).
+
+To run on a converted retail installation instead, push it as before and
+create the marker file:
 
 ```sh
 scripts/quest/push-assets.sh quest-data/assets quest-data/audio-pcm-cache
+adb shell touch /sdcard/Android/data/com.andrewnakas.skate3ar/files/use-retail-data
 ```
-
-That lands in `/sdcard/Android/data/com.andrewnakas.skate3ar/files/`:
-`assets/` (the converted installation) and
-`Skate3RustEngine/audio-pcm-cache/` (pre-decoded player sound banks; the
-headset has no ffmpeg).
 
 ## Run and read logs
 
@@ -106,7 +110,10 @@ The Quest build plays clean skate sounds (`crates/skate-game/clean-audio/`,
 from the skate3-cleanroom web build, extracted by
 `tools/extract_clean_audio.py`): rolling, grinds (metal on placed rails and
 copings), powerslides, pops, flips, catches, landings, pushes, footsteps and
-bails. 22 are CC0 recordings from freesound.org (credits in
+bails. Every sound is spatial: the headset is the listener and the skater
+the source, with distance measured in real metres (full volume within 1 m,
+a quarter at 2 m), so it pans and fades as the skater rides around the room at
+any world scale (`xr/spatial_audio.rs`). 22 are CC0 recordings from freesound.org (credits in
 `clean-audio/CREDITS.json`: nolimitkid, Sheyvan, mbezzola, BlackNeon1234,
 visionear, neotronable, PHetish, Bruno_Garcez, C-V, bspiller5,
 jarrondesnudo, gerardcatala); the rest are resynthesised. `SKATE_AUDIO=retail`
