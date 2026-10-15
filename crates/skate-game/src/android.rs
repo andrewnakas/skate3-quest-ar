@@ -11,7 +11,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 /// Bump when the bundled pack changes in a way its size would not show.
-const BUNDLE_VERSION: u32 = 1;
+const BUNDLE_VERSION: u32 = 2;
 
 pub(crate) fn files_dir() -> Result<PathBuf, String> {
     bevy::android::ANDROID_APP
@@ -47,7 +47,14 @@ pub(crate) fn asset_root() -> Result<PathBuf, String> {
     let started = std::time::Instant::now();
     let staging = files.join("clean.unpacking");
     let _ = std::fs::remove_dir_all(&staging);
-    let count = crate::clean_pack::unpack(BufReader::with_capacity(1 << 20, open()?), &staging)?;
+    // Only the asset tree: the pack's settings/ (the web build's default
+    // map, University, which isn't in it), maps/ and mods/ belong to the web
+    // build. Without a default map the Quest starts on the AR course.
+    let count = crate::clean_pack::unpack(
+        BufReader::with_capacity(1 << 20, open()?),
+        &staging,
+        |path| path.starts_with("assets/"),
+    )?;
     let _ = std::fs::remove_dir_all(&dest);
     std::fs::rename(&staging, &dest).map_err(|e| format!("{}: {e}", dest.display()))?;
     std::fs::write(&marker, &id).map_err(|e| format!("{}: {e}", marker.display()))?;

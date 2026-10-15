@@ -13,14 +13,16 @@ use std::path::{Component, Path, PathBuf};
 
 const MAGIC: &[u8; 5] = b"SKPK1";
 
-/// Unpack every file of an SKPK1 stream under `dest`. Returns the file count.
-pub(crate) fn unpack(mut pack: impl Read, dest: &Path) -> Result<usize, String> {
+/// Unpack the files of an SKPK1 stream whose path `keep` accepts under
+/// `dest`; the rest are skipped. Returns the count written.
+pub(crate) fn unpack(mut pack: impl Read, dest: &Path, keep: impl Fn(&str) -> bool) -> Result<usize, String> {
     let mut header = [0u8; 12];
     pack.read_exact(&mut header).map_err(|e| format!("pack header: {e}"))?;
     if &header[..5] != MAGIC {
         return Err("not an SKPK1 pack".into());
     }
     let count = u32::from_le_bytes(header[8..12].try_into().expect("4 bytes"));
+    let mut written = 0;
     for index in 0..count {
         let len = read_u32(&mut pack)? as usize;
         if len == 0 || len > 4096 {
@@ -30,6 +32,14 @@ pub(crate) fn unpack(mut pack: impl Read, dest: &Path) -> Result<usize, String> 
         pack.read_exact(&mut name).map_err(|e| format!("pack entry {index}: {e}"))?;
         let name = String::from_utf8(name).map_err(|_| format!("pack entry {index}: path is not UTF-8"))?;
         let size = read_u64(&mut pack)?;
+        if !keep(&name) {
+            let skipped = io::copy(&mut (&mut pack).take(size), &mut io::sink())
+                .map_err(|e| format!("{name}: {e}"))?;
+            if skipped != size {
+                return Err(format!("{name}: pack ends {} bytes early", size - skipped));
+            }
+            continue;
+        }
         let path = dest.join(safe_relative(&name)?);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
@@ -43,8 +53,9 @@ pub(crate) fn unpack(mut pack: impl Read, dest: &Path) -> Result<usize, String> 
             return Err(format!("{name}: pack ends {} bytes early", size - copied));
         }
         file.flush().map_err(|e| format!("{name}: {e}"))?;
+        written += 1;
     }
-    Ok(count as usize)
+    Ok(written)
 }
 
 fn read_u32(r: &mut impl Read) -> Result<u32, String> {
@@ -94,22 +105,33 @@ mod tests {
     #[test]
     fn unpacks_nested_files() {
         let dest = scratch("ok");
-        let data = pack(&[("assets/private/game.json", b"{}"), ("maps/a.skate", b"xyz")]);
-        assert_eq!(unpack(data.as_slice(), &dest).unwrap(), 2);
+        let data = pack(&[
+            ("settings/default-map.json", b"{\"map\":1}"),
+            ("assets/private/game.json", b"{}"),
+            ("maps/a.skate", b"xyz"),
+        ]);
+        assert_eq!(unpack(data.as_slice(), &dest, |_| true).unwrap(), 3);
         assert_eq!(std::fs::read(dest.join("assets/private/game.json")).unwrap(), b"{}");
         assert_eq!(std::fs::read(dest.join("maps/a.skate")).unwrap(), b"xyz");
+        let _ = std::fs::remove_dir_all(&dest);
+        let only = |p: &str| p.starts_with("assets/");
+        assert_eq!(unpack(data.as_slice(), &dest, only).unwrap(), 1);
+        assert_eq!(std::fs::read(dest.join("assets/private/game.json")).unwrap(), b"{}");
+        assert!(!dest.join("settings").exists() && !dest.join("maps").exists());
         let _ = std::fs::remove_dir_all(&dest);
     }
 
     #[test]
     fn rejects_escaping_paths_and_truncation() {
         let dest = scratch("bad");
-        assert!(unpack(pack(&[("../evil", b"x")]).as_slice(), &dest).is_err());
-        assert!(unpack(pack(&[("/abs", b"x")]).as_slice(), &dest).is_err());
+        let all = |_: &str| true;
+        assert!(unpack(pack(&[("../evil", b"x")]).as_slice(), &dest, all).is_err());
+        assert!(unpack(pack(&[("/abs", b"x")]).as_slice(), &dest, all).is_err());
         let mut short = pack(&[("a.bin", b"12345")]);
         short.truncate(short.len() - 2);
-        assert!(unpack(short.as_slice(), &dest).is_err());
-        assert!(unpack(&b"NOPE0000\0\0\0\0"[..], &dest).is_err());
+        assert!(unpack(short.as_slice(), &dest, all).is_err());
+        assert!(unpack(short.as_slice(), &dest, |_| false).is_err(), "skipping still checks the length");
+        assert!(unpack(&b"NOPE0000\0\0\0\0"[..], &dest, all).is_err());
         let _ = std::fs::remove_dir_all(&dest);
     }
 }
