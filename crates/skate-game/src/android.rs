@@ -2,11 +2,16 @@
 //! (`/sdcard/Android/data/<package>/files`) stands in for the desktop
 //! package folder.
 //!
-//! Game data comes from the clean-room pack bundled in the APK
-//! (`apk-assets/core.pack`, see [`crate::clean_pack`]), unpacked into
-//! `files/clean/` on the first launch of each build. A converted retail
-//! installation pushed with `scripts/quest/push-assets.sh` (`files/assets/`)
-//! is used instead only when `files/use-retail-data` exists.
+//! Game data is the player's own converted installation, pushed with
+//! `scripts/quest/push-assets.sh` into `files/assets/`. Public releases carry
+//! nothing else.
+//!
+//! Development builds can bundle an asset pack in the APK
+//! (`apk-assets/core.pack`, see [`crate::clean_pack`]); it is unpacked into
+//! `files/clean/` on the first launch of each build and used unless
+//! `files/use-retail-data` exists. That path is for the fully clean-room
+//! pack; the current skate3-cleanroom pack still keeps retail animations,
+//! graphs, tuning and colliders, so it must not ship in a public APK.
 use std::io::BufReader;
 use std::path::PathBuf;
 
@@ -21,23 +26,25 @@ pub(crate) fn files_dir() -> Result<PathBuf, String> {
         .ok_or_else(|| "Android external files directory is unavailable".into())
 }
 
-/// The asset root: the bundled clean pack (unpacked on first use), or a
-/// pushed retail installation when asked for.
+/// The asset root: a pack bundled in the APK (unpacked on first use) unless
+/// `files/use-retail-data` asks otherwise; else the pushed installation.
 pub(crate) fn asset_root() -> Result<PathBuf, String> {
     let files = files_dir()?;
-    let retail = files.join("assets");
-    if files.join("use-retail-data").exists() && retail.join("private/game.json").is_file() {
-        eprintln!("SKATE_ANDROID using pushed retail data in {}", retail.display());
-        return Ok(retail);
-    }
+    let pushed = files.join("assets");
     let app = bevy::android::ANDROID_APP
         .get()
         .ok_or("Android app handle not set; start through bevy_main")?;
-    let open = || {
-        app.asset_manager()
-            .open(c"core.pack")
-            .ok_or("The APK has no core.pack (build with scripts/quest/fetch-clean-pack.sh first)")
-    };
+    let open = || app.asset_manager().open(c"core.pack");
+    if open().is_none() || files.join("use-retail-data").exists() {
+        if !pushed.join("private/game.json").is_file() {
+            eprintln!(
+                "SKATE_ANDROID no game data: convert your own Skate 3 disc with the desktop engine and push it with scripts/quest/push-assets.sh (expected {})",
+                pushed.display()
+            );
+        }
+        return Ok(pushed);
+    }
+    let open = || open().ok_or("core.pack vanished from the APK");
     let dest = files.join("clean");
     let marker = dest.join(".bundle");
     let id = format!("{BUNDLE_VERSION} {}", open()?.length());

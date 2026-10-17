@@ -23,24 +23,27 @@ The headset must be in developer mode and visible to `adb devices`.
 scripts/quest/build-apk.sh --install
 ```
 
-## Game data
+## Game data (once, and after asset changes)
 
-Nothing to push. The APK carries `core.pack`, the
-[skate3-cleanroom](https://github.com/andrewnakas/skate3-cleanroom) asset pack
-(regenerated skater model, textures and sounds; animations, graphs and tuning
-kept as facts), fetched into `crates/skate-quest/apk-assets/` by
-`scripts/quest/fetch-clean-pack.sh` (`build-apk.sh` runs it the first time).
-On the first launch of each build the app unpacks it into
-`/sdcard/Android/data/com.andrewnakas.skate3ar/files/clean/` (about 1 s;
-log line `SKATE_ANDROID unpacked the clean pack`).
-
-To run on a converted retail installation instead, push it as before and
-create the marker file:
+The APK carries no game data. Convert your own Skate 3 disc with the desktop
+engine, copy the transfer bundle (made by `scripts/quest/make-bundle.ps1` on
+the PC) and push it after installing the APK once:
 
 ```sh
 scripts/quest/push-assets.sh quest-data/assets quest-data/audio-pcm-cache
-adb shell touch /sdcard/Android/data/com.andrewnakas.skate3ar/files/use-retail-data
 ```
+
+That lands in `/sdcard/Android/data/com.andrewnakas.skate3ar/files/`:
+`assets/` (the converted installation) and
+`Skate3RustEngine/audio-pcm-cache/` (pre-decoded player sound banks; the
+headset has no ffmpeg).
+
+**Development only:** `scripts/quest/fetch-clean-pack.sh` puts the
+skate3-cleanroom `core.pack` into `crates/skate-quest/apk-assets/`; the app
+then unpacks and uses it instead (`files/clean/`; `files/use-retail-data`
+switches back). That pack still keeps retail animations, state graphs, tuning
+and player colliders, so an APK built with it must not be published. Public
+builds bundle data only once the fully clean-room pack exists (planned 0.03).
 
 ## Run and read logs
 

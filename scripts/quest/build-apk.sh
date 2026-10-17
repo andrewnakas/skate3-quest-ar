@@ -14,8 +14,12 @@ export ANDROID_NDK_ROOT
 if [ ! -f crates/skate-quest/runtime_libs/arm64-v8a/libopenxr_loader.so ]; then
   scripts/quest/fetch-openxr-loader.sh
 fi
-if [ ! -f crates/skate-quest/apk-assets/core.pack ]; then
-  scripts/quest/fetch-clean-pack.sh
+# The APK's asset folder must exist; public builds leave it empty (players
+# import their own data). A core.pack in it is bundled: development only,
+# see scripts/quest/fetch-clean-pack.sh.
+mkdir -p crates/skate-quest/apk-assets
+if [ -f crates/skate-quest/apk-assets/core.pack ]; then
+  echo "WARNING: bundling apk-assets/core.pack (development build, not for public release)"
 fi
 # The workspace compiles at opt-level 3 and rustc needs a large stack for
 # the game crate (see the desktop build notes).

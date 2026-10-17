@@ -27,8 +27,9 @@ no GPU code: the host draws, the library simulates.
 
 - **Quest 3:** install the APK from the
   [releases page](https://github.com/andrewnakas/skate3-quest-ar/releases)
-  (`adb install -r skate3ar-*.apk`, developer mode on). From the build after
-  0.01, game data is inside the APK, so no import step is needed. Controls are in
+  (`adb install -r skate3ar-*.apk`, developer mode on). Public builds need data
+  converted from your own disc (`scripts/quest/push-assets.sh`); a development
+  build can bundle `core.pack` instead (`scripts/quest/fetch-clean-pack.sh`). Controls are in
   [scripts/quest/README.md](../scripts/quest/README.md).
 - **Browser (C++ runtime):** https://andrewnakas.github.io/skatecore-cpp/
   (Space to push, arrows to flick: down then up is an ollie). This is the exact
@@ -58,16 +59,19 @@ What is in it, and how clean it is (full detail in the skate3-cleanroom README):
 | Animations (`.abin`), state graphs, physics/VLT tuning, joystick gesture patterns, camera configs, skeleton | **Kept as facts** from the retail game (the skating *is* these numbers). |
 | Music, speech, everything else on the disc | Not shipped. |
 
-Be aware of that last kept-facts row when deciding how and where you ship.
-None of it is EA's mesh, texture or audio data, but the animation and tuning
-numbers come from the retail game. The project is unofficial and not
-affiliated with EA.
+**Policy: the public no-import build must be 100% clean-room and original.**
+The kept-facts rows above (animations, state graphs, tuning, the skeleton and
+player colliders, and with them the retail proportions) are not acceptable in
+anything shipped publicly with bundled data. They are being replaced with
+original work for 0.03; until then public Quest builds bundle nothing and
+players import their own disc. Plan the Spectacles version around the fully
+clean pack, not this one. The project is unofficial and not affiliated with EA.
 
 You only need a subset for a skater in AR: `assets/private/` minus
 `native-skies`, `native-props`, `hud`, `session-marker`, and none of `maps/` or
 `mods/` (about 64 MB; most of it is the 46 MB of animation and graph data in
 `stock/`).
-The Quest build ships the whole pack for simplicity.
+Development Quest builds bundle the whole pack for simplicity.
 
 ## 3. Recommended Spectacles architecture
 
@@ -157,7 +161,7 @@ small and mostly pure math. File references are in this repo:
    a simplified gesture layer that writes the same `Pad`.
 3. World understanding API: world mesh vs detected planes, update rate, and
    whether a hit-test is available for placement.
-4. Shipping the pack (90 MB, or the ~40 MB skater subset): bundled vs
+4. Shipping the pack (90 MB, or the ~64 MB skater subset): bundled vs
    downloaded on first run.
 
 ## 4. The Quest app in brief (this repo)

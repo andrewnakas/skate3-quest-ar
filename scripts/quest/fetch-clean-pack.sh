@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Fetch the skate3-cleanroom asset pack (core.pack: regenerated skater model,
-# animations, state graphs, tuning, HUD, clean sounds) into the APK's assets.
-# The app unpacks it on first launch, so players need no game files.
-# Never committed; run once per checkout (and again when the pack changes).
+# DEVELOPMENT ONLY. Fetch the skate3-cleanroom asset pack (core.pack) into the
+# APK's assets; the app then unpacks it on first launch instead of using
+# imported data. Its model, textures and sounds are regenerated, but its
+# animations, state graphs, tuning and player colliders are still retail data,
+# so an APK built with it must NOT be published. Public builds bundle nothing
+# until the fully clean-room pack exists. Remove apk-assets/core.pack (or set
+# CLEAN_PACK_BASE to the clean pack) before building a release.
 set -euo pipefail
 BASE="${CLEAN_PACK_BASE:-https://andrewnakas.github.io/skate3-cleanroom}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
