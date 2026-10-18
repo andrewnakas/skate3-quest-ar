@@ -136,26 +136,26 @@ def push_frame(phase):
     if phase < plant:                       # swinging forward to plant
         k = phase / plant
         x, lift = -0.35 + 0.47 * k, 0.1 * math.sin(math.pi * (0.5 + 0.5 * k))
-    elif phase < release:                   # driving back on the ground
+    elif phase < release:                   # driving back on the ground, a long stroke past the tail
         k = (phase - plant) / (release - plant)
-        x, lift = 0.12 - 0.62 * k, 0.0
+        x, lift = 0.12 - 0.74 * k, 0.0
     else:                                   # lifting off and coming forward
         k = (phase - release) / (1 - release)
-        # ends at the swing's starting height so the loop has no seam
-        # the heel kicks up behind (knee bent) as the leg swings forward, as in gameplay footage
-        x, lift = -0.5 + 0.15 * k, 0.24 * math.sin(math.pi * k) + 0.1 * k * k * (3 - 2 * k)
+        # ends at the swing's starting height so the loop has no seam; the heel kicks up behind
+        # (knee bent) as the leg swings forward, as in gameplay footage
+        x, lift = -0.62 + 0.27 * k, 0.24 * math.sin(math.pi * k) + 0.1 * k * k * (3 - 2 * k)
     drive = math.sin(math.pi * min(1.0, max(0.0, (phase - plant) / (release - plant))))
     # The body faces down the board (+X) while pushing, so its left side is +Y and its right -Y. The
     # arms hang at those sides and swing against the pushing leg: right arm forward as it drives back.
-    arm = max(-0.12, min(0.12, (-0.19 - x) * 0.35))
+    arm = max(-0.2, min(0.2, (-0.25 - x) * 0.5))
     # Upright: the trunk leans only a little into each drive (a deep forward bend read as hunched),
     # and the standing knee bends to let the pushing foot reach the ground.
     return P(hips=(0.05, -0.05, 0.83 - 0.09 * drive), hips_rot=(8 + 6 * drive, 0, 75),
              spine=(8 + 5 * drive, 0, 12 + 20 * arm), head=(-6, 0, 8 - 15 * arm),
              lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=80),
              rf=foot(x, -0.17, DECK_TOP_TO_GROUND + lift, yaw=78),
-             lh=(0.12 - arm, 0.24, 0.8 + 0.15 * max(0.0, -arm)),
-             rh=(0.12 + arm, -0.38, 0.8 + 0.15 * max(0.0, arm)), knee_out=0.5)
+             lh=(0.12 - arm, 0.28, 0.8 + 0.2 * max(0.0, -arm)),
+             rh=(0.12 + arm, -0.42, 0.8 + 0.2 * max(0.0, arm)), knee_out=0.5)
 
 
 # Stopping pushing: the back foot steps back onto the tail (still pointing ahead), then the front
