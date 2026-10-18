@@ -698,6 +698,7 @@ void Rider::state(sk8_state &s) const
 	s.combo_points = combo_points_;
 	s.combo_count = unsigned(combo_names_.size());
 	s.score = score_;
+	s.manual_dir = mode_ == SK8_MODE_MANUAL ? manual_dir_ : 0;
 }
 
 } // namespace sk8

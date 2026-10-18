@@ -37,8 +37,9 @@ CLEAN_SOURCES = [
     REPO / "crates/skate-lite-sys/vendor",
     REPO / "crates/skate-game/src/clean",
     REPO / "crates/skate-game/src/xr/panel.rs",
+    REPO / "scripts/cleanroom/blender",
 ]
-CLEAN_BLOBS = [REPO / "crates/skate-game/clean-audio"]
+CLEAN_BLOBS = [REPO / "crates/skate-game/clean-audio", REPO / "crates/skate-game/src/clean/assets"]
 SOURCE_EXT = {".c", ".cc", ".cpp", ".h", ".hpp", ".rs", ".py", ".wgsl", ".toml", ".json"}
 RETAIL_EXT = {".abin", ".stategraph", ".pat", ".shk", ".vlt", ".bin", ".big"}
 RETAIL_NAMES = {"skater-collections.json", "physics-skeletons.json", "input.cfg", "game.json"}

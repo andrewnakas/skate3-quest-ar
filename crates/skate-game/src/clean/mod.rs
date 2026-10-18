@@ -142,6 +142,7 @@ fn build(options: Options) -> App {
         .add_systems(Startup, (view::lights, skater::spawn))
         .add_systems(PostStartup, menu::spawn_ui);
     crate::skate_audio::clean::install_sk8(&mut app);
+    bevy::asset::embedded_asset!(app, "assets/skater.glb");
 
     let xr = options.xr.is_some();
     #[cfg(feature = "xr")]
@@ -178,7 +179,7 @@ fn build(options: Options) -> App {
                 .before(feed_sounds),
         );
     }
-    app.add_systems(Update, (feed_sounds, skater::animate, menu::draw).chain());
+    app.add_systems(Update, (feed_sounds, skater::bind, skater::animate, menu::draw).chain());
     app
 }
 

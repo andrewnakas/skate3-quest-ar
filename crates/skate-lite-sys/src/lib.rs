@@ -87,6 +87,7 @@ struct RawState {
     combo_points: c_uint,
     combo_count: c_uint,
     score: u64,
+    manual_dir: c_int,
 }
 
 /// One step's output. Rotations are quaternions `[x, y, z, w]`.
@@ -119,6 +120,8 @@ pub struct State {
     pub combo_points: u32,
     pub combo_count: u32,
     pub score: u64,
+    /// 1 manual (tail down), -1 nose manual, 0 none.
+    pub manual_dir: i32,
 }
 
 impl From<RawState> for State {
@@ -144,6 +147,7 @@ impl From<RawState> for State {
             combo_points: r.combo_points,
             combo_count: r.combo_count,
             score: r.score,
+            manual_dir: r.manual_dir,
         }
     }
 }

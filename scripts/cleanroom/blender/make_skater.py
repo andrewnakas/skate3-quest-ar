@@ -15,6 +15,9 @@ from pathlib import Path
 
 import bpy
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skater_anims  # noqa: E402
+
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = Path(ARGS[0]) if ARGS else Path("skater.glb")
 PREVIEW = Path(ARGS[1]) if len(ARGS) > 1 else None
@@ -129,30 +132,52 @@ def export():
         export_format="GLB",
         export_apply=False,
         export_skins=True,
-        export_animations=False,
+        export_animations=True,
+        export_animation_mode="ACTIONS",
         export_yup=True,
     )
     print("SKATER exported", OUT)
 
 
-def preview():
+def preview(clips):
+    """One small render per clip (its middle frame) next to a stand-in board, tiled into PREVIEW."""
     scene = bpy.context.scene
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
     scene.collection.objects.link(cam)
-    cam.location = (0.0, -4.2, 1.0)
-    cam.rotation_euler = (math.radians(88), 0, 0)
+    cam.location = (2.2, -3.4, 1.3)
+    cam.rotation_euler = (math.radians(80), 0, math.radians(33))
     scene.camera = cam
     sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
     sun.rotation_euler = (math.radians(50), 0, math.radians(30))
     scene.collection.objects.link(sun)
-    scene.render.engine = "BLENDER_EEVEE_NEXT"
-    scene.render.resolution_x, scene.render.resolution_y = 600, 900
-    scene.render.filepath = str(PREVIEW)
-    bpy.ops.render.render(write_still=True)
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, -0.06))
+    board = bpy.context.active_object
+    board.scale = (0.8, 0.21, 0.02)
+    scene.render.engine = "BLENDER_WORKBENCH"
+    scene.render.resolution_x, scene.render.resolution_y = 300, 360
+    rig = bpy.data.objects["skater_rig"]
+    rig.animation_data_create()
+    frames = []
+    for name in clips:
+        act = bpy.data.actions[name]
+        rig.animation_data.action = act
+        lo, hi = act.frame_range
+        scene.frame_set(int((lo + hi) / 2))
+        out = PREVIEW.with_name(f"{PREVIEW.stem}_{name}.png")
+        scene.render.filepath = str(out)
+        bpy.ops.render.render(write_still=True)
+        frames.append(out)
+    rig.animation_data.action = None
+    bpy.data.objects.remove(board)
+    bpy.data.objects.remove(cam)
+    bpy.data.objects.remove(sun)
+    print("SKATER previews", len(frames))
 
 
 basemesh = build()
 finish(basemesh)
+clips = skater_anims.bake_clips(bpy.data.objects["skater_rig"])
+print("SKATER clips", clips)
 if PREVIEW:
-    preview()
+    preview(clips)
 export()

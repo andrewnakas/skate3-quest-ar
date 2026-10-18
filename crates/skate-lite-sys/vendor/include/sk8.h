@@ -120,6 +120,7 @@ typedef struct sk8_state
 	unsigned combo_points;
 	unsigned combo_count;
 	unsigned long long score;
+	int manual_dir;      /* 1 manual (tail down), -1 nose manual, 0 none */
 } sk8_state;
 
 sk8_rider *sk8_rider_new(void);
