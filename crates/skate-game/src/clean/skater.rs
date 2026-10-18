@@ -415,7 +415,7 @@ fn smooth01(x: f32) -> f32 {
 
 /// One step of a critically damped follow of `target` (smoothing time `smooth`, s): stable for
 /// any frame time, so the blends look the same at 60, 72 or 90 Hz.
-fn smooth_cd(value: f32, vel: f32, target: f32, smooth: f32, dt: f32) -> (f32, f32) {
+pub(crate) fn smooth_cd(value: f32, vel: f32, target: f32, smooth: f32, dt: f32) -> (f32, f32) {
     let omega = 2.0 / smooth.max(1e-3);
     let x = omega * dt;
     let decay = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);

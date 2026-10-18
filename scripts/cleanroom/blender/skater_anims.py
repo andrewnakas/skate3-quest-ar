@@ -61,16 +61,18 @@ AIR_TUCK = P(hips=(0.0, 0.03, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 10), hea
 # open, then the feet come back down onto it. Kickflips kick the front foot out forward over the toe
 # side, heelflips forward over the heel side; shove-its lift both feet straight up.
 def flip_open(front_y, back_z):
-    return P(hips=(0.0, 0.02, 0.96), hips_rot=(8, 0, 0), spine=(8, 0, 8), head=(-26, 0, 50),
-             lf=foot(FRONT_X + 0.22, front_y, 0.34, yaw=-40, pitch=-15), rf=foot(BACK_X - 0.08, 0.0, back_z, yaw=12),
-             lh=(0.7, -0.08, 1.24), rh=(-0.68, -0.02, 1.21), knee_out=0.7)
+    """Both feet up in a compact tuck over the spinning board (the front foot only flicks a little
+    toward its side), the chest hunched, arms thrown up and out in a V (as in gameplay footage)."""
+    return P(hips=(0.0, 0.04, 0.88), hips_rot=(22, 0, 0), spine=(20, 0, 8), head=(-30, 0, 50),
+             lf=foot(FRONT_X + 0.08, front_y, 0.4, yaw=-30, pitch=-10), rf=foot(BACK_X - 0.02, 0.0, back_z, yaw=10),
+             lh=(0.56, -0.08, 1.56), rh=(-0.54, -0.02, 1.54), knee_out=0.7)
 
 
-FLIP_KICK = flip_open(-0.24, 0.2)
-FLIP_HEEL = flip_open(0.18, 0.24)
-FLIP_SHUV = P(hips=(0.0, 0.02, 0.96), hips_rot=(10, 0, 0), spine=(10, 0, 8), head=(-24, 0, 50),
-              lf=foot(FRONT_X + 0.02, 0.0, 0.28, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.26, yaw=8),
-              lh=(0.68, -0.1, 1.2), rh=(-0.66, -0.04, 1.17), knee_out=0.6)
+FLIP_KICK = flip_open(-0.12, 0.36)
+FLIP_HEEL = flip_open(0.1, 0.37)
+FLIP_SHUV = P(hips=(0.0, 0.04, 0.88), hips_rot=(22, 0, 0), spine=(20, 0, 8), head=(-28, 0, 50),
+              lf=foot(FRONT_X + 0.02, 0.0, 0.38, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.37, yaw=8),
+              lh=(0.62, -0.1, 1.44), rh=(-0.6, -0.04, 1.42), knee_out=0.65)
 FLIP_CATCH = P(hips=(0.0, 0.03, 0.88), hips_rot=(16, 0, 0), spine=(18, 0, 10), head=(-26, 0, 50),
                lf=foot(FRONT_X, 0.0, 0.1, yaw=-20), rf=foot(BACK_X, 0.0, 0.09, yaw=8),
                lh=(0.66, -0.1, 1.16), rh=(-0.64, -0.04, 1.13), knee_out=0.55)

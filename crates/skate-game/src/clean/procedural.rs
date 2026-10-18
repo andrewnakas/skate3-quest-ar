@@ -61,6 +61,8 @@ const PIN_BLEND: f32 = 0.06;
 /// The foot stays on the deck: at most this far off its centre line, and inside the trucks' span.
 const PIN_HALF_WIDTH: f32 = 0.07;
 const PIN_HALF_LEN: f32 = 0.36;
+/// Room left between the feet and a flipping board (m).
+const FLIP_ROOM: f32 = 0.09;
 
 #[derive(Default)]
 pub(crate) struct Motion {
@@ -71,6 +73,9 @@ pub(crate) struct Motion {
     last_vel: Option<Vec3>,
     air_vy: f32,
     pin: [f32; 2],
+    /// How far the board rides up under the feet in the air (m), and its rate.
+    lift: f32,
+    lift_vel: f32,
     /// The board after a bail: flung on from the rider's speed, tumbling, bouncing to rest.
     loose: Option<Loose>,
     trace: Option<Trace>,
@@ -299,11 +304,26 @@ pub(crate) fn layer(
     let mut at = pos + up * skater::DECK_CENTRE;
     // Where the clips assume the deck is: flat under the rider, no lift, snap, roll or flip.
     let rest_inv = Transform::from_translation(at).with_rotation(rider_rot).compute_affine().inverse();
-    if s.mode == Mode::Air && s.flip_progress.is_none() {
+    // In the air the board rides up under the feet (a tuck brings it with them); while it flips it
+    // keeps a little room to turn. The height springs, so a flip starting or ending never snaps it.
+    let lift_goal = if s.mode == Mode::Air {
         let lowest = ankles.iter().map(|p| (*p - rider_at).dot(up)).fold(f32::MAX, f32::min);
-        if lowest < 1.0 {
-            at += up * (lowest - skater::ANKLE).max(0.0);
-        }
+        let room = if s.flip_progress.is_some_and(|p| p < 0.85) { FLIP_ROOM } else { 0.0 };
+        if lowest < 1.0 { (lowest - skater::ANKLE - room).max(0.0) } else { 0.0 }
+    } else {
+        0.0
+    };
+    if dt > 0.0 {
+        // Exact critically damped follow: a stiff explicit spring here diverged at 60 Hz.
+        let (l, lv) = skater::smooth_cd(motion.lift, motion.lift_vel, lift_goal, 0.035, dt);
+        (motion.lift, motion.lift_vel) = (l.max(0.0), lv);
+    }
+    if s.mode == Mode::Air {
+        at += up * motion.lift;
+    } else {
+        // Landed: the board is on the ground at once (the spring only smooths the air).
+        motion.lift = 0.0;
+        motion.lift_vel = 0.0;
     }
     let mut deck = board_rot;
     if carving {
