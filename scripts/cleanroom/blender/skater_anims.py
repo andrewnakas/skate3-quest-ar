@@ -100,9 +100,14 @@ POP_DRIVE = P(hips=(-0.02, 0.03, 0.86), hips_rot=(16, 0, 0), spine=(14, 0, 10), 
 POP_SLIDE = P(hips=(0.0, 0.02, 0.95), hips_rot=(12, 0, 0), spine=(12, 0, 9), head=(-20, 0, 55),
               lf=foot(FRONT_X + 0.06, 0.0, 0.17, yaw=-22, pitch=4), rf=foot(BACK_X, 0.0, 0.1, yaw=8),
               lh=(0.5, -0.17, 1.06), rh=(-0.49, -0.1, 1.03), knee_out=0.6)
-AIR_PEAK = P(hips=(0.0, 0.03, 0.9), hips_rot=(18, 0, 0), spine=(18, 0, 10), head=(-22, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.19, yaw=-20), rf=foot(BACK_X, 0.0, 0.18, yaw=8),
-             lh=(0.58, -0.17, 1.08), rh=(-0.56, -0.11, 1.04), knee_out=0.62)  # arms wide for balance
+# Gameplay footage (3 fixed angles, pose-tracked): knees ~82 deg in the tuck and the tuck deepest late
+# in the air, held into the landing (no reaching the legs down first); pop to landing ~0.8 s.
+AIR_PEAK = P(hips=(0.0, 0.03, 0.88), hips_rot=(20, 0, 0), spine=(20, 0, 10), head=(-22, 0, 55),
+             lf=foot(FRONT_X, 0.0, 0.24, yaw=-20), rf=foot(BACK_X, 0.0, 0.23, yaw=8),
+             lh=(0.58, -0.17, 1.06), rh=(-0.56, -0.11, 1.02), knee_out=0.65)  # arms wide for balance
+AIR_HOLD = P(hips=(0.0, 0.04, 0.87), hips_rot=(21, 0, 0), spine=(21, 0, 10), head=(-20, 0, 55),
+             lf=foot(FRONT_X, 0.0, 0.25, yaw=-20), rf=foot(BACK_X, 0.0, 0.24, yaw=8),
+             lh=(0.56, -0.2, 1.02), rh=(-0.54, -0.14, 0.98), knee_out=0.65)
 AIR_REACH = P(hips=(0.0, 0.03, 0.94), hips_rot=(14, 0, 0), spine=(16, 0, 10), head=(-22, 0, 55),
               lf=foot(FRONT_X, 0.0, 0.07, yaw=-20), rf=foot(BACK_X, 0.0, 0.06, yaw=8),
               lh=(0.48, -0.18, 0.98), rh=(-0.46, -0.12, 0.95), knee_out=0.5)
@@ -199,7 +204,7 @@ CLIPS = {
     "ride": (True, loop(ride_frame, IDLE_LEN)),
     "crouch": (True, loop(lambda t: idle(CROUCH, t, 0.008, 0.02), IDLE_LEN)),
     "pop": (False, [(0.0, CROUCH), (0.05, POP_DRIVE), (0.1, POP_TOP), (0.18, POP_SLIDE), (0.3, AIR_TUCK)]),
-    "air": (False, [(0.0, AIR_TUCK), (0.14, AIR_PEAK), (0.34, AIR_PEAK), (0.62, AIR_REACH)]),
+    "air": (False, [(0.0, AIR_TUCK), (0.18, AIR_PEAK), (0.6, AIR_HOLD)]),
     # Absorb deep, then rise slowly: in gameplay footage the recovery takes about half a second.
     "land": (False, [(0.0, LAND_CONTACT), (0.07, LAND_DEEP), (0.18, LAND_DEEP), (0.42, LAND_RISE), (0.6, STANCE)]),
     "push": (True, [(i / 10 * 0.62, push_frame(i / 10)) for i in range(11)]),
