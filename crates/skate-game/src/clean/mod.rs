@@ -175,10 +175,33 @@ fn build(options: Options) -> App {
     if !xr {
         app.add_systems(Startup, view::desktop_world).add_systems(
             Update,
-            (menu::keyboard_nav, menu::update, input::read_desktop, sim::step, view::chase)
+            (menu::keyboard_nav, menu::update, input::read_desktop, sim::step, view::chase, view::views)
                 .chain()
                 .before(feed_sounds),
         );
+    }
+    // SK8_CAPTURE=<dir>: every frame advances exactly 1/60 s and is saved (f00000.jpg, ...), so a
+    // capture is deterministic however slowly frames are written; SK8_CAPTURE_FRAMES stops it.
+    if let Ok(dir) = std::env::var("SK8_CAPTURE") {
+        let frames: u32 = std::env::var("SK8_CAPTURE_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(1620);
+        let _ = std::fs::create_dir_all(&dir);
+        app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(std::time::Duration::from_secs_f64(
+            1.0 / 60.0,
+        )))
+        .add_systems(Last, move |mut commands: Commands, mut n: Local<u32>, mut exit: MessageWriter<AppExit>| {
+            use bevy::render::view::window::screenshot::{Screenshot, save_to_disk};
+            // Skip the first frames while the skater loads.
+            *n += 1;
+            if *n <= 30 {
+                return;
+            }
+            let i = *n - 31;
+            if i >= frames {
+                exit.write(AppExit::Success);
+                return;
+            }
+            commands.spawn(Screenshot::primary_window()).observe(save_to_disk(format!("{dir}/f{i:05}.jpg")));
+        });
     }
     app.init_resource::<skater::Clock>()
         .add_systems(Update, (feed_sounds, skater::bind, skater::animate, menu::draw).chain())

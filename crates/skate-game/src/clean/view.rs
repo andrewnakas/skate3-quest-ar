@@ -15,7 +15,8 @@ pub(crate) fn lights(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             illuminance: 9000.0,
-            shadows_enabled: false,
+            // On for the 3-view check: the shadow is what shows how high the board and rider go.
+            shadows_enabled: three_views(),
             ..default()
         },
         Transform::from_xyz(4.0, 10.0, 6.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -29,6 +30,16 @@ pub(crate) fn lights(mut commands: Commands) {
 
 #[derive(Component)]
 pub(crate) struct ChaseCamera;
+
+/// `SK8_VIEWS=3`: two more cameras beside the chase one, split three ways, for checking animation
+/// from fixed angles (0 = beside the line of travel on the chest side, 1 = ahead on the line, which
+/// sees the rider's profile). The same layout as the skatecore web page's `?views=3`.
+#[derive(Component)]
+pub(crate) struct ViewCamera(u8);
+
+pub(crate) fn three_views() -> bool {
+    std::env::var("SK8_VIEWS").is_ok_and(|v| v == "3")
+}
 
 /// (kind, size, position, turn) of the desktop test park, metres.
 const PARK: [(PieceKind, f32, [f32; 3], f32); 7] = [
@@ -68,6 +79,17 @@ pub(crate) fn desktop_world(
         Camera3d::default(),
         Transform::from_xyz(0.0, 2.5, -5.0).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
     ));
+    if three_views() {
+        for (i, order) in [(0u8, 1isize), (1, 2)] {
+            commands.spawn((
+                ViewCamera(i),
+                Camera3d::default(),
+                Camera { order, ..default() },
+                Projection::Perspective(PerspectiveProjection { fov: 38f32.to_radians(), ..default() }),
+                Transform::default(),
+            ));
+        }
+    }
     let mut grid = Grid::default();
     let f = FLOOR_HALF;
     grid.add_quad(
@@ -135,4 +157,49 @@ pub(crate) fn chase(
     let target = pos - *h * 4.2 + Vec3::Y * 1.9;
     cam.translation = cam.translation.lerp(target, 1.0 - (-6.0 * time.delta_secs()).exp());
     cam.look_at(pos + Vec3::Y * 0.8, Vec3::Y);
+}
+
+/// Split the window three ways and aim the fixed cameras: they follow the line of travel (the body
+/// turns to push, so its own axes would swing the views), one beside it on the chest side, one ahead.
+#[allow(clippy::type_complexity)]
+pub(crate) fn views(
+    sim: Res<CleanSkate>,
+    windows: Query<&Window>,
+    mut chase: Query<&mut Camera, (With<ChaseCamera>, Without<ViewCamera>)>,
+    mut fixed: Query<(&ViewCamera, &mut Camera, &mut Transform), Without<ChaseCamera>>,
+    mut dir: Local<Option<Vec3>>,
+) {
+    let Ok(window) = windows.single() else { return };
+    let (w, h) = (window.physical_width() / 3, window.physical_height());
+    if w == 0 || h == 0 {
+        return;
+    }
+    let viewport = |i: u32| Some(bevy::camera::Viewport {
+        physical_position: UVec2::new(i * w, 0),
+        physical_size: UVec2::new(w, h),
+        ..default()
+    });
+    if let Ok(mut cam) = chase.single_mut() {
+        cam.viewport = viewport(0);
+    }
+    let s = &sim.current;
+    let pos = Vec3::from_array(s.position);
+    let rot = Quat::from_array(s.rider_rot);
+    let vel = Vec3::from_array(s.velocity).with_y(0.0);
+    let d = dir.get_or_insert((rot * Vec3::Z).with_y(0.0).normalize_or(Vec3::Z));
+    if vel.length() > 0.3 {
+        *d = d.lerp(vel.normalize(), 0.06).normalize_or(*d);
+    }
+    // The chest faces the rider's -X.
+    let chest = (rot * Vec3::NEG_X).with_y(0.0).normalize_or(Vec3::X);
+    let mut beside = Vec3::new(-d.z, 0.0, d.x);
+    if beside.dot(chest) < 0.0 {
+        beside = -beside;
+    }
+    let aim = pos + Vec3::Y * 0.85;
+    for (v, mut cam, mut tf) in &mut fixed {
+        cam.viewport = viewport(1 + v.0 as u32);
+        let at = aim + if v.0 == 0 { beside } else { *d } * 4.6 + Vec3::Y * 0.1;
+        *tf = Transform::from_translation(at).looking_at(aim, Vec3::Y);
+    }
 }

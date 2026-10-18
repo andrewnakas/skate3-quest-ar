@@ -53,27 +53,27 @@ CROUCH = P(hips=(0.0, 0.05, 0.74), hips_rot=(22, 0, 0), spine=(20, 0, 12), head=
 POP_TOP = P(hips=(-0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 8), head=(-18, 0, 55),
             lf=foot(FRONT_X + 0.1, 0.0, 0.16, yaw=-25, pitch=14), rf=foot(BACK_X - 0.02, 0.0, 0.0, yaw=8),
             # hands up and out but elbows kept bent: a near-straight arm lets the elbow flip about
-            lh=(0.46, -0.18, 1.03), rh=(-0.45, -0.11, 1.0), knee_out=0.55)
+            lh=(0.62, -0.12, 1.16), rh=(-0.6, -0.06, 1.13), knee_out=0.55)
 AIR_TUCK = P(hips=(0.0, 0.03, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 10), head=(-20, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.16, yaw=-20), rf=foot(BACK_X, 0.0, 0.15, yaw=8),
-             lh=(0.5, -0.16, 1.06), rh=(-0.48, -0.1, 1.02), knee_out=0.6)
+             lf=foot(FRONT_X, 0.0, 0.22, yaw=-20), rf=foot(BACK_X, 0.0, 0.21, yaw=8),
+             lh=(0.68, -0.1, 1.2), rh=(-0.66, -0.04, 1.17), knee_out=0.6)
 # Flip tricks: the legs split up and out of the way and the board turns underneath, arms up and
 # open, then the feet come back down onto it. Kickflips kick the front foot out forward over the toe
 # side, heelflips forward over the heel side; shove-its lift both feet straight up.
 def flip_open(front_y, back_z):
     return P(hips=(0.0, 0.02, 0.96), hips_rot=(8, 0, 0), spine=(8, 0, 8), head=(-26, 0, 50),
              lf=foot(FRONT_X + 0.22, front_y, 0.34, yaw=-40, pitch=-15), rf=foot(BACK_X - 0.08, 0.0, back_z, yaw=12),
-             lh=(0.6, -0.08, 1.24), rh=(-0.58, -0.02, 1.2), knee_out=0.7)
+             lh=(0.7, -0.08, 1.24), rh=(-0.68, -0.02, 1.21), knee_out=0.7)
 
 
 FLIP_KICK = flip_open(-0.24, 0.2)
 FLIP_HEEL = flip_open(0.18, 0.24)
 FLIP_SHUV = P(hips=(0.0, 0.02, 0.96), hips_rot=(10, 0, 0), spine=(10, 0, 8), head=(-24, 0, 50),
               lf=foot(FRONT_X + 0.02, 0.0, 0.28, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.26, yaw=8),
-              lh=(0.56, -0.1, 1.18), rh=(-0.54, -0.04, 1.14), knee_out=0.6)
+              lh=(0.68, -0.1, 1.2), rh=(-0.66, -0.04, 1.17), knee_out=0.6)
 FLIP_CATCH = P(hips=(0.0, 0.03, 0.88), hips_rot=(16, 0, 0), spine=(18, 0, 10), head=(-26, 0, 50),
                lf=foot(FRONT_X, 0.0, 0.1, yaw=-20), rf=foot(BACK_X, 0.0, 0.09, yaw=8),
-               lh=(0.52, -0.12, 1.06), rh=(-0.5, -0.06, 1.02), knee_out=0.55)
+               lh=(0.66, -0.1, 1.16), rh=(-0.64, -0.04, 1.13), knee_out=0.55)
 LAND_LOW = P(hips=(0.0, 0.04, 0.72), hips_rot=(22, 0, 0), spine=(22, 0, 12), lh=(0.4, -0.26, 0.8), rh=(-0.4, -0.2, 0.78))
 MANUAL = P(hips=(-0.13, 0.0, 0.8), hips_rot=(-4, 0, 0), spine=(-2, 0, 12), lh=(0.38, -0.05, 1.02), rh=(-0.5, -0.05, 1.0))
 NOSE_MANUAL = P(hips=(0.14, 0.0, 0.78), hips_rot=(14, 0, 0), spine=(24, 0, 14), lh=(0.52, -0.08, 1.0), rh=(-0.36, -0.08, 1.04))
@@ -99,20 +99,20 @@ POP_DRIVE = P(hips=(-0.02, 0.03, 0.86), hips_rot=(16, 0, 0), spine=(14, 0, 10), 
               lh=(0.42, -0.22, 0.86), rh=(-0.42, -0.16, 0.84), knee_out=0.45)
 POP_SLIDE = P(hips=(0.0, 0.02, 0.95), hips_rot=(12, 0, 0), spine=(12, 0, 9), head=(-20, 0, 55),
               lf=foot(FRONT_X + 0.06, 0.0, 0.17, yaw=-22, pitch=4), rf=foot(BACK_X, 0.0, 0.1, yaw=8),
-              lh=(0.5, -0.17, 1.06), rh=(-0.49, -0.1, 1.03), knee_out=0.6)
+              lh=(0.68, -0.1, 1.22), rh=(-0.66, -0.04, 1.19), knee_out=0.6)
 # Gameplay footage (3 fixed angles, pose-tracked): knees ~82 deg in the tuck and the tuck deepest late
 # in the air, held into the landing (no reaching the legs down first); pop to landing ~0.8 s.
-AIR_PEAK = P(hips=(0.0, 0.03, 0.88), hips_rot=(20, 0, 0), spine=(20, 0, 10), head=(-22, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.24, yaw=-20), rf=foot(BACK_X, 0.0, 0.23, yaw=8),
-             lh=(0.58, -0.17, 1.06), rh=(-0.56, -0.11, 1.02), knee_out=0.65)  # arms wide for balance
-AIR_HOLD = P(hips=(0.0, 0.04, 0.87), hips_rot=(21, 0, 0), spine=(21, 0, 10), head=(-20, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.25, yaw=-20), rf=foot(BACK_X, 0.0, 0.24, yaw=8),
-             lh=(0.56, -0.2, 1.02), rh=(-0.54, -0.14, 0.98), knee_out=0.65)
+AIR_PEAK = P(hips=(0.0, 0.05, 0.84), hips_rot=(26, 0, 0), spine=(26, 0, 10), head=(-26, 0, 55),
+             lf=foot(FRONT_X, 0.0, 0.4, yaw=-20), rf=foot(BACK_X, 0.0, 0.39, yaw=8),
+             lh=(0.7, -0.1, 1.2), rh=(-0.68, -0.04, 1.17), knee_out=0.65)  # arms wide for balance
+AIR_HOLD = P(hips=(0.0, 0.05, 0.84), hips_rot=(24, 0, 0), spine=(24, 0, 10), head=(-24, 0, 55),
+             lf=foot(FRONT_X, 0.0, 0.37, yaw=-20), rf=foot(BACK_X, 0.0, 0.36, yaw=8),
+             lh=(0.68, -0.12, 1.16), rh=(-0.66, -0.06, 1.13), knee_out=0.65)
 AIR_REACH = P(hips=(0.0, 0.03, 0.94), hips_rot=(14, 0, 0), spine=(16, 0, 10), head=(-22, 0, 55),
               lf=foot(FRONT_X, 0.0, 0.07, yaw=-20), rf=foot(BACK_X, 0.0, 0.06, yaw=8),
               lh=(0.48, -0.18, 0.98), rh=(-0.46, -0.12, 0.95), knee_out=0.5)
 LAND_CONTACT = P(hips=(0.0, 0.03, 0.84), hips_rot=(16, 0, 0), spine=(18, 0, 11), head=(-18, 0, 55),
-                 lh=(0.46, -0.2, 0.94), rh=(-0.46, -0.14, 0.92), knee_out=0.5)
+                 lh=(0.6, -0.16, 1.06), rh=(-0.6, -0.1, 1.03), knee_out=0.5)
 LAND_DEEP = P(hips=(0.0, 0.05, 0.7), hips_rot=(24, 0, 0), spine=(24, 0, 12), head=(-14, 0, 55),
               lh=(0.42, -0.27, 0.76), rh=(-0.42, -0.21, 0.74), knee_out=0.45)
 LAND_RISE = P(hips=(0.0, 0.01, 0.87), hips_rot=(9, 0, 0), spine=(15, 0, 10), lh=(0.34, -0.14, 0.86), rh=(-0.35, -0.11, 0.85))
@@ -139,22 +139,25 @@ def push_frame(phase):
     else:                                   # lifting off and coming forward
         k = (phase - release) / (1 - release)
         # ends at the swing's starting height so the loop has no seam
-        x, lift = -0.5 + 0.15 * k, 0.12 * math.sin(math.pi * k) + 0.1 * k * k * (3 - 2 * k)
+        # the heel kicks up behind (knee bent) as the leg swings forward, as in gameplay footage
+        x, lift = -0.5 + 0.15 * k, 0.24 * math.sin(math.pi * k) + 0.1 * k * k * (3 - 2 * k)
     drive = math.sin(math.pi * min(1.0, max(0.0, (phase - plant) / (release - plant))))
     # The body faces down the board (+X) while pushing, so its left side is +Y and its right -Y. The
     # arms hang at those sides and swing against the pushing leg: right arm forward as it drives back.
     arm = max(-0.12, min(0.12, (-0.19 - x) * 0.35))
-    return P(hips=(0.06, -0.06, 0.78 - 0.11 * drive), hips_rot=(20 + 8 * drive, 0, 75),
-             spine=(18 + 6 * drive, 0, 12 + 20 * arm), head=(-16, 0, 8 - 15 * arm),
+    # Upright: the trunk leans only a little into each drive (a deep forward bend read as hunched),
+    # and the standing knee bends to let the pushing foot reach the ground.
+    return P(hips=(0.05, -0.05, 0.83 - 0.09 * drive), hips_rot=(8 + 6 * drive, 0, 75),
+             spine=(8 + 5 * drive, 0, 12 + 20 * arm), head=(-6, 0, 8 - 15 * arm),
              lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=80),
              rf=foot(x, -0.17, DECK_TOP_TO_GROUND + lift, yaw=78),
-             lh=(0.08 - arm, 0.18, 0.74 + 0.15 * max(0.0, -arm)),
-             rh=(0.08 + arm, -0.32, 0.74 + 0.15 * max(0.0, arm)), knee_out=0.5)
+             lh=(0.12 - arm, 0.24, 0.8 + 0.15 * max(0.0, -arm)),
+             rh=(0.12 + arm, -0.38, 0.8 + 0.15 * max(0.0, arm)), knee_out=0.5)
 
 
 # Stopping pushing: the back foot steps back onto the tail (still pointing ahead), then the front
 # foot pivots back across the board and the hips and chest turn back to the side.
-PUSH_STEP_ON = P(hips=(0.03, -0.04, 0.8), hips_rot=(16, 0, 45), spine=(16, 0, 12), head=(-12, 0, 30),
+PUSH_STEP_ON = P(hips=(0.03, -0.04, 0.84), hips_rot=(9, 0, 45), spine=(10, 0, 12), head=(-8, 0, 30),
                  lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=80), rf=foot(BACK_X, 0.0, 0.0, yaw=30),
                  lh=(0.14, 0.12, 0.76), rh=(-0.06, -0.3, 0.76), knee_out=0.45)
 PUSH_TURN = P(hips=(0.01, -0.01, 0.84), hips_rot=(10, 0, 12), spine=(15, 0, 10), head=(-9, 0, 48),
