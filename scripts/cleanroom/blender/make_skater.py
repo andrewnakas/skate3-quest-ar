@@ -1,0 +1,158 @@
+"""Build the clean tier's skater in Blender from MakeHuman CC0 assets (MPFB 2) and export it as glTF.
+
+    Blender -b --python scripts/cleanroom/blender/make_skater.py -- <out.glb> [preview.png]
+
+Needs the MPFB extension and the MakeHuman system asset pack (CC0) in MPFB's user data dir
+(see scripts/cleanroom/README.md). The body shape is set here (our own phenotype), the rig is
+MPFB's game-engine rig with every bone renamed to our own scheme, and the result is one skinned
+mesh per material plus the armature.
+"""
+import importlib
+import json
+import math
+import sys
+from pathlib import Path
+
+import bpy
+
+ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+OUT = Path(ARGS[0]) if ARGS else Path("skater.glb")
+PREVIEW = Path(ARGS[1]) if len(ARGS) > 1 else None
+
+M = "bl_ext.blender_org.mpfb.services."
+HumanService = importlib.import_module(M + "humanservice").HumanService
+LocationService = importlib.import_module(M + "locationservice").LocationService
+DATA = Path(LocationService.get_user_data())
+
+# Our skater: a lean young adult, a little taller than average, long-limbed.
+PRESET = {
+    "phenotype": {
+        "gender": 1.0,
+        "age": 0.42,
+        "muscle": 0.6,
+        "weight": 0.41,
+        "height": 0.6,
+        "proportions": 0.66,
+        "cupsize": 0.5,
+        "firmness": 0.5,
+        "race": {"african": 0.25, "asian": 0.2, "caucasian": 0.55},
+    },
+    "skin_mhmat": "young_caucasian_male/young_caucasian_male.mhmat",
+    "skin_material_type": "MAKESKIN",
+    "eyes": "high-poly/high-poly.mhclo",
+    "eyes_material_type": "MAKESKIN",
+    "eyebrows": "eyebrow001/eyebrow001.mhclo",
+    "eyelashes": "eyelashes01/eyelashes01.mhclo",
+    "hair": "short02/short02.mhclo",
+    "clothes": [
+        "male_casualsuit06/male_casualsuit06.mhclo",
+        "shoes06/shoes06.mhclo",
+    ],
+    "clothes_material_type": "MAKESKIN",
+    "rig": "game_engine",
+}
+
+# MPFB game-engine bone -> our name. Anything not listed keeps a prefixed name.
+BONES = {
+    "root": "base",
+    "pelvis": "hips",
+    "spine_01": "back_low",
+    "spine_02": "back_mid",
+    "spine_03": "chest",
+    "neck_01": "neck",
+    "head": "skull",
+    "clavicle_l": "collar.L",
+    "upperarm_l": "arm.L",
+    "lowerarm_l": "elbow.L",
+    "hand_l": "wrist.L",
+    "clavicle_r": "collar.R",
+    "upperarm_r": "arm.R",
+    "lowerarm_r": "elbow.R",
+    "hand_r": "wrist.R",
+    "thigh_l": "leg.L",
+    "calf_l": "knee.L",
+    "foot_l": "ankle.L",
+    "ball_l": "toes.L",
+    "thigh_r": "leg.R",
+    "calf_r": "knee.R",
+    "foot_r": "ankle.R",
+    "ball_r": "toes.R",
+}
+
+
+def build():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    info = dict(PRESET)
+    info.update({"targets": [], "expressions": [], "makeup": [], "proxy": "", "teeth": "", "tongue": "",
+                 "color_adjustments": {}, "eyes_material_settings": {}, "skin_material_settings": {}})
+    settings = HumanService.get_default_deserialization_settings()
+    settings["subdiv_levels"] = 0
+    settings["override_skin_model"] = "MAKESKIN"
+    return HumanService.deserialize_from_dict(info, settings)
+
+
+def finish(basemesh):
+    rig = basemesh.parent
+    for b in rig.data.bones:
+        b.name = BONES.get(b.name, "sk_" + b.name)
+    rig.name = rig.data.name = "skater_rig"
+    # Bake shape keys / modifiers (except the armature) so the export is a plain skinned mesh.
+    for ob in [o for o in bpy.data.objects if o.type == "MESH"]:
+        bpy.context.view_layer.objects.active = ob
+        if ob.data.shape_keys:
+            ob.shape_key_add(name="baked", from_mix=True)
+            keys = ob.data.shape_keys.key_blocks
+            for k in list(keys):
+                if k.name != "baked":
+                    ob.shape_key_remove(k)
+            ob.shape_key_remove(ob.data.shape_keys.key_blocks["baked"])
+        for m in list(ob.modifiers):
+            if m.type in ("SUBSURF",):
+                ob.modifiers.remove(m)
+            elif m.type not in ("ARMATURE",):
+                try:
+                    bpy.ops.object.modifier_apply(modifier=m.name)
+                except RuntimeError as e:
+                    print("modifier", ob.name, m.name, e)
+        # Helper geometry (MPFB's joint/clothing helpers) is masked out of the body.
+        ob.name = "skater_" + ob.name.split(".")[0].lower()
+    tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == "MESH")
+    heights = [v.co.z for o in bpy.data.objects if o.type == "MESH" for v in o.data.vertices]
+    print(f"SKATER meshes={sum(1 for o in bpy.data.objects if o.type == 'MESH')} tris={tris} "
+          f"bones={len(rig.data.bones)} height={max(heights) - min(heights):.3f}")
+
+
+def export():
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    bpy.ops.export_scene.gltf(
+        filepath=str(OUT),
+        export_format="GLB",
+        export_apply=False,
+        export_skins=True,
+        export_animations=False,
+        export_yup=True,
+    )
+    print("SKATER exported", OUT)
+
+
+def preview():
+    scene = bpy.context.scene
+    cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
+    scene.collection.objects.link(cam)
+    cam.location = (0.0, -4.2, 1.0)
+    cam.rotation_euler = (math.radians(88), 0, 0)
+    scene.camera = cam
+    sun = bpy.data.objects.new("sun", bpy.data.lights.new("sun", "SUN"))
+    sun.rotation_euler = (math.radians(50), 0, math.radians(30))
+    scene.collection.objects.link(sun)
+    scene.render.engine = "BLENDER_EEVEE_NEXT"
+    scene.render.resolution_x, scene.render.resolution_y = 600, 900
+    scene.render.filepath = str(PREVIEW)
+    bpy.ops.render.render(write_still=True)
+
+
+basemesh = build()
+finish(basemesh)
+if PREVIEW:
+    preview()
+export()
