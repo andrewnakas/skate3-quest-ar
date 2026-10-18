@@ -26,7 +26,7 @@ import numpy as np
 
 ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else Path.home() / "cleanroom/skate-reference")
 L_SH, R_SH, L_WR, R_WR, L_HIP, R_HIP, L_KN, R_KN, L_AN, R_AN = 11, 12, 15, 16, 23, 24, 25, 26, 27, 28
-POP_TRICKS = {"ollie", "kickflip", "shuvit", "grab", "landing"}
+POP_TRICKS = {"ollie", "kickflip", "heelflip", "shuvit", "grab", "landing"}
 
 
 def angle(a, b, c):

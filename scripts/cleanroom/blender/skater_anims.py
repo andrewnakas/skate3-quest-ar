@@ -42,35 +42,38 @@ def P(**kw):
 
 
 STANCE = P()
-CROUCH = P(hips=(0.0, 0.05, 0.64), hips_rot=(24, 0, 0), spine=(22, 0, 12), head=(-20, 0, 55),
-           lh=(0.3, -0.3, 0.58), rh=(-0.3, -0.24, 0.56))
-# From reference footage (scripts/cleanroom/reference): at the pop the back leg snaps straight to
-# slam the tail, the front knee drives up and the front foot drags toward the nose, and the arms
-# fly up and out wide; in the air the knees come up high with the board under the feet.
-POP_TOP = P(hips=(-0.03, 0.02, 0.86), hips_rot=(14, 0, 0), spine=(12, 0, 8), head=(-18, 0, 55),
-            lf=foot(FRONT_X + 0.1, 0.0, 0.18, yaw=-25, pitch=14), rf=foot(BACK_X - 0.02, 0.0, 0.0, yaw=8),
-            lh=(0.66, -0.1, 1.22), rh=(-0.62, -0.02, 1.18), knee_out=0.55)
-AIR_TUCK = P(hips=(0.0, 0.03, 0.76), hips_rot=(16, 0, 0), spine=(16, 0, 10), head=(-20, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.3, yaw=-20), rf=foot(BACK_X, 0.0, 0.28, yaw=8),
-             lh=(0.64, -0.14, 1.2), rh=(-0.62, -0.08, 1.16), knee_out=0.6)
-# Flip tricks: the legs split up and out of the way and the board turns underneath, arms high and
-# wide, then the feet come back down onto it. Kickflips kick the front foot out forward over the
-# toe side, heelflips forward over the heel side; shove-its lift both feet straight up.
+# Key poses fitted to median measurements of pose-estimated reference clips (scripts/cleanroom/
+# reference, many skaters): crouch leg extension ~0.8 of leg length with ~80 deg knees and the trunk
+# leaning 30-50 deg; pop fully extended; in the air the body stays tall (extension ~0.85, knees
+# ~65-70 deg) and the board comes up ~15 cm; hands around chest height, a little out to the sides.
+CROUCH = P(hips=(0.0, 0.05, 0.74), hips_rot=(22, 0, 0), spine=(20, 0, 12), head=(-20, 0, 55),
+           lh=(0.34, -0.28, 0.72), rh=(-0.34, -0.22, 0.7))
+# The pop: the back leg snaps straight to slam the tail, the front knee drives up and the front foot
+# drags toward the nose, the arms lift and open.
+POP_TOP = P(hips=(-0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 8), head=(-18, 0, 55),
+            lf=foot(FRONT_X + 0.1, 0.0, 0.16, yaw=-25, pitch=14), rf=foot(BACK_X - 0.02, 0.0, 0.0, yaw=8),
+            lh=(0.52, -0.14, 1.1), rh=(-0.5, -0.06, 1.06), knee_out=0.55)
+AIR_TUCK = P(hips=(0.0, 0.03, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 10), head=(-20, 0, 55),
+             lf=foot(FRONT_X, 0.0, 0.16, yaw=-20), rf=foot(BACK_X, 0.0, 0.15, yaw=8),
+             lh=(0.5, -0.16, 1.06), rh=(-0.48, -0.1, 1.02), knee_out=0.6)
+# Flip tricks: the legs split up and out of the way and the board turns underneath, arms up and
+# open, then the feet come back down onto it. Kickflips kick the front foot out forward over the toe
+# side, heelflips forward over the heel side; shove-its lift both feet straight up.
 def flip_open(front_y, back_z):
-    return P(hips=(0.0, 0.02, 0.86), hips_rot=(8, 0, 0), spine=(8, 0, 8), head=(-26, 0, 50),
-             lf=foot(FRONT_X + 0.24, front_y, 0.42, yaw=-40, pitch=-15), rf=foot(BACK_X - 0.1, 0.0, back_z, yaw=12),
-             lh=(0.72, -0.05, 1.42), rh=(-0.7, 0.0, 1.38), knee_out=0.7)
+    return P(hips=(0.0, 0.02, 0.96), hips_rot=(8, 0, 0), spine=(8, 0, 8), head=(-26, 0, 50),
+             lf=foot(FRONT_X + 0.22, front_y, 0.34, yaw=-40, pitch=-15), rf=foot(BACK_X - 0.08, 0.0, back_z, yaw=12),
+             lh=(0.6, -0.08, 1.24), rh=(-0.58, -0.02, 1.2), knee_out=0.7)
 
 
-FLIP_KICK = flip_open(-0.26, 0.24)
-FLIP_HEEL = flip_open(0.2, 0.3)
-FLIP_SHUV = P(hips=(0.0, 0.02, 0.86), hips_rot=(10, 0, 0), spine=(10, 0, 8), head=(-24, 0, 50),
-              lf=foot(FRONT_X + 0.02, 0.0, 0.38, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.36, yaw=8),
-              lh=(0.7, -0.08, 1.34), rh=(-0.68, -0.02, 1.3), knee_out=0.6)
-FLIP_CATCH = P(hips=(0.0, 0.03, 0.78), hips_rot=(16, 0, 0), spine=(18, 0, 10), head=(-26, 0, 50),
-               lf=foot(FRONT_X, 0.0, 0.12, yaw=-20), rf=foot(BACK_X, 0.0, 0.11, yaw=8),
-               lh=(0.66, -0.1, 1.24), rh=(-0.64, -0.04, 1.2), knee_out=0.55)
-LAND_LOW = P(hips=(0.0, 0.04, 0.6), hips_rot=(22, 0, 0), spine=(30, 0, 12), lh=(0.36, -0.28, 0.62), rh=(-0.36, -0.24, 0.6))
+FLIP_KICK = flip_open(-0.24, 0.2)
+FLIP_HEEL = flip_open(0.18, 0.24)
+FLIP_SHUV = P(hips=(0.0, 0.02, 0.96), hips_rot=(10, 0, 0), spine=(10, 0, 8), head=(-24, 0, 50),
+              lf=foot(FRONT_X + 0.02, 0.0, 0.28, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.26, yaw=8),
+              lh=(0.56, -0.1, 1.18), rh=(-0.54, -0.04, 1.14), knee_out=0.6)
+FLIP_CATCH = P(hips=(0.0, 0.03, 0.88), hips_rot=(16, 0, 0), spine=(18, 0, 10), head=(-26, 0, 50),
+               lf=foot(FRONT_X, 0.0, 0.1, yaw=-20), rf=foot(BACK_X, 0.0, 0.09, yaw=8),
+               lh=(0.52, -0.12, 1.06), rh=(-0.5, -0.06, 1.02), knee_out=0.55)
+LAND_LOW = P(hips=(0.0, 0.04, 0.72), hips_rot=(22, 0, 0), spine=(22, 0, 12), lh=(0.4, -0.26, 0.8), rh=(-0.4, -0.2, 0.78))
 MANUAL = P(hips=(-0.13, 0.0, 0.8), hips_rot=(-4, 0, 0), spine=(-2, 0, 12), lh=(0.38, -0.05, 1.02), rh=(-0.5, -0.05, 1.0))
 NOSE_MANUAL = P(hips=(0.14, 0.0, 0.78), hips_rot=(14, 0, 0), spine=(24, 0, 14), lh=(0.52, -0.08, 1.0), rh=(-0.36, -0.08, 1.04))
 GRIND = P(hips=(0.0, 0.02, 0.74), hips_rot=(12, 0, 0), spine=(18, 0, 12), lh=(0.62, -0.05, 1.08), rh=(-0.62, -0.05, 1.04))
@@ -211,7 +214,8 @@ def apply_pose(rig, c, pose, rest_ankle):
     target = Vector(pose["hips"])
     world_off = target - rest
     hips.matrix = Matrix.Translation(target) @ (
-        Euler([math.radians(a) for a in (-pose["hips_rot"][0], pose["hips_rot"][1], pose["hips_rot"][2])], "XYZ")
+        # +pitch tips the pelvis (and everything above) toward the chest side (-Y); checked from the side.
+        Euler([math.radians(a) for a in (pose["hips_rot"][0], pose["hips_rot"][1], pose["hips_rot"][2])], "XYZ")
         .to_matrix().to_4x4()) @ Matrix.Translation(-rest) @ rig.data.bones["hips"].matrix_local
     del world_off
     bend, side, twist = pose["spine"]
