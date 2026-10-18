@@ -73,7 +73,56 @@ pub(crate) fn read_touch(
     };
 }
 
+/// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
+/// with `SK8_ANIM_TRACE` without hand-driving the game.
+fn demo_input(t: f32) -> Input {
+    const LOOP: f32 = 26.0;
+    let t = t % LOOP;
+    let mut i = Input::default();
+    let (down, centre, up) = ([0.0, -1.0], [0.0, 0.0], [0.0, 1.0]);
+    let (up_left, up_right, down_left, left) = ([-0.7, 0.7], [0.7, 0.7], [-0.7, -0.7], [-1.0, 0.0]);
+    // A flick starting at `at`: a crouch, then each token held for three engine steps.
+    let flick = |at: f32, crouch: f32, tokens: &[[f32; 2]]| -> Option<[f32; 2]> {
+        let d = t - at;
+        if !(0.0..crouch + tokens.len() as f32 * 0.05).contains(&d) {
+            return None;
+        }
+        if d < crouch { Some(down) } else { Some(tokens[((d - crouch) / 0.05) as usize]) }
+    };
+    let flicks = [
+        flick(6.0, 0.35, &[centre, up]),
+        flick(8.5, 0.35, &[centre, up_left]),
+        flick(11.0, 0.35, &[centre, up_right]),
+        flick(13.5, 0.3, &[down_left, left, centre]),
+        flick(16.5, 0.35, &[centre, up]),
+    ];
+    if let Some(f) = flicks.into_iter().flatten().next() {
+        i.flick = f;
+    }
+    let push = t < 3.0 || (14.8..16.0).contains(&t) || t > 23.5;
+    if push {
+        i.buttons |= buttons::PUSH;
+    }
+    if (3.0..4.5).contains(&t) || (20.5..22.5).contains(&t) {
+        i.steer[0] = 1.0;
+    } else if (4.5..6.0).contains(&t) {
+        i.steer[0] = -1.0;
+    }
+    if (16.95..17.6).contains(&t) {
+        i.buttons |= buttons::GRAB_RIGHT;
+    }
+    if (18.5..20.0).contains(&t) {
+        i.buttons |= buttons::MANUAL;
+    }
+    if (20.5..22.5).contains(&t) {
+        i.buttons |= buttons::SLIDE;
+    }
+    i
+}
+
 pub(crate) fn read_desktop(
+    time: Res<Time<Real>>,
+    mut demo: Local<Option<f32>>,
     keys: Res<ButtonInput<KeyCode>>,
     pads: Query<&Gamepad>,
     ui: Res<UiCapture>,
@@ -81,6 +130,16 @@ pub(crate) fn read_desktop(
 ) {
     if ui.0 {
         sim.input = Input::default();
+        return;
+    }
+    if demo.is_none() && std::env::var_os("SK8_DEMO").is_some() {
+        *demo = Some(0.0);
+    }
+    if let Some(t) = demo.as_mut() {
+        if !sim.paused {
+            *t += time.delta_secs().min(0.1) * sim.time_scale;
+        }
+        sim.input = demo_input(*t);
         return;
     }
     let key = |k| if keys.pressed(k) { 1.0 } else { 0.0 };

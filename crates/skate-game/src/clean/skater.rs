@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use skate_lite_sys::{EventKind, Mode, State};
 use std::f32::consts::FRAC_PI_2;
 
-const DECK_TOP: f32 = 0.105;
+pub(crate) const DECK_TOP: f32 = 0.105;
 const DECK_LEN: f32 = 0.8;
 const DECK_WIDTH: f32 = 0.205;
 const DECK_THICK: f32 = 0.013;
@@ -18,11 +18,15 @@ const KICK_LEN: f32 = 0.13;
 const KICK_ANGLE: f32 = 0.33;
 const WHEEL_R: f32 = 0.027;
 const AXLE_Z: f32 = 0.235;
-const DECK_CENTRE: f32 = 0.09;
+pub(crate) const DECK_CENTRE: f32 = 0.09;
 /// Ankle height above the sole in the authored clips.
-const ANKLE: f32 = 0.075;
-/// How fast clip weights follow their targets, 1/s.
-const BLEND_RATE: f32 = 16.0;
+pub(crate) const ANKLE: f32 = 0.075;
+/// Where the pop clip reaches its full extension (the flip clips start from that pose).
+const POP_TOP_AT: f32 = 0.1;
+/// Tail snap on the pop: peak nose-up pitch (radians), when it peaks and when it is level again.
+const POP_PITCH: f32 = 0.34;
+const POP_PITCH_PEAK: f32 = 0.05;
+const POP_PITCH_END: f32 = 0.24;
 
 const SKATER_GLB: &str = "embedded://skate_game/clean/assets/skater.glb";
 
@@ -73,7 +77,11 @@ pub(crate) struct Avatar {
     nodes: Option<Vec<AnimationNodeIndex>>,
     player: Option<Entity>,
     ankles: Vec<Entity>,
+    pub(crate) bones: Option<super::procedural::Bones>,
     weights: [f32; CLIPS],
+    weight_vel: [f32; CLIPS],
+    /// Each clip's time; a clip fading out holds where it was instead of jumping to its start.
+    times: [f32; CLIPS],
 }
 
 pub(crate) fn spawn(
@@ -99,7 +107,10 @@ pub(crate) fn spawn(
         nodes: None,
         player: None,
         ankles: Vec::new(),
+        bones: None,
         weights: [0.0; CLIPS],
+        weight_vel: [0.0; CLIPS],
+        times: [0.0; CLIPS],
     });
 
     let mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32, metal: f32| {
@@ -197,14 +208,18 @@ pub(crate) fn bind(
         .filter(|(_, n)| n.as_str() == "ankle.L" || n.as_str() == "ankle.R")
         .map(|(e, _)| e)
         .collect();
+    avatar.bones = super::procedural::Bones::find(&names);
+    if avatar.bones.is_none() {
+        warn!("SK8 avatar: bones for the procedural layer missing");
+    }
     info!("SK8 avatar bound: {} clips, {} ankles", nodes.len(), avatar.ankles.len());
     avatar.nodes = Some(nodes);
     avatar.player = Some(player);
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub(crate) struct Clock {
-    since_pop: f32,
+    pub(crate) since_pop: f32,
     since_land: f32,
     ride: f32,
 }
@@ -221,10 +236,25 @@ fn flip_clip(trick: &str) -> Clip {
     }
 }
 
-/// (target weight, time) per clip for this state.
-fn targets(s: &State, c: &Clock, trick: &str) -> [(f32, f32); CLIPS] {
-    let mut t = [(0.0, 0.0); CLIPS];
-    let mut set = |clip: Clip, w: f32, time: f32| t[clip as usize] = (w, time);
+/// How long a blend into this clip takes (smoothing time of a critically damped follow, s):
+/// the pop and catch are quick, body shifts like settling into a push or a manual slower.
+fn blend_time(clip: Clip) -> f32 {
+    match clip {
+        Clip::Pop => 0.035,
+        Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv => 0.05,
+        Clip::Land | Clip::Bail => 0.05,
+        Clip::Air | Clip::Grind | Clip::Boardslide => 0.08,
+        Clip::GrabToe | Clip::GrabHeel | Clip::Manual | Clip::NoseManual | Clip::Powerslide => 0.1,
+        Clip::Ride | Clip::Crouch => 0.13,
+        // The front foot turns ~100 degrees to point down the board: not in a snap.
+        Clip::Push => 0.2,
+    }
+}
+
+/// (target weight, time) per clip for this state; `None` time = the clip is not playing.
+fn targets(s: &State, c: &Clock, trick: &str) -> [(f32, Option<f32>); CLIPS] {
+    let mut t = [(0.0, None); CLIPS];
+    let mut set = |clip: Clip, w: f32, time: f32| t[clip as usize] = (w, Some(time));
     match s.mode {
         Mode::Bail => set(Clip::Bail, 1.0, s.bail_time.unwrap_or(0.0).min(BAIL_LEN)),
         Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, 0.0),
@@ -233,7 +263,9 @@ fn targets(s: &State, c: &Clock, trick: &str) -> [(f32, f32); CLIPS] {
         Mode::Manual => set(Clip::Manual, 1.0, 0.0),
         Mode::Slide => set(Clip::Powerslide, 1.0, 0.0),
         Mode::Air => {
-            if c.since_pop < POP_LEN {
+            // A flip takes over from the pop at full extension, where its clip starts.
+            let pop_until = if s.flip_progress.is_some() { POP_TOP_AT } else { POP_LEN };
+            if c.since_pop < pop_until {
                 set(Clip::Pop, 1.0, c.since_pop);
             } else if let Some(p) = s.flip_progress {
                 set(flip_clip(trick), 1.0, p * FLIP_LEN);
@@ -264,23 +296,21 @@ pub(crate) fn animate(
     time: Res<Time<Real>>,
     sim: Res<CleanSkate>,
     mut avatar: ResMut<Avatar>,
-    mut clock: Local<Clock>,
+    mut clock: ResMut<Clock>,
     mut players: Query<&mut AnimationPlayer>,
-    globals: Query<&GlobalTransform>,
-    mut rider: Query<&mut Transform, (With<RiderRoot>, Without<BoardRoot>)>,
-    mut board: Query<&mut Transform, (With<BoardRoot>, Without<RiderRoot>)>,
+    mut rider: Query<&mut Transform, With<RiderRoot>>,
 ) {
     let dt = time.delta_secs().min(0.1);
     let (a, b, t) = (&sim.previous, &sim.current, sim.alpha());
     let pos = Vec3::from_array(a.position).lerp(Vec3::from_array(b.position), t);
     let rider_rot = Quat::from_array(a.rider_rot).slerp(Quat::from_array(b.rider_rot), t);
-    let board_rot = Quat::from_array(a.board_rot).slerp(Quat::from_array(b.board_rot), t);
     let up = rider_rot * Vec3::Y;
 
     let game_dt = if sim.paused { 0.0 } else { dt * sim.time_scale };
     clock.since_pop += game_dt;
     clock.since_land += game_dt;
-    clock.ride += game_dt;
+    // The ride sway quickens a little with speed.
+    clock.ride += game_dt * (0.7 + 0.3 * (b.speed / 6.0).min(1.0));
     for e in &sim.events {
         match e.kind {
             EventKind::Pop => clock.since_pop = 0.0,
@@ -294,11 +324,25 @@ pub(crate) fn animate(
         *tf = Transform::from_translation(rider_at).with_rotation(rider_rot);
     }
 
-    // Clip weights and times.
+    // Clip weights and times. Every weight follows its goal with a critically damped spring (eased
+    // in and out, never overshooting), all at the pace of the clip being blended in.
     let goals = targets(b, &clock, &sim.rider.trick());
-    let k = 1.0 - (-BLEND_RATE * dt).exp();
-    for (w, (goal, _)) in avatar.weights.iter_mut().zip(goals.iter()) {
-        *w += (goal - *w) * k;
+    let lead = (0..CLIPS).max_by(|&i, &j| goals[i].0.total_cmp(&goals[j].0)).unwrap_or(0);
+    let smooth = blend_time(CLIP_ORDER[lead]);
+    // A respawn is a cut: no standing up out of the bail in front of the camera.
+    if sim.events.iter().any(|e| e.kind == EventKind::Respawn) {
+        for i in 0..CLIPS {
+            avatar.weights[i] = goals[i].0;
+            avatar.weight_vel[i] = 0.0;
+        }
+    }
+    for i in 0..CLIPS {
+        let (w, v) = smooth_cd(avatar.weights[i], avatar.weight_vel[i], goals[i].0, smooth, dt);
+        avatar.weights[i] = w.clamp(0.0, 1.0);
+        avatar.weight_vel[i] = v;
+        if let Some(time) = goals[i].1 {
+            avatar.times[i] = time;
+        }
     }
     let total: f32 = avatar.weights.iter().sum::<f32>().max(1e-4);
     if let (Some(nodes), Some(player)) = (avatar.nodes.clone(), avatar.player) {
@@ -311,29 +355,47 @@ pub(crate) fn animate(
                 if let Some(active) = player.animation_mut(*node) {
                     active.set_weight(weight);
                     if weight > 1e-3 {
-                        active.seek_to(goals[i].1);
+                        active.seek_to(avatar.times[i]);
                     }
                 }
             }
         }
     }
+}
 
-    // The board: under the feet. In the air the clip lifts the feet (a tuck brings the board up
-    // with them), so the board follows the lower ankle (last frame's pose).
-    if let Ok(mut tf) = board.single_mut() {
-        let mut at = pos + up * DECK_CENTRE;
-        // During a flip the legs open out of the way and the board turns below them instead.
-        if matches!(b.mode, Mode::Air) && b.flip_progress.is_none() {
-            let lowest = avatar
-                .ankles
-                .iter()
-                .filter_map(|e| globals.get(*e).ok())
-                .map(|g| (g.translation() - rider_at).dot(up))
-                .fold(f32::MAX, f32::min);
-            if lowest < 1.0 {
-                at += up * (lowest - ANKLE).max(0.0);
-            }
-        }
-        *tf = Transform::from_translation(at).with_rotation(board_rot);
+/// The pop's tail snap: the tail slams down and the nose comes up, pivoting on the tail wheels,
+/// then the front foot levels it out. Returns the board's shift and its turned rotation.
+pub(crate) fn pop_snap(deck: Quat, since_pop: f32) -> (Vec3, Quat) {
+    if since_pop >= POP_PITCH_END {
+        return (Vec3::ZERO, deck);
     }
+    let k = if since_pop < POP_PITCH_PEAK {
+        smooth01(since_pop / POP_PITCH_PEAK)
+    } else {
+        1.0 - smooth01((since_pop - POP_PITCH_PEAK) / (POP_PITCH_END - POP_PITCH_PEAK))
+    };
+    let pitch = Quat::from_rotation_x(-POP_PITCH * k);
+    let tail = Vec3::new(0.0, WHEEL_R - DECK_CENTRE, -AXLE_Z);
+    (deck * (tail - pitch * tail), deck * pitch)
+}
+
+const CLIP_ORDER: [Clip; CLIPS] = [
+    Clip::Ride, Clip::Crouch, Clip::Pop, Clip::Air, Clip::FlipKick, Clip::FlipHeel, Clip::FlipShuv, Clip::Land, Clip::Push,
+    Clip::Manual, Clip::NoseManual, Clip::Grind, Clip::Boardslide, Clip::Powerslide, Clip::GrabToe, Clip::GrabHeel, Clip::Bail,
+];
+
+fn smooth01(x: f32) -> f32 {
+    let x = x.clamp(0.0, 1.0);
+    x * x * (3.0 - 2.0 * x)
+}
+
+/// One step of a critically damped follow of `target` (smoothing time `smooth`, s): stable for
+/// any frame time, so the blends look the same at 60, 72 or 90 Hz.
+fn smooth_cd(value: f32, vel: f32, target: f32, smooth: f32, dt: f32) -> (f32, f32) {
+    let omega = 2.0 / smooth.max(1e-3);
+    let x = omega * dt;
+    let decay = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x);
+    let change = value - target;
+    let temp = (vel + omega * change) * dt;
+    ((target + (change + temp) * decay), (vel - omega * temp) * decay)
 }

@@ -9,6 +9,7 @@ mod collide;
 mod input;
 mod menu;
 pub(crate) mod sim;
+mod procedural;
 mod skater;
 mod view;
 #[cfg(feature = "xr")]
@@ -179,7 +180,14 @@ fn build(options: Options) -> App {
                 .before(feed_sounds),
         );
     }
-    app.add_systems(Update, (feed_sounds, skater::bind, skater::animate, menu::draw).chain());
+    app.init_resource::<skater::Clock>()
+        .add_systems(Update, (feed_sounds, skater::bind, skater::animate, menu::draw).chain())
+        .add_systems(
+            PostUpdate,
+            procedural::layer
+                .after(bevy::app::AnimationSystems)
+                .before(bevy::transform::TransformSystems::Propagate),
+        );
     app
 }
 

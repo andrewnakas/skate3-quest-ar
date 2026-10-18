@@ -119,7 +119,8 @@ impl Menu {
         tabs.push(Tab::Presets);
         let retail_available = files.join("assets/private/game.json").is_file();
         Self {
-            open: true,
+            // The scripted demo (SK8_DEMO) skips the start screen.
+            open: std::env::var_os("SK8_DEMO").is_none(),
             page: Page::Start,
             cursor: 0,
             tab: 0,
