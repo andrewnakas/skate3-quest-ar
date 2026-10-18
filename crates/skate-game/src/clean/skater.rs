@@ -51,20 +51,18 @@ enum Clip {
     GrabToe,
     GrabHeel,
     Bail,
+    PushEnd,
 }
 
-const CLIPS: usize = 17;
-const CLIP_NAMES: [&str; CLIPS] = [
+const CLIPS: usize = 18;
+pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
     "sk8_nose_manual", "sk8_grind", "sk8_boardslide", "sk8_powerslide", "sk8_grab_toe", "sk8_grab_heel", "sk8_bail",
+    "sk8_push_end",
 ];
-/// Authored lengths, seconds (see skater_anims.py).
-const POP_LEN: f32 = 0.3;
-const FLIP_LEN: f32 = 0.45;
-const LAND_LEN: f32 = 0.35;
-const PUSH_LEN: f32 = 0.62;
-const RIDE_LEN: f32 = 2.0;
-const BAIL_LEN: f32 = 0.9;
+/// Clips that loop (idles and the push); the rest play once and hold their last frame.
+const LOOPED: [Clip; 8] =
+    [Clip::Ride, Clip::Crouch, Clip::Push, Clip::Manual, Clip::NoseManual, Clip::Grind, Clip::Boardslide, Clip::Powerslide];
 
 #[derive(Component)]
 pub(crate) struct RiderRoot;
@@ -76,12 +74,13 @@ pub(crate) struct Avatar {
     gltf: Handle<Gltf>,
     nodes: Option<Vec<AnimationNodeIndex>>,
     player: Option<Entity>,
-    ankles: Vec<Entity>,
+    /// Each clip's length as exported (s), so timing follows the authored clips.
+    lens: [f32; CLIPS],
     pub(crate) bones: Option<super::procedural::Bones>,
-    weights: [f32; CLIPS],
+    pub(crate) weights: [f32; CLIPS],
     weight_vel: [f32; CLIPS],
     /// Each clip's time; a clip fading out holds where it was instead of jumping to its start.
-    times: [f32; CLIPS],
+    pub(crate) times: [f32; CLIPS],
 }
 
 pub(crate) fn spawn(
@@ -106,7 +105,7 @@ pub(crate) fn spawn(
         gltf: assets.load(SKATER_GLB),
         nodes: None,
         player: None,
-        ankles: Vec::new(),
+        lens: [1.0; CLIPS],
         bones: None,
         weights: [0.0; CLIPS],
         weight_vel: [0.0; CLIPS],
@@ -178,6 +177,7 @@ pub(crate) fn bind(
     mut commands: Commands,
     mut avatar: ResMut<Avatar>,
     gltfs: Res<Assets<Gltf>>,
+    anims: Res<Assets<AnimationClip>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     players: Query<Entity, Added<AnimationPlayer>>,
@@ -194,6 +194,11 @@ pub(crate) fn bind(
             Handle::default()
         }))
         .collect();
+    for (len, clip) in avatar.lens.iter_mut().zip(&clips) {
+        if let Some(c) = anims.get(clip) {
+            *len = c.duration().max(1e-3);
+        }
+    }
     let (graph, nodes) = AnimationGraph::from_clips(clips);
     // MakeHuman materials arrive alpha-blended, which sorts badly (skin shows through the
     // clothes); cut-out alpha keeps hair and lashes and draws everything else opaque.
@@ -203,25 +208,31 @@ pub(crate) fn bind(
         }
     }
     commands.entity(player).insert(AnimationGraphHandle(graphs.add(graph)));
-    avatar.ankles = names
-        .iter()
-        .filter(|(_, n)| n.as_str() == "ankle.L" || n.as_str() == "ankle.R")
-        .map(|(e, _)| e)
-        .collect();
     avatar.bones = super::procedural::Bones::find(&names);
     if avatar.bones.is_none() {
         warn!("SK8 avatar: bones for the procedural layer missing");
     }
-    info!("SK8 avatar bound: {} clips, {} ankles", nodes.len(), avatar.ankles.len());
+    info!("SK8 avatar bound: {} clips, lengths {:?}", nodes.len(), avatar.lens);
     avatar.nodes = Some(nodes);
     avatar.player = Some(player);
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub(crate) struct Clock {
     pub(crate) since_pop: f32,
     since_land: f32,
-    ride: f32,
+    since_grab: f32,
+    /// Since the last kick ended (the back foot steps back on and the front foot turns back).
+    since_push: f32,
+    /// Drives the idle loops (ride sway, manual and grind balance).
+    idle: f32,
+}
+
+impl Default for Clock {
+    fn default() -> Self {
+        // Long ago, so nothing plays its "just happened" clip at spawn.
+        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, idle: 0.0 }
+    }
 }
 
 /// Which way the front foot leaves the board for this trick.
@@ -248,43 +259,53 @@ fn blend_time(clip: Clip) -> f32 {
         Clip::Ride | Clip::Crouch => 0.13,
         // The front foot turns ~100 degrees to point down the board: not in a snap.
         Clip::Push => 0.2,
+        Clip::PushEnd => 0.12,
     }
 }
 
 /// (target weight, time) per clip for this state; `None` time = the clip is not playing.
-fn targets(s: &State, c: &Clock, trick: &str) -> [(f32, Option<f32>); CLIPS] {
+fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Option<f32>); CLIPS] {
     let mut t = [(0.0, None); CLIPS];
-    let mut set = |clip: Clip, w: f32, time: f32| t[clip as usize] = (w, Some(time));
+    let mut set = |clip: Clip, w: f32, time: f32| {
+        let l = len[clip as usize];
+        let time = if LOOPED.contains(&clip) { time.rem_euclid(l) } else { time.clamp(0.0, l) };
+        t[clip as usize] = (w, Some(time));
+    };
+    let pop_len = len[Clip::Pop as usize];
     match s.mode {
-        Mode::Bail => set(Clip::Bail, 1.0, s.bail_time.unwrap_or(0.0).min(BAIL_LEN)),
-        Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, 0.0),
-        Mode::Grind => set(Clip::Grind, 1.0, 0.0),
-        Mode::Manual if s.manual_dir < 0 => set(Clip::NoseManual, 1.0, 0.0),
-        Mode::Manual => set(Clip::Manual, 1.0, 0.0),
-        Mode::Slide => set(Clip::Powerslide, 1.0, 0.0),
+        Mode::Bail => set(Clip::Bail, 1.0, s.bail_time.unwrap_or(0.0)),
+        Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, c.idle),
+        Mode::Grind => set(Clip::Grind, 1.0, c.idle),
+        Mode::Manual if s.manual_dir < 0 => set(Clip::NoseManual, 1.0, c.idle),
+        Mode::Manual => set(Clip::Manual, 1.0, c.idle),
+        Mode::Slide => set(Clip::Powerslide, 1.0, c.idle),
         Mode::Air => {
             // A flip takes over from the pop at full extension, where its clip starts.
-            let pop_until = if s.flip_progress.is_some() { POP_TOP_AT } else { POP_LEN };
+            let pop_until = if s.flip_progress.is_some() { POP_TOP_AT } else { pop_len };
             if c.since_pop < pop_until {
                 set(Clip::Pop, 1.0, c.since_pop);
             } else if let Some(p) = s.flip_progress {
-                set(flip_clip(trick), 1.0, p * FLIP_LEN);
+                let clip = flip_clip(trick);
+                set(clip, 1.0, p * len[clip as usize]);
             } else if s.grab & 1 != 0 {
-                set(Clip::GrabHeel, 1.0, 0.0);
+                set(Clip::GrabHeel, 1.0, c.since_grab);
             } else if s.grab & 2 != 0 {
-                set(Clip::GrabToe, 1.0, 0.0);
+                set(Clip::GrabToe, 1.0, c.since_grab);
             } else {
-                set(Clip::Air, 1.0, 0.0);
+                // Tuck, hold, then reach the legs down for the landing.
+                set(Clip::Air, 1.0, c.since_pop - pop_len);
             }
         }
         Mode::Ride => {
-            if c.since_land < LAND_LEN {
+            if c.since_land < len[Clip::Land as usize] {
                 set(Clip::Land, 1.0, c.since_land);
             } else if let Some(phase) = s.push_phase {
-                set(Clip::Push, 1.0, phase * PUSH_LEN);
+                set(Clip::Push, 1.0, phase * len[Clip::Push as usize]);
+            } else if c.since_push < len[Clip::PushEnd as usize] {
+                set(Clip::PushEnd, 1.0, c.since_push);
             } else {
-                set(Clip::Ride, 1.0 - s.crouch, c.ride % RIDE_LEN);
-                set(Clip::Crouch, s.crouch, 0.0);
+                set(Clip::Ride, 1.0 - s.crouch, c.idle);
+                set(Clip::Crouch, s.crouch, c.idle);
             }
         }
     }
@@ -309,8 +330,10 @@ pub(crate) fn animate(
     let game_dt = if sim.paused { 0.0 } else { dt * sim.time_scale };
     clock.since_pop += game_dt;
     clock.since_land += game_dt;
-    // The ride sway quickens a little with speed.
-    clock.ride += game_dt * (0.7 + 0.3 * (b.speed / 6.0).min(1.0));
+    clock.since_push = if b.push_phase.is_some() { 0.0 } else { clock.since_push + game_dt };
+    clock.since_grab = if b.grab != 0 { clock.since_grab + game_dt } else { 0.0 };
+    // The idles quicken a little with speed.
+    clock.idle += game_dt * (0.7 + 0.3 * (b.speed / 6.0).min(1.0));
     for e in &sim.events {
         match e.kind {
             EventKind::Pop => clock.since_pop = 0.0,
@@ -326,7 +349,7 @@ pub(crate) fn animate(
 
     // Clip weights and times. Every weight follows its goal with a critically damped spring (eased
     // in and out, never overshooting), all at the pace of the clip being blended in.
-    let goals = targets(b, &clock, &sim.rider.trick());
+    let goals = targets(b, &clock, &sim.rider.trick(), &avatar.lens);
     let lead = (0..CLIPS).max_by(|&i, &j| goals[i].0.total_cmp(&goals[j].0)).unwrap_or(0);
     let smooth = blend_time(CLIP_ORDER[lead]);
     // A respawn is a cut: no standing up out of the bail in front of the camera.
@@ -382,6 +405,7 @@ pub(crate) fn pop_snap(deck: Quat, since_pop: f32) -> (Vec3, Quat) {
 const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::Ride, Clip::Crouch, Clip::Pop, Clip::Air, Clip::FlipKick, Clip::FlipHeel, Clip::FlipShuv, Clip::Land, Clip::Push,
     Clip::Manual, Clip::NoseManual, Clip::Grind, Clip::Boardslide, Clip::Powerslide, Clip::GrabToe, Clip::GrabHeel, Clip::Bail,
+    Clip::PushEnd,
 ];
 
 fn smooth01(x: f32) -> f32 {

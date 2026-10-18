@@ -71,7 +71,40 @@ pub(crate) struct Motion {
     last_vel: Option<Vec3>,
     air_vy: f32,
     pin: [f32; 2],
+    /// The board after a bail: flung on from the rider's speed, tumbling, bouncing to rest.
+    loose: Option<Loose>,
     trace: Option<Trace>,
+}
+
+struct Loose {
+    at: Vec3,
+    vel: Vec3,
+    rot: Quat,
+    spin: Vec3,
+    ground: f32,
+}
+
+impl Loose {
+    fn step(&mut self, dt: f32) {
+        self.vel.y -= 9.8 * dt;
+        self.at += self.vel * dt;
+        let s = self.spin * dt;
+        self.rot = (Quat::from_scaled_axis(s) * self.rot).normalize();
+        if self.at.y < self.ground {
+            self.at.y = self.ground;
+            if self.vel.y < 0.0 {
+                self.vel.y *= -0.3;
+            }
+            // Rolling and scraping to a stop, settling wheels-down (or on its back).
+            self.vel.x *= (1.0 - 3.0 * dt).max(0.0);
+            self.vel.z *= (1.0 - 3.0 * dt).max(0.0);
+            self.spin *= (1.0 - 6.0 * dt).max(0.0);
+            let up = self.rot * Vec3::Y;
+            let flat = if up.y >= 0.0 { Vec3::Y } else { Vec3::NEG_Y };
+            let settle = Quat::from_rotation_arc(up, flat);
+            self.rot = Quat::IDENTITY.slerp(settle, (8.0 * dt).min(1.0)) * self.rot;
+        }
+    }
 }
 
 /// `SK8_ANIM_TRACE=1`: how fast every watched bone turns (degrees per 1/60 s, rider frame) and how
@@ -281,6 +314,27 @@ pub(crate) fn layer(
         at += shift;
         deck = pitched;
     }
+    if s.mode == Mode::Bail {
+        if motion.loose.is_none() {
+            // Kicked out ahead and to the toe side, flipping over.
+            motion.loose = Some(Loose {
+                at,
+                vel: vel * 0.9 + up * 1.6 - rider_rot * Vec3::X * 0.8,
+                rot: deck,
+                spin: fwd * 9.0 + up * 4.0,
+                ground: pos.y,
+            });
+        }
+        if let Some(l) = motion.loose.as_mut() {
+            // The ground where the rider's body is (the engine keeps it on the surface).
+            l.ground = pos.y + skater::DECK_CENTRE;
+            l.step(dt);
+            at = l.at;
+            deck = l.rot;
+        }
+    } else {
+        motion.loose = None;
+    }
     let deck_tf = Transform::from_translation(at).with_rotation(deck);
     if let Ok(mut tf) = board.single_mut() {
         *tf = deck_tf;
@@ -335,6 +389,17 @@ pub(crate) fn layer(
                     let deg = q.angle_between(*last).to_degrees() / (dt * 60.0);
                     if deg > SPIKE_DEG {
                         info!("SK8 anim spike {} {:.1} deg/frame in {}", set.watched[k].1, deg, mode);
+                    }
+                    if deg > 3.0 * SPIKE_DEG {
+                        // A jump this big in one frame is a discontinuity: show what was playing.
+                        let mut w: Vec<(f32, usize)> =
+                            avatar.weights.iter().enumerate().map(|(i, w)| (*w, i)).filter(|(w, _)| *w > 0.01).collect();
+                        w.sort_by(|a, b| b.0.total_cmp(&a.0));
+                        let playing: Vec<String> = w
+                            .iter()
+                            .map(|(w, i)| format!("{}={:.2}@{:.2}", skater::CLIP_NAMES[*i], w, avatar.times[*i]))
+                            .collect();
+                        info!("SK8 anim jump clips: {}", playing.join(" "));
                     }
                     if deg > tr.worst.0 {
                         tr.worst = (deg, set.watched[k].1, mode.clone());

@@ -162,15 +162,18 @@ def preview(clips):
     for name in clips:
         act = bpy.data.actions[name]
         rig.animation_data.action = act
-        lo, hi = act.frame_range
-        scene.frame_set(int((lo + hi) / 2))
+        lo, hi = (int(f) for f in act.frame_range)
+        # A filmstrip per clip and view: every third frame of a one-shot, eight frames of a loop.
+        step = max(1, (hi - lo) // 8) if act.get("loop") else 3
         for view, (loc, rot) in views.items():
             cam.location = loc
             cam.rotation_euler = [math.radians(a) for a in rot]
-            out = PREVIEW.with_name(f"{PREVIEW.stem}_{view}_{name}.png")
-            scene.render.filepath = str(out)
-            bpy.ops.render.render(write_still=True)
-            frames.append(out)
+            for f in range(lo, hi + 1, step):
+                scene.frame_set(f)
+                out = PREVIEW.with_name(f"{PREVIEW.stem}_{view}_{name}_{f - lo:03d}.png")
+                scene.render.filepath = str(out)
+                bpy.ops.render.render(write_still=True)
+                frames.append(out)
     rig.animation_data.action = None
     bpy.data.objects.remove(board)
     bpy.data.objects.remove(cam)
