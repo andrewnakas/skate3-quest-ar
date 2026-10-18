@@ -4,12 +4,11 @@
 //! The pad is neutral while aiming so the squeeze doesn't also grab/bump.
 use super::actions::{Hand, LatestTouch};
 use super::rig::Rig;
+use super::link::{ArWorld, TeleportSkater};
 use crate::input::ExternalPad;
-use crate::physics::{GamePhysics, SkaterRuntime};
 use bevy::prelude::*;
 use bevy_mod_openxr::openxr_session_running;
 use skate_core::input::xbox::XboxState;
-use skate_core::physics::board_world::WorldTriangle;
 
 const SQUEEZE: f32 = 0.7;
 /// Game-world units (metres at skater scale).
@@ -83,8 +82,8 @@ fn aim_and_spawn(
     rig: Res<Rig>,
     build: Res<super::build::BuildMode>,
     hands: Query<(&Hand, &Transform)>,
-    physics: Option<Res<GamePhysics>>,
-    skater: Option<ResMut<SkaterRuntime>>,
+    world: Res<ArWorld>,
+    mut teleport: MessageWriter<TeleportSkater>,
     mut pad: ResMut<ExternalPad>,
     mut aim: ResMut<Aim>,
 ) {
@@ -92,11 +91,9 @@ fn aim_and_spawn(
     let held = touch.left_grip >= SQUEEZE && touch.left_trigger >= SQUEEZE && !build.active;
     if !held {
         aim.ray = None;
-        if let (Some((point, forward)), Some(mut skater)) = (aim.target.take(), skater) {
-            match skater.travel_to(spawn_matrix(point, forward)) {
-                Ok(()) => info!("XR spawn at {point:?}"),
-                Err(e) => warn!("XR spawn: {e}"),
-            }
+        if let Some((point, forward)) = aim.target.take() {
+            info!("XR spawn at {point:?}");
+            teleport.write(TeleportSkater { point, forward });
         }
         return;
     }
@@ -106,7 +103,7 @@ fn aim_and_spawn(
         left: [0, 0],
         right: [0, 0],
     });
-    let (Some(root), Some(physics)) = (rig.root_transform(), physics) else {
+    let Some(root) = rig.root_transform() else {
         return;
     };
     let Some((_, controller)) = hands.iter().find(|(hand, _)| matches!(hand, Hand::Left)) else {
@@ -114,7 +111,7 @@ fn aim_and_spawn(
     };
     let origin = root.transform_point(controller.translation);
     let direction = (root.rotation * (controller.rotation * Vec3::NEG_Z)).normalize();
-    let hit = raycast(physics.world_triangles(), origin, direction);
+    let hit = raycast(&world, origin, direction);
     aim.target = hit.map(|point| (point, direction));
     aim.ray = Some(match hit {
         Some(point) => (origin, point, true),
@@ -154,11 +151,10 @@ fn show_aim(
 }
 
 /// Nearest ground-like collision face along the ray.
-fn raycast(triangles: &[WorldTriangle], origin: Vec3, direction: Vec3) -> Option<Vec3> {
-    triangles
-        .iter()
-        .filter_map(|t| {
-            let [a, b, c] = t.triangle.vertices.map(|v| Vec3::new(v.x, v.y, v.z));
+fn raycast(world: &ArWorld, origin: Vec3, direction: Vec3) -> Option<Vec3> {
+    world
+        .all_triangles()
+        .filter_map(|[a, b, c]| {
             let normal = (b - a).cross(c - a).normalize_or_zero();
             if normal.y.abs() < MIN_UP {
                 return None;
@@ -171,7 +167,7 @@ fn raycast(triangles: &[WorldTriangle], origin: Vec3, direction: Vec3) -> Option
 }
 
 /// Möller-Trumbore, both faces.
-pub(super) fn ray_triangle(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
+pub(crate) fn ray_triangle(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
     let (e1, e2) = (b - a, c - a);
     let p = direction.cross(e2);
     let det = e1.dot(p);

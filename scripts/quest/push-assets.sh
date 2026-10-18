@@ -16,4 +16,6 @@ adb push --sync "$ASSETS/." "$DEST/assets/"
 if [ -n "$CACHE" ]; then
   adb push --sync "$CACHE/." "$DEST/Skate3RustEngine/audio-pcm-cache/"
 fi
-echo "Pushed to $DEST"
+# The app runs the clean-room tier unless this marker exists.
+adb shell touch "$DEST/use-retail-data"
+echo "Pushed to $DEST; the next launch uses this imported data (rm $DEST/use-retail-data for the clean-room tier)"

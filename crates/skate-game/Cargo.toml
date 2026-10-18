@@ -46,6 +46,7 @@ half = "=2.7.1"
 serde_json.workspace = true
 serde.workspace = true
 skate-mods = { path = "../skate-mods" }
+skate-lite-sys = { path = "../skate-lite-sys" }
 
 skate-vehicles = { path = "../skate-vehicles" }
 skate-net = { path = "../skate-net" }

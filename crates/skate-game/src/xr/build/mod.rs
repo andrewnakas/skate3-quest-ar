@@ -7,6 +7,8 @@
 //!   controller shows them; the chosen one is raised)
 //! - left stick up/down: grow or shrink the whole world (skater and pieces
 //!   together) against the real room; the skater stays where it was
+//! - left grip held + left stick up/down: grow or shrink only the park (every
+//!   placed piece, about its own base), leaving the skater's size alone
 //! - left stick click: drop a starter park where the right controller points
 //! - left trigger: undo
 //! - right controller: point; a ghost of the piece shows where it would go
@@ -31,15 +33,14 @@ use self::pieces::{MAX_SIZE, MIN_SIZE, Piece, PieceGeometry, PieceKind};
 use super::actions::{Hand, LatestTouch, TouchRead};
 use super::planes::{SceneCapture, SceneShapes, Shape};
 use super::rig::{Rig, heading};
-use super::spawn::{ray_triangle, spawn_matrix};
+use super::link::{ArWorld, SkaterLink, TeleportSkater};
+use super::spawn::ray_triangle;
 use crate::input::ExternalPad;
-use crate::physics::{GamePhysics, SkaterRuntime};
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy_mod_openxr::openxr_session_running;
 use serde::{Deserialize, Serialize};
 use skate_core::input::xbox::XboxState;
-use skate_core::physics::board::BodyId;
 
 const HOLD_TO_TOGGLE_SECONDS: f32 = 1.0;
 /// Left stick deflection that makes a menu hold a D-pad chord instead.
@@ -54,6 +55,11 @@ const RESIZE_RATE: f32 = 0.8;
 const SIZE_STEP: f32 = 0.05;
 /// World scale change per second at full stick deflection (multiplicative).
 const SCALE_RATE: f32 = 1.0;
+/// Park scale: every placed piece is this many times its authored size.
+pub(crate) const MIN_PARK_SCALE: f32 = 0.25;
+pub(crate) const MAX_PARK_SCALE: f32 = 4.0;
+/// A grip counts as held for the park-scale chord past this pull.
+const PARK_CHORD_GRIP: f32 = 0.6;
 /// Game metres per real metre: 1 is life size, 60 is a tiny toy.
 pub(crate) const MIN_SCALE: f32 = 1.0;
 pub(crate) const MAX_SCALE: f32 = 60.0;
@@ -85,11 +91,13 @@ pub(crate) struct Placed {
 }
 
 impl Placed {
-    pub(crate) fn world_transform(&self, root: &Transform) -> Transform {
+    /// Pose of the piece in the game world; `park_scale` grows it about its
+    /// base centre, which stays on the same real spot.
+    pub(crate) fn world_transform(&self, root: &Transform, park_scale: f32) -> Transform {
         Transform {
             translation: root.transform_point(Vec3::from_array(self.position)),
             rotation: root.rotation * Quat::from_rotation_y(self.yaw),
-            scale: Vec3::ONE,
+            scale: Vec3::splat(park_scale),
         }
     }
 }
@@ -98,15 +106,32 @@ impl Placed {
 /// edit (collision rebuild and save key off it); `dragging` is the piece
 /// following the controller, `resizing` the one being resized and
 /// `rescaling` the world scale being changed: collision waits until they end.
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub(crate) struct PlacedPieces {
     pub items: Vec<Placed>,
+    /// Size of every piece relative to its authored size (the skater keeps
+    /// the world scale), [`MIN_PARK_SCALE`]..[`MAX_PARK_SCALE`].
+    pub park_scale: f32,
     pub revision: u64,
     pub dragging: Option<u64>,
     pub resizing: Option<u64>,
     pub rescaling: bool,
     /// Earlier layouts, newest last, for undo.
     history: Vec<Vec<Placed>>,
+}
+
+impl Default for PlacedPieces {
+    fn default() -> Self {
+        Self {
+            items: Vec::new(),
+            park_scale: 1.0,
+            revision: 0,
+            dragging: None,
+            resizing: None,
+            rescaling: false,
+            history: Vec::new(),
+        }
+    }
 }
 
 impl PlacedPieces {
@@ -176,6 +201,11 @@ struct BuildState {
     clear_hold: f32,
     /// Where the skater's deck was in the room when a rescale began.
     rescale_from: Option<(Vec3, Vec3)>,
+    /// The rescale in progress is the park's, not the world's.
+    park_rescale: bool,
+    /// The park was resized: once collision is rebuilt, drop the skater onto
+    /// whatever is now under this real (tracking) spot.
+    drop_after_rebuild: Option<(Vec3, Vec3, u64)>,
     /// Unsnapped size of the placed piece being resized.
     resize_size: f32,
     previous: Buttons,
@@ -195,6 +225,8 @@ impl Default for BuildState {
             toggled: false,
             clear_hold: 0.0,
             rescale_from: None,
+            park_rescale: false,
+            drop_after_rebuild: None,
             resize_size: 1.0,
             previous: Buttons::default(),
         }
@@ -240,7 +272,7 @@ impl Plugin for BuildPlugin {
                     .before(crate::input::poll_controllers)
                     .run_if(openxr_session_running),
             )
-            .add_systems(Update, (sync_pieces, show_build, layout::save));
+            .add_systems(Update, (sync_pieces, show_build, layout::save, drop_after_park_scale));
     }
 }
 
@@ -252,7 +284,10 @@ fn toggle_build(
     mut placed: ResMut<PlacedPieces>,
 ) {
     let touch = &touch.0;
+    // Menu + grips is the SK8 menu chord, not a build-mode hold.
     let chording = touch.x
+        || touch.left_grip > 0.5
+        || touch.right_grip > 0.5
         || touch.left_stick[0].abs() > CHORD_STICK
         || touch.left_stick[1].abs() > CHORD_STICK;
     state.menu_hold = match (state.menu_hold, touch.menu && !chording) {
@@ -280,8 +315,9 @@ fn build_controls(
     mode: Res<BuildMode>,
     mut rig: ResMut<Rig>,
     hands: Query<(&Hand, &Transform)>,
-    physics: Option<Res<GamePhysics>>,
-    skater: Option<ResMut<SkaterRuntime>>,
+    world: Res<ArWorld>,
+    link: Res<SkaterLink>,
+    mut teleport: MessageWriter<TeleportSkater>,
     shapes: Res<SceneShapes>,
     mut pad: ResMut<ExternalPad>,
     mut state: ResMut<BuildState>,
@@ -293,7 +329,7 @@ fn build_controls(
         state.ghost = None;
         state.target = None;
         if placed.rescaling {
-            finish_rescale(&rig, skater, &mut state, &mut placed);
+            finish_rescale(&rig, &mut teleport, &mut state, &mut placed);
         }
         return;
     }
@@ -355,29 +391,31 @@ fn build_controls(
     }
 
     // World scale: up grows the skater and pieces in the room, down shrinks
-    // them. Collision and the skater follow once the stick is let go.
+    // them. Collision and the skater follow once the stick is let go. With
+    // the left grip held the stick scales only the park.
     let [scale_x, scale_y] = touch.left_stick;
+    let park_chord = touch.left_grip > PARK_CHORD_GRIP;
     if scale_y.abs() > STICK_DEADZONE && scale_y.abs() > scale_x.abs() {
+        let factor = (-scale_y * SCALE_RATE * time.delta_secs()).exp();
         if !placed.rescaling {
             placed.rescaling = true;
-            state.rescale_from = rig.root_transform().zip(physics.as_deref()).map(|(root, physics)| {
-                let deck = physics.board.part_transforms()[BodyId::Deck.index()];
+            state.rescale_from = rig.root_transform().zip(link.deck).map(|(root, (deck, forward))| {
                 let to_tracking = root.compute_affine().inverse();
-                let t = deck.translation;
-                let f = deck.basis.columns[2];
-                (
-                    to_tracking.transform_point3(Vec3::new(t.x, t.y, t.z)),
-                    to_tracking.transform_vector3(Vec3::new(f[0], f[1], f[2])),
-                )
+                (to_tracking.transform_point3(deck), to_tracking.transform_vector3(forward))
             });
         }
-        let scale = rig.scale * (-scale_y * SCALE_RATE * time.delta_secs()).exp();
-        rig.scale = scale.clamp(MIN_SCALE, MAX_SCALE);
+        if park_chord {
+            // Up grows the pieces (stick up = away, as for the world scale).
+            placed.park_scale = (placed.park_scale / factor).clamp(MIN_PARK_SCALE, MAX_PARK_SCALE);
+            state.park_rescale = true;
+        } else {
+            rig.scale = (rig.scale * factor).clamp(MIN_SCALE, MAX_SCALE);
+        }
     } else if placed.rescaling {
-        finish_rescale(&rig, skater, &mut state, &mut placed);
+        finish_rescale(&rig, &mut teleport, &mut state, &mut placed);
     }
 
-    let (Some(root), Some(physics)) = (rig.root_transform(), physics) else {
+    let Some(root) = rig.root_transform() else {
         return;
     };
     let Some((_, controller)) = hands.iter().find(|(hand, _)| matches!(hand, Hand::Right)) else {
@@ -389,7 +427,7 @@ fn build_controls(
         // Face pieces away from the player until they are turned.
         state.yaw = heading(controller.rotation);
     }
-    let hit = cast(&physics, &placed, &root, origin, direction);
+    let hit = cast(&world, &placed, &root, origin, direction);
     let to_tracking = root.compute_affine().inverse();
     // A piece being resized keeps the stick until it is let go.
     state.target = placed.resizing.or(hit.and_then(|h| h.piece));
@@ -509,7 +547,7 @@ fn build_controls(
             for (kind, size, offset, turn) in STARTER_PARK {
                 // Offsets are game metres in the park's frame; positions are
                 // tracking metres.
-                let at = position + Quat::from_rotation_y(yaw) * Vec3::from_array(offset) / rig.scale;
+                let at = position + Quat::from_rotation_y(yaw) * Vec3::from_array(offset) * placed.park_scale / rig.scale;
                 placed.insert(Piece { kind, size }, at, yaw + turn);
             }
             info!("BUILD starter park at {position:?} ({} pieces)", placed.items.len());
@@ -542,25 +580,71 @@ fn snap_size(size: f32) -> f32 {
 }
 
 /// The scale stick was let go: put the skater back on the same real spot at
-/// the new scale, and rebuild collision (and save) for it.
+/// the new scale, and rebuild collision (and save) for it. After a park
+/// rescale the skater is dropped onto whatever is under it once the new
+/// collision exists ([`drop_after_park_scale`]).
 fn finish_rescale(
     rig: &Rig,
-    skater: Option<ResMut<SkaterRuntime>>,
+    teleport: &mut MessageWriter<TeleportSkater>,
     state: &mut BuildState,
     placed: &mut PlacedPieces,
 ) {
     placed.rescaling = false;
     placed.revision += 1;
+    let park = std::mem::take(&mut state.park_rescale);
+    let Some((deck, forward)) = state.rescale_from.take() else {
+        return;
+    };
+    if park {
+        info!("BUILD park scale {:.2}", placed.park_scale);
+        state.drop_after_rebuild = Some((deck, forward, placed.revision));
+        return;
+    }
     info!("BUILD world scale {:.2} (game metres per real metre)", rig.scale);
-    let (Some((deck, forward)), Some(root), Some(mut skater)) =
-        (state.rescale_from.take(), rig.root_transform(), skater)
-    else {
+    let Some(root) = rig.root_transform() else {
+        return;
+    };
+    teleport.write(TeleportSkater {
+        point: root.transform_point(deck),
+        forward: root.rotation * forward,
+    });
+}
+
+/// Height above the skater's spot to search down from after a park rescale,
+/// game metres.
+const DROP_SEARCH: f32 = 200.0;
+
+fn drop_after_park_scale(
+    rig: Res<Rig>,
+    world: Res<ArWorld>,
+    placed: Res<PlacedPieces>,
+    mut state: ResMut<BuildState>,
+    mut teleport: MessageWriter<TeleportSkater>,
+    mut seen: Local<u64>,
+) {
+    // Wait for the rebuild that follows the rescale's revision.
+    let Some((deck, forward, revision)) = state.drop_after_rebuild else {
+        *seen = world.revision;
+        return;
+    };
+    if placed.revision != revision || world.revision == *seen {
+        return;
+    }
+    state.drop_after_rebuild = None;
+    let Some(root) = rig.root_transform() else {
         return;
     };
     let point = root.transform_point(deck);
-    if let Err(e) = skater.travel_to(spawn_matrix(point, root.rotation * forward)) {
-        warn!("BUILD rescale teleport: {e}");
-    }
+    let from = point + Vec3::Y * DROP_SEARCH;
+    let top = world
+        .all_triangles()
+        .filter_map(|[a, b, c]| ray_triangle(from, Vec3::NEG_Y, a, b, c))
+        .min_by(f32::total_cmp)
+        .map_or(point, |t| from - Vec3::Y * t);
+    teleport.write(TeleportSkater {
+        point: top,
+        forward: root.rotation * forward,
+    });
 }
 
 #[derive(Clone, Copy)]
@@ -573,7 +657,7 @@ struct Hit {
 /// Nearest face along the ray: the real room (collision tag 0) or a placed
 /// piece. The piece being dragged is ignored so it can't land on itself.
 fn cast(
-    physics: &GamePhysics,
+    world: &ArWorld,
     placed: &PlacedPieces,
     root: &Transform,
     origin: Vec3,
@@ -589,12 +673,11 @@ fn cast(
             }
         }
     };
-    for t in physics.world_triangles().iter().filter(|t| t.tag == 0) {
-        let [a, b, c] = t.triangle.vertices.map(|v| Vec3::new(v.x, v.y, v.z));
+    for [a, b, c] in world.room() {
         consider(ray_triangle(origin, direction, a, b, c), (b - a).cross(c - a), None);
     }
     for item in placed.items.iter().filter(|p| Some(p.id) != placed.dragging) {
-        let at = item.world_transform(root);
+        let at = item.world_transform(root, placed.park_scale);
         for q in item.piece.geometry().all_quads() {
             let [a, b, c, d] = q.map(|p| at.transform_point(p));
             let normal = (c - a).cross(b - a);
@@ -726,7 +809,7 @@ fn sync_pieces(
     for (entity, visual, mut transform) in &mut visuals {
         match placed.items.iter().find(|p| p.id == visual.0) {
             Some(item) if item.piece == visual.1 => {
-                let target = item.world_transform(&root);
+                let target = item.world_transform(&root, placed.park_scale);
                 if *transform != target {
                     *transform = target;
                 }
@@ -740,7 +823,7 @@ fn sync_pieces(
             PlacedVisual(item.id, item.piece),
             Mesh3d(assets.mesh(item.piece, &mut meshes)),
             MeshMaterial3d(assets.solid(item.piece.kind, &mut materials)),
-            item.world_transform(&root),
+            item.world_transform(&root, placed.park_scale),
         ));
     }
 }
@@ -807,7 +890,7 @@ fn show_build(
             *ghost_tf = Transform {
                 translation: point,
                 rotation: root.rotation * Quat::from_rotation_y(state.placed_yaw),
-                scale: Vec3::ONE,
+                scale: Vec3::splat(placed.park_scale),
             };
             *ghost_vis = Visibility::Visible;
         }

@@ -1,0 +1,77 @@
+// Tuning table for the clean-room engine (values hand-picked for this engine).
+#include "params.hpp"
+#include <cstring>
+
+namespace sk8 {
+
+namespace {
+
+const char *const kPop = "Pop & Jump";
+const char *const kSpeed = "Gravity & Speed";
+const char *const kSpin = "Spin";
+const char *const kFlips = "Flips";
+const char *const kBails = "Bails";
+const char *const kGrinds = "Grinds";
+const char *const kManuals = "Manuals";
+const char *const kScore = "Scoring";
+
+// key, label, group, min, max, default, step
+const sk8_param kTable[ParamCount] = {
+	{"pop_low", "Pop (quick flick), m/s", kPop, 1.0f, 12.0f, 3.85f, 0.05f},
+	{"pop_high", "Pop (full crouch), m/s", kPop, 1.0f, 16.0f, 5.55f, 0.05f},
+	{"crouch_charge", "Crouch to full pop, s", kPop, 0.05f, 1.5f, 0.34f, 0.01f},
+	{"nollie_pop", "Nollie pop share", kPop, 0.3f, 1.5f, 0.93f, 0.01f},
+	{"grind_pop", "Pop off rails share", kPop, 0.3f, 1.5f, 0.82f, 0.01f},
+
+	{"gravity", "Gravity, m/s^2", kSpeed, 1.0f, 40.0f, 17.25f, 0.25f},
+	{"push_kick", "Push strength, m/s", kSpeed, 0.0f, 6.0f, 1.62f, 0.02f},
+	{"push_period", "Time between pushes, s", kSpeed, 0.15f, 2.0f, 0.62f, 0.01f},
+	{"push_top", "Top pushing speed, m/s", kSpeed, 1.0f, 30.0f, 8.35f, 0.05f},
+	{"roll_drag", "Rolling drag, m/s^2", kSpeed, 0.0f, 3.0f, 0.17f, 0.01f},
+	{"air_drag", "Air drag", kSpeed, 0.0f, 0.05f, 0.0031f, 0.0005f},
+	{"brake", "Brake, m/s^2", kSpeed, 0.0f, 20.0f, 4.65f, 0.05f},
+	{"carve", "Turning, rad/s", kSpeed, 0.2f, 8.0f, 2.07f, 0.01f},
+	{"grip", "Wheel grip", kSpeed, 0.5f, 40.0f, 8.4f, 0.1f},
+	{"slide_drag", "Powerslide drag, m/s^2", kSpeed, 0.0f, 25.0f, 6.15f, 0.05f},
+	{"ground_snap", "Stick to ground, m", kSpeed, 0.02f, 1.0f, 0.27f, 0.01f},
+
+	{"spin_rate", "Air spin, rad/s", kSpin, 0.0f, 25.0f, 5.35f, 0.05f},
+	{"spin_ease", "Spin response", kSpin, 0.5f, 40.0f, 9.5f, 0.1f},
+	{"air_level", "Auto-level in the air, rad/s", kSpin, 0.0f, 10.0f, 1.14f, 0.01f},
+
+	{"flip_base", "Flip time, s", kFlips, 0.05f, 2.0f, 0.255f, 0.005f},
+	{"flip_per_rev", "Extra time per turn, s", kFlips, 0.0f, 2.0f, 0.235f, 0.005f},
+	{"late_flips", "Flick in the air (0 off, 1 on)", kFlips, 0.0f, 1.0f, 1.0f, 1.0f},
+	{"flip_lenience", "Flip done enough to land", kFlips, 0.3f, 1.0f, 0.83f, 0.01f},
+
+	{"land_clean", "Clean landing, degrees", kBails, 1.0f, 89.0f, 22.0f, 0.5f},
+	{"land_max", "Worst landing, degrees", kBails, 5.0f, 170.0f, 58.0f, 0.5f},
+	{"side_max", "Worst sideways landing, degrees", kBails, 5.0f, 90.0f, 54.0f, 0.5f},
+	{"wall_bail", "Wall slam speed, m/s", kBails, 0.5f, 60.0f, 6.45f, 0.05f},
+	{"impact_bail", "Hard landing speed, m/s", kBails, 1.0f, 80.0f, 13.6f, 0.1f},
+	{"bail_time", "Time on the ground, s", kBails, 0.2f, 10.0f, 1.9f, 0.05f},
+
+	{"grind_catch", "Rail catch distance, m", kGrinds, 0.05f, 2.0f, 0.42f, 0.01f},
+	{"grind_drag", "Rail drag, m/s^2", kGrinds, 0.0f, 10.0f, 0.47f, 0.01f},
+	{"grind_balance", "Rail balance (0 off)", kGrinds, 0.0f, 3.0f, 0.0f, 0.05f},
+
+	{"manual_wobble", "Manual wobble", kManuals, 0.0f, 5.0f, 0.72f, 0.02f},
+	{"manual_correct", "Manual correction", kManuals, 0.0f, 10.0f, 2.45f, 0.05f},
+
+	{"score_scale", "Score multiplier", kScore, 0.0f, 100.0f, 1.0f, 0.1f},
+	{"bank_wait", "Roll-away to bank, s", kScore, 0.0f, 5.0f, 0.95f, 0.05f},
+	{"grind_rate", "Grind points per second", kScore, 0.0f, 1000.0f, 65.0f, 5.0f},
+	{"manual_rate", "Manual points per second", kScore, 0.0f, 1000.0f, 45.0f, 5.0f},
+};
+
+} // namespace
+
+const sk8_param *param_table() { return kTable; }
+
+Params::Params()
+{
+	for (int i = 0; i < ParamCount; i++)
+		v[i] = kTable[i].def;
+}
+
+} // namespace sk8

@@ -12,18 +12,26 @@ use bevy_mod_openxr::{
     types::AppInfo,
 };
 
-mod actions;
-mod build;
+pub(crate) mod actions;
+pub(crate) mod build;
+pub(crate) mod link;
 mod mesh_planes;
+pub(crate) mod panel;
 mod plane_view;
 mod planes;
 mod real_world;
 pub(crate) mod rig;
 mod spatial_audio;
-mod spawn;
+pub(crate) mod spawn;
 pub(crate) mod touch;
 
 pub(crate) use crate::config::XrOptions;
+
+/// Directory for the XR layer's saved state (`ar-layout.json`): next to the
+/// assets folder for the imported-disc tier, the app's files directory for
+/// the clean tier.
+#[derive(Resource, Clone)]
+pub(crate) struct XrFiles(pub std::path::PathBuf);
 
 /// Wrap the game's `DefaultPlugins` so the OpenXR runtime owns rendering.
 /// `add_xr_plugins` replaces the `RenderPlugin` with one built on the
@@ -68,11 +76,24 @@ pub(crate) fn plugins(base: PluginGroupBuilder) -> PluginGroupBuilder {
         .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
 }
 
-pub(crate) struct XrPlugin(pub XrOptions);
+/// The XR layer. `retail` adds the adapter for the faithful port; the clean
+/// tier adds its own (`crate::clean`).
+pub(crate) struct XrPlugin {
+    pub options: XrOptions,
+    pub files: std::path::PathBuf,
+    pub retail: bool,
+}
 
 impl Plugin for XrPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(bevy_mod_openxr::features::fb_passthrough::OxrFbPassthroughPlugin)
+        if self.retail {
+            app.add_plugins(link::RetailLinkPlugin);
+        } else {
+            app.add_plugins(panel::PanelPlugin);
+        }
+        app.insert_resource(XrFiles(self.files.clone()))
+            .add_plugins(link::LinkPlugin)
+            .add_plugins(bevy_mod_openxr::features::fb_passthrough::OxrFbPassthroughPlugin)
             .insert_resource(OxrSessionConfig {
                 blend_mode_preference: vec![
                     openxr::EnvironmentBlendMode::ALPHA_BLEND,
@@ -85,7 +106,7 @@ impl Plugin for XrPlugin {
             .add_plugins((
                 actions::TouchActionsPlugin,
                 planes::PlanesPlugin,
-                rig::RigPlugin(self.0),
+                rig::RigPlugin(self.options),
                 real_world::RealWorldPlugin,
                 spawn::SpawnPlugin,
                 build::BuildPlugin,
@@ -159,12 +180,16 @@ fn no_eye_occlusion_culling(
     }
 }
 
-/// Quest's GPU only has budget for the two eye views. The flat-screen
+/// Quest's GPU only has budget for the two eye views (and the menu panel's
+/// small UI camera, `panel`, while it is open). The flat-screen
 /// gameplay camera and the window HUD cameras render where nobody can see
 /// them (`camera::present` leaves the gameplay one off in XR), and shadow cascades
 /// per eye were most of the remaining cost (13 fps vs 72 on device).
 fn headset_only_rendering(
-    mut cameras: Query<&mut Camera, Without<bevy_mod_xr::camera::XrCamera>>,
+    mut cameras: Query<
+        &mut Camera,
+        (Without<bevy_mod_xr::camera::XrCamera>, Without<panel::XrPanelCamera>),
+    >,
     mut lights: Query<&mut DirectionalLight>,
 ) {
     for mut camera in &mut cameras {

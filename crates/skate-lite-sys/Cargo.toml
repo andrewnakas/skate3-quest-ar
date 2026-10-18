@@ -1,0 +1,12 @@
+[package]
+name = "skate-lite-sys"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-only"
+description = "Rust bindings for the clean-room sk8 skate engine (vendored from skatecore-cpp clean/)"
+
+[dependencies]
+
+[build-dependencies]
+cc = "1"

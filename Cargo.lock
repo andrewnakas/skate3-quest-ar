@@ -4871,11 +4871,19 @@ dependencies = [
  "skate-audio-formats",
  "skate-core",
  "skate-data",
+ "skate-lite-sys",
  "skate-mods",
  "skate-net",
  "skate-vehicles",
  "tracing-log",
  "wgpu",
+]
+
+[[package]]
+name = "skate-lite-sys"
+version = "0.1.0"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

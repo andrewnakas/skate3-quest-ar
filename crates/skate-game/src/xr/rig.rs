@@ -56,7 +56,11 @@ pub(crate) struct RigPlugin(pub XrOptions);
 
 impl Plugin for RigPlugin {
     fn build(&self, app: &mut App) {
-        let world_origin = spawn_ground(app.world().resource::<crate::config::Config>());
+        // The clean tier has no game config: its world floor is y = 0.
+        let world_origin = app
+            .world()
+            .get_resource::<crate::config::Config>()
+            .map_or(Vec3::ZERO, spawn_ground);
         app.insert_resource(Rig {
             scale: self.0.scale,
             world_origin,

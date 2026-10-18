@@ -109,6 +109,8 @@ pub(crate) fn build(
     };
     #[cfg(feature = "xr")]
     let xr = config.xr;
+    #[cfg(feature = "xr")]
+    let xr_files = config.asset_root.parent().unwrap_or(&config.asset_root).to_path_buf();
     app.add_plugins(plugins)
     .insert_resource(bevy::winit::WinitSettings {
         focused_mode: bevy::winit::UpdateMode::Continuous,
@@ -174,7 +176,11 @@ pub(crate) fn build(
     app.add_systems(Last, crate::crash_context::sample);
     #[cfg(feature = "xr")]
     if let Some(options) = xr {
-        app.add_plugins(crate::xr::XrPlugin(options));
+        app.add_plugins(crate::xr::XrPlugin {
+            options,
+            files: xr_files,
+            retail: true,
+        });
     }
     crate::profiling::install(&mut app);
     app

@@ -54,6 +54,7 @@ mod verification;
 mod world;
 #[cfg(feature = "xr")]
 mod xr;
+mod clean;
 
 /// Startup loading. `Err` is the exit to return, including the asset
 /// check's success.
@@ -199,6 +200,10 @@ pub fn run_with(pump: Option<&mut dyn FnMut()>) -> bevy::app::AppExit {
     if let Err(error) = android::prepare() {
         eprintln!("{error}");
         return bevy::app::AppExit::error();
+    }
+    // The public tier: the clean-room engine, no game data at all.
+    if clean::wanted() {
+        return clean::run();
     }
     // The updater and the crash supervisor relaunch the current executable,
     // which on Android is the system app process.

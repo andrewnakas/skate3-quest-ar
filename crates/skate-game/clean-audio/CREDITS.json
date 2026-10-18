@@ -1,26 +1,92 @@
 [
  {
-  "sound": "pop_1",
-  "url": "https://freesound.org/people/nolimitkid/sounds/515226/",
+  "sound": "bail_1",
+  "url": "https://freesound.org/people/gerardcatala/sounds/153285/",
+  "author": "gerardcatala",
+  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
+ },
+ {
+  "sound": "bail_2",
+  "url": "https://freesound.org/people/Bruno_Garcez/sounds/243767/",
+  "author": "Bruno_Garcez",
+  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
+ },
+ {
+  "sound": "catch_1",
+  "url": "https://freesound.org/people/nolimitkid/sounds/515230/",
   "author": "nolimitkid",
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
-  "sound": "pop_2",
-  "url": "https://freesound.org/people/Sheyvan/sounds/568406/",
-  "author": "Sheyvan",
-  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
- },
- {
-  "sound": "pop_3",
-  "url": "https://freesound.org/people/nolimitkid/sounds/515229/",
+  "sound": "catch_2",
+  "url": "https://freesound.org/people/nolimitkid/sounds/515225/",
   "author": "nolimitkid",
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
-  "sound": "pop_4",
-  "url": "https://freesound.org/people/mbezzola/sounds/105076/",
+  "sound": "catch_3",
+  "url": "https://freesound.org/people/mbezzola/sounds/105075/",
   "author": "mbezzola",
+  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
+ },
+ {
+  "sound": "chime",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
+ },
+ {
+  "sound": "flip_1",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
+ },
+ {
+  "sound": "flip_2",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
+ },
+ {
+  "sound": "flip_3",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
+ },
+ {
+  "sound": "footstep_1",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
+ },
+ {
+  "sound": "footstep_2",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
+ },
+ {
+  "sound": "footstep_3",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
+ },
+ {
+  "sound": "footstep_4",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
+ },
+ {
+  "sound": "grind_concrete",
+  "url": "https://freesound.org/people/bspiller5/sounds/478166/",
+  "author": "bspiller5",
+  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
+ },
+ {
+  "sound": "grind_metal",
+  "url": "https://freesound.org/people/C-V/sounds/845524/",
+  "author": "C-V",
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
@@ -48,21 +114,33 @@
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
-  "sound": "catch_1",
-  "url": "https://freesound.org/people/nolimitkid/sounds/515230/",
+  "sound": "pop_1",
+  "url": "https://freesound.org/people/nolimitkid/sounds/515226/",
   "author": "nolimitkid",
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
-  "sound": "catch_2",
-  "url": "https://freesound.org/people/nolimitkid/sounds/515225/",
+  "sound": "pop_2",
+  "url": "https://freesound.org/people/Sheyvan/sounds/568406/",
+  "author": "Sheyvan",
+  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
+ },
+ {
+  "sound": "pop_3",
+  "url": "https://freesound.org/people/nolimitkid/sounds/515229/",
   "author": "nolimitkid",
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
-  "sound": "catch_3",
-  "url": "https://freesound.org/people/mbezzola/sounds/105075/",
+  "sound": "pop_4",
+  "url": "https://freesound.org/people/mbezzola/sounds/105076/",
   "author": "mbezzola",
+  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
+ },
+ {
+  "sound": "powerslide",
+  "url": "https://freesound.org/people/jarrondesnudo/sounds/581379/",
+  "author": "jarrondesnudo",
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
@@ -84,10 +162,10 @@
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
-  "sound": "roll_smooth",
-  "url": "https://freesound.org/people/neotronable/sounds/346380/",
-  "author": "neotronable",
-  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
+  "sound": "roll_metal",
+  "url": "scripts/cleanroom/synth_sounds.py",
+  "author": "SK8 AR (original synthesis)",
+  "license": "Original work, generated from noise and sine synthesis; no recorded or game audio"
  },
  {
   "sound": "roll_rough",
@@ -96,38 +174,14 @@
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  },
  {
+  "sound": "roll_smooth",
+  "url": "https://freesound.org/people/neotronable/sounds/346380/",
+  "author": "neotronable",
+  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
+ },
+ {
   "sound": "roll_wood",
   "url": "https://freesound.org/people/Bruno_Garcez/sounds/243762/",
-  "author": "Bruno_Garcez",
-  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
- },
- {
-  "sound": "grind_metal",
-  "url": "https://freesound.org/people/C-V/sounds/845524/",
-  "author": "C-V",
-  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
- },
- {
-  "sound": "grind_concrete",
-  "url": "https://freesound.org/people/bspiller5/sounds/478166/",
-  "author": "bspiller5",
-  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
- },
- {
-  "sound": "powerslide",
-  "url": "https://freesound.org/people/jarrondesnudo/sounds/581379/",
-  "author": "jarrondesnudo",
-  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
- },
- {
-  "sound": "bail_1",
-  "url": "https://freesound.org/people/gerardcatala/sounds/153285/",
-  "author": "gerardcatala",
-  "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
- },
- {
-  "sound": "bail_2",
-  "url": "https://freesound.org/people/Bruno_Garcez/sounds/243767/",
   "author": "Bruno_Garcez",
   "license": "Creative Commons 0 (CC0 1.0 Public Domain Dedication), as shown on sound page"
  }

@@ -213,6 +213,108 @@ pub(super) fn install(app: &mut App) {
         .add_systems(Update, (observe, frontend, mix, follow_skater).chain());
 }
 
+/// A one-shot from the clean-room engine.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Sk8Cue {
+    Pop,
+    /// A flip trick started: whoosh now, catch a moment later.
+    Flip,
+    /// Touchdown, with the speed into the surface.
+    Land(f32),
+    Push,
+    Bail,
+    /// A combo was banked.
+    Chime,
+}
+
+/// What the clean-room engine did this frame; the clean tier (`crate::clean`)
+/// fills it before the driver runs.
+#[derive(Resource, Default, Debug)]
+pub(crate) struct Sk8Sounds {
+    pub position: Vec3,
+    pub speed: f32,
+    pub grounded: bool,
+    pub grinding: bool,
+    pub powersliding: bool,
+    pub paused: bool,
+    pub cues: Vec<Sk8Cue>,
+}
+
+/// The driver for the clean-room engine: same sounds, loops and mixing, fed
+/// by [`Sk8Sounds`] instead of the retail physics observation.
+pub(crate) fn install_sk8(app: &mut App) {
+    use bevy::audio::AddAudioSource;
+    app.add_audio_source::<StreamPcm>()
+        .init_resource::<SurfaceHints>()
+        .init_resource::<Sk8Sounds>()
+        .add_systems(Startup, setup)
+        .add_systems(Update, (observe_sk8, mix, follow_skater).chain());
+}
+
+fn observe_sk8(
+    mut commands: Commands,
+    audio: Option<ResMut<CleanAudio>>,
+    hints: Res<SurfaceHints>,
+    sounds: Res<Sk8Sounds>,
+    real_time: Res<Time<bevy::time::Real>>,
+) {
+    let Some(mut audio) = audio else { return };
+    let now = real_time.elapsed_secs();
+    audio.paused = sounds.paused;
+    audio.source = sounds.position;
+    if let Some(at) = audio.pending_catch {
+        if now >= at {
+            audio.pending_catch = None;
+            audio.play(&mut commands, Shot::Catch, 0.8);
+        }
+    }
+    for cue in &sounds.cues {
+        match *cue {
+            Sk8Cue::Pop => audio.play(&mut commands, Shot::Pop, 0.9),
+            Sk8Cue::Flip => {
+                audio.play(&mut commands, Shot::Flip, 0.7);
+                audio.pending_catch = Some(now + CATCH_DELAY_S);
+            }
+            Sk8Cue::Land(impact) => {
+                if now - audio.last_land > 0.15 {
+                    audio.last_land = now;
+                    audio.pending_catch = None;
+                    let gain = (0.45 + impact.abs() / 6.0).clamp(0.45, 1.0);
+                    audio.play(&mut commands, Shot::Land, gain);
+                }
+            }
+            Sk8Cue::Push => audio.play(&mut commands, Shot::Push, 0.75),
+            Sk8Cue::Bail => {
+                if now - audio.last_wipe > 0.8 {
+                    audio.last_wipe = now;
+                    audio.play(&mut commands, Shot::Bail, 1.0);
+                }
+            }
+            Sk8Cue::Chime => audio.play(&mut commands, Shot::Chime, 0.5),
+        }
+    }
+    let speed = sounds.speed.max(0.0);
+    let level = ((speed - ROLL_MIN_SPEED) / (ROLL_FULL_SPEED - ROLL_MIN_SPEED)).clamp(0.0, 1.0);
+    let level = level.powf(0.6);
+    let pitch = 0.85 + 0.35 * (speed / 10.0).min(1.0);
+    for kind in Loop::ALL {
+        audio.set(kind, 0.0, pitch);
+    }
+    let position = sounds.position;
+    if sounds.grinding {
+        let kind = if hints.near_metal(position) { Loop::GrindMetal } else { Loop::GrindConcrete };
+        audio.set(kind, (0.35 + 0.65 * level).min(1.0), 0.9 + 0.2 * (speed / 8.0).min(1.0));
+    } else if sounds.grounded {
+        let kind = if hints.on_wood(position) { Loop::RollWood } else { Loop::RollSmooth };
+        if sounds.powersliding {
+            audio.set(kind, level * 0.5, pitch);
+            audio.set(Loop::Powerslide, (0.4 + 0.6 * level).min(1.0), 0.9 + 0.2 * level);
+        } else {
+            audio.set(kind, level, pitch);
+        }
+    }
+}
+
 /// Keep the looping emitters on the skater.
 fn follow_skater(audio: Option<Res<CleanAudio>>, mut transforms: Query<&mut Transform>) {
     let Some(audio) = audio.filter(|a| a.spatial) else { return };

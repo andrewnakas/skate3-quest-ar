@@ -11,12 +11,9 @@ use super::build::PlacedPieces;
 use super::plane_view::MeshPlanes;
 use super::build::pieces::PieceKind;
 use crate::skate_audio::clean::SurfaceHints;
-use crate::physics::ground::PlacedSurfaces;
-use crate::physics::SkaterRuntime;
+use super::link::{ArWorld, PieceSurfaces, SkaterLink};
 use super::rig::Rig;
-use crate::physics::GamePhysics;
 use bevy::prelude::*;
-use skate_core::math::Vector3;
 
 const MIN_HALF_M: f32 = 0.01;
 const UPWARD_MIN_COS: f32 = 0.9;
@@ -44,14 +41,12 @@ fn rebuild_collision(
     revision: Res<SceneRevision>,
     placed: Res<PlacedPieces>,
     mesh_planes: Res<MeshPlanes>,
-    physics: Option<ResMut<GamePhysics>>,
-    skater: Option<ResMut<SkaterRuntime>>,
+    link: Res<SkaterLink>,
+    mut world: ResMut<ArWorld>,
     hints: Option<ResMut<SurfaceHints>>,
     mut built: Local<Option<((Vec3, f32), u64, u64)>>,
 ) {
-    let (Some(anchor), Some(root), Some(mut physics), Some(mut skater)) =
-        (rig.anchor, rig.root_transform(), physics, skater)
-    else {
+    let (Some(anchor), Some(root)) = (rig.anchor, rig.root_transform()) else {
         return;
     };
     // Re-located poses wobble by tracking noise every frame; only a new
@@ -59,7 +54,7 @@ fn rebuild_collision(
     // rebuild. A piece being dragged rebuilds when it is dropped, and grind
     // state refers to the current rails, so a grind finishes first.
     let key = (anchor, revision.0, placed.revision);
-    if shapes.0.is_empty() || *built == Some(key) || placed.busy() || skater.is_grinding() {
+    if shapes.0.is_empty() || *built == Some(key) || placed.busy() || link.grinding {
         return;
     }
     *built = Some(key);
@@ -73,19 +68,18 @@ fn rebuild_collision(
         .as_ref()
         .map(|mesh| mesh_triangles(mesh, &all_shapes))
         .unwrap_or_default();
-    let v = |w: Vec3| Vector3::new(w.x, w.y, w.z);
-    let to_world = |p: Vec3| v(root.transform_point(p));
+    let to_world = |p: Vec3| root.transform_point(p);
     let (quad_count, triangle_count) = (quads.len(), triangles.len());
-    let quads = quads.into_iter().map(|q| q.map(to_world)).collect();
-    let triangles = triangles.into_iter().map(|t| t.map(to_world)).collect();
-    let edges: Vec<_> = real_edges.iter().map(|&(a, b)| (to_world(a), to_world(b))).collect();
+    let room_quads: Vec<[Vec3; 4]> = quads.into_iter().map(|q| q.map(to_world)).collect();
+    let room_triangles: Vec<[Vec3; 3]> = triangles.into_iter().map(|t| t.map(to_world)).collect();
+    let room_edges: Vec<(Vec3, Vec3)> = real_edges.iter().map(|&(a, b)| (to_world(a), to_world(b))).collect();
     // Table and furniture tops are grindable ledges.
-    let mut rails: Vec<Vec<Vector3>> = edges.iter().map(|&(a, b)| vec![a, b]).collect();
+    let mut rails: Vec<Vec<Vec3>> = room_edges.iter().map(|&(a, b)| vec![a, b]).collect();
     let mut pieces = Vec::with_capacity(placed.items.len());
     let mut sound = SurfaceHints::default();
     for item in &placed.items {
-        let at = item.world_transform(&root);
-        let local = |p: Vec3| v(at.transform_point(p));
+        let at = item.world_transform(&root, placed.park_scale);
+        let local = |p: Vec3| at.transform_point(p);
         let geometry = item.piece.geometry();
         rails.extend(geometry.rails.iter().map(|r| r.iter().map(|&p| local(p)).collect()));
         // Rails, handrails and ramp copings are metal; ramps and boxes are
@@ -108,28 +102,30 @@ fn rebuild_collision(
                 sound.wood_boxes.push((min, max));
             }
         }
-        pieces.push(PlacedSurfaces {
+        pieces.push(PieceSurfaces {
             quads: geometry.quads.iter().map(|q| q.map(local)).collect(),
             rail_quads: geometry.rail_quads.iter().map(|q| q.map(local)).collect(),
             edges: geometry.edges.iter().map(|&(a, b)| (local(a), local(b))).collect(),
         });
     }
     let piece_count = pieces.len();
-    if let Err(e) = physics.set_real_surfaces(quads, triangles, edges, pieces) {
-        error!("AR collision rebuild failed: {e}");
-        return;
-    }
-    if let Err(e) = physics.set_grind_rails(&rails, &mut skater) {
-        error!("AR grind rails rebuild failed: {e}");
-    }
+    let rail_count = rails.len();
+    let revision = world.revision + 1;
+    *world = ArWorld {
+        revision,
+        room_quads,
+        room_triangles,
+        room_edges,
+        pieces,
+        rails,
+    };
     if let Some(mut hints) = hints {
         *hints = sound;
     }
     info!(
-        "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} shapes ({} mesh planes), {piece_count} placed pieces, {} grind rails ({:.1} ms)",
+        "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} shapes ({} mesh planes), {piece_count} placed pieces, {rail_count} grind rails ({:.1} ms)",
         shapes.0.len(),
         all_shapes.len() - shapes.0.len(),
-        rails.len(),
         started.elapsed().as_secs_f32() * 1000.0
     );
 }

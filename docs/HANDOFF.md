@@ -36,102 +36,96 @@ no GPU code: the host draws, the library simulates.
   code you would put on Spectacles, compiled to WebAssembly.
 - **Browser (Rust engine):** https://andrewnakas.github.io/skate3-cleanroom/
 
-## 2. The data: `core.pack`
-
-Both the Quest app and skatecore-cpp read one file, `core.pack` (90 MB,
-534 files). It is published by skate3-cleanroom:
-`https://andrewnakas.github.io/skate3-cleanroom/core.pack`, described by `pack.json`.
-
-Format `SKPK1` (little-endian): magic `SKPK1` padded to 8 bytes, `u32` file
-count, then per file `u32` path length, UTF-8 path, `u64` size, bytes. Paths
-look like a converted installation: `assets/private/game.json`,
-`assets/private/skater.glb`, `assets/private/stock/data/anim/*.abin`,
-`assets/private/stock/data/state/...`, `assets/clean-audio/*.wav`, `maps/...`.
-Readers: `crates/skate-game/src/clean_pack.rs` (Rust, unpacks to disk) and
-`src/s3/data/vfs.*` in skatecore-cpp (in memory).
-
-What is in it, and how clean it is (full detail in the skate3-cleanroom README):
-
-| Content | Treatment |
-|---|---|
-| Skater model and its textures | **Regenerated** (new geometry lattice, new triangulation, re-quantised skin weights; textures rebuilt from coarse colour grids + noise). Taint-scanned: 0 shared 32-byte runs with retail. |
-| Sounds (27 + CC0 recordings) | **Regenerated** or CC0 recordings (credits in `assets/clean-audio/CREDITS.json`). |
-| Animations (`.abin`), state graphs, physics/VLT tuning, joystick gesture patterns, camera configs, skeleton | **Kept as facts** from the retail game (the skating *is* these numbers). |
-| Music, speech, everything else on the disc | Not shipped. |
+## 2. The engine and data: use the clean-room `sk8` engine
 
 **Policy: the public no-import build must be 100% clean-room and original.**
-The kept-facts rows above (animations, state graphs, tuning, the skeleton and
-player colliders, and with them the retail proportions) are not acceptable in
-anything shipped publicly with bundled data. They are being replaced with
-original work for 0.03; until then public Quest builds bundle nothing and
-players import their own disc. Plan the Spectacles version around the fully
-clean pack, not this one. The project is unofficial and not affiliated with EA.
+Since 0.03 the Quest app's default tier meets it, and the Spectacles version
+should be built the same way.
 
-You only need a subset for a skater in AR: `assets/private/` minus
-`native-skies`, `native-props`, `hud`, `session-marker`, and none of `maps/` or
-`mods/` (about 64 MB; most of it is the 46 MB of animation and graph data in
-`stock/`).
-Development Quest builds bundle the whole pack for simplicity.
+- **Engine:** `sk8`, in skatecore-cpp `clean/` (C++17, C API `clean/include/sk8.h`,
+  GPL-3.0 like the rest of skatecore-cpp). It was written from scratch, with
+  its own physics, its own flick recogniser (stick paths read as rim and centre
+  tokens), its own 16 tricks and its own tuning table with menu descriptors.
+  It reads **no files**. The host supplies a segment raycast and grind-rail
+  polylines, steps it at 1/60 s, and reads back a state (position, deck and
+  stance rotations, mode, crouch, lean, flip progress, grabs, score) and
+  events (pop, trick, land, bail, grind, bank, push). Tests: `make sk8-test`.
+- **Skater:** built in code: a figure of simple segments with its own
+  proportions, posed from the state with two-bone IK feet on the deck, plus
+  a procedural tumble for bails (`crates/skate-game/src/clean/skater.rs`; port
+  the maths, it is about 300 lines).
+- **Sounds:** `crates/skate-game/clean-audio/`. These are 22 CC0 recordings and
+  9 sounds synthesised by `scripts/cleanroom/synth_sounds.py`, with credits in
+  `CREDITS.json`.
+- **Rust host for reference:** `crates/skate-lite-sys` (bindings, built with
+  `cc`) and `crates/skate-game/src/clean/` (collision grid, stepping with time
+  scale, menus).
+- **Proof:** `scripts/cleanroom/audit.py --retail <your converted assets>` checks
+  the clean sources, sounds and APK for retail files, shared 32-byte runs,
+  retail identifiers, float literals equal to retail tuning values, porting
+  markers and uncredited sounds.
+
+The old `core.pack` (skate3-cleanroom, `SKPK1` format, readers
+`crates/skate-game/src/clean_pack.rs` and skatecore-cpp `src/s3/data/vfs.*`)
+is **not** clean. Its model, textures and some sounds are derived from
+retail sources, and its animations, state graphs, VLT tuning, gesture
+patterns, camera configs and skeleton are kept as retail facts. It drives the
+faithful port (`src/s3`, which itself carries retail addresses). Only use it
+in an import-your-own-disc tier, never bundled. The project is unofficial and
+not affiliated with EA.
 
 ## 3. Recommended Spectacles architecture
 
 ```
- Spectacles host (C++)                              skatecore-cpp (C++17 library)
- ─────────────────────                              ─────────────────────────────
- world mesh / planes ──► collision quads+tris ─────► GamePhysics::set_real_surfaces*   (port, ~130 lines)
+ Spectacles host (C++)                              skatecore-cpp clean/ (sk8, C API)
+ ─────────────────────                              ─────────────────────────────────
+ world mesh / planes ──► triangles (grid) ─────────► sk8_raycast_fn callback (your collision)
  placed ramps/rails  ──► piece geometry ──────────► (pieces.rs → C++, pure math, ~330 lines)
- ledges, rails       ──► polylines ───────────────► GamePhysics::set_grind_rails*      (port, ~60 lines)
- input (hands/phone) ──► XInput-style Pad ────────► driver::Sim::step(Pad)  60 Hz fixed tick
-                         render ◄── Presentation: root + bone matrices (skater.glb skin)
-                         audio  ◄── Presentation: board_speed, wheel_surface, trick_identifier, ...
+ ledges, rails       ──► polylines ───────────────► sk8_world_add_rail
+ input (hands/phone) ──► sk8_input (2 sticks + bits) ► sk8_rider_step, 60 Hz fixed step
+                         render ◄── sk8_state: position, board_rot, rider_rot, crouch, lean, flip, grab
+                         audio  ◄── sk8_event: pop / land / grind / bail / push / bank
  head pose ─────────────► spatial listener; skater position = emitter
- ```
- `*` exists in the Rust Quest app only; see 3.2.
+```
 
 ### 3.1 What skatecore-cpp gives you today
 
-- `s3::game::driver::Sim` (`src/s3/game/driver.hpp`): `Sim::load(vfs, "assets",
-  map, difficulty)`, then one `step(Pad)` per 1/60 s tick, then
-  `presentation()` for rendering and audio. `Pad` is XInput units (buttons
-  bitmask, 0-255 triggers, ±32767 sticks), so any input source works if you
-  map it onto a virtual Xbox pad. That is exactly what the Quest app does with
-  Touch controllers (`crates/skate-game/src/xr/touch.rs`).
-- `Presentation`: skeleton root transform, global bone matrices in animation
-  space (skin `skater.glb` with them), camera (ignore in AR), audio inputs,
-  trick names and scores.
-- Determinism: `-ffp-contract=off`, bit-identical traces vs Rust
-  (`tools/parity.sh`, `docs/PARITY.md`). Keep that flag on any new toolchain.
-- Build: `make s3-test` runs the 1001 ported tests natively (needs the pack);
-  `tools/build_web.sh site` builds the wasm demo (~690 translation units,
-  ~10 min clean at `-j4`, about 1 GB RAM per job). The output is 4.0 MB of wasm.
-- Web host reference: `web/s3/host.cpp` (loading the pack into a `Vfs`, map
-  geometry out, sim stepping) and `web/s3/main.js` (three.js skinning, camera,
-  clean-audio driver, HUD). Port the JS skinning/audio logic to the Spectacles
-  side.
-
-**Alternative, the "lite" engine** (`include/skate_api.h`, `src/*.cpp`, 145
-lines of C API): a small procedural skater that needs **no data pack**, only
-a raycast callback into your collision, and derives grind rails from any
-triangle soup. It is far less faithful (one rigid body, authored flick
-patterns) but tiny, and a fast way to get something skating on Spectacles on
-day one.
+- **`sk8` (clean/, use this):** `sk8_world_new(raycast, user)`,
+  `sk8_world_add_rail`, `sk8_rider_new`, `sk8_rider_place(pos, facing, speed)`,
+  `sk8_rider_step(rider, world, &input)` once per 1/60 s, `sk8_rider_state`,
+  `sk8_rider_poll_event`. Tuning: `sk8_param_count/at/find` and
+  `sk8_rider_set_param`, which is what the Quest SK8 menu uses. Practice:
+  `SK8_FLAG_NEVER_BAIL`, and `SK8_FLAG_NO_RESPAWN` for host-handled markers.
+  Tutorials: `sk8_trick_name`, `sk8_trick_demo_path`, `sk8_flick_classify`.
+  Build: compile `clean/src/*.cpp` as C++17. No data, no other dependencies.
+- **Faithful port (`s3::game::driver::Sim`, import tier only):** it needs the
+  retail-derived `core.pack` described in §2, so it is not for a public build.
+  `Sim::load(vfs, ...)`, `step(Pad)`, `presentation()`; parity tooling in
+  `tools/parity.sh`.
+- The older `include/skate_api.h` "lite" engine is also data-free, but it
+  ports retail pieces (its gesture recogniser, trick table and some formulas),
+  so it is superseded by `sk8` for clean builds.
 
 ### 3.2 What to port from the Quest app (the AR layer)
 
-The C++ port is a snapshot of the engine before the AR work. The AR layer is
-small and mostly pure math. File references are in this repo:
+The AR layer is small and mostly pure math. With `sk8` there is nothing to
+add to the engine: collision is your raycast and rails are polylines. File
+references are in this repo:
 
 | Piece | Rust source | Notes |
 |---|---|---|
-| Real surfaces as collision | `crates/skate-game/src/physics.rs` `set_real_surfaces`, `physics/ground.rs` `course_on_real_world`, `PlacedSurfaces` (~190 lines changed vs the snapshot) | Replaces the map collision with room quads, mesh triangles and ledge edges; rebuilds the off-board grab scene. |
-| Runtime grind rails | `physics.rs` `set_grind_rails` | Builds a `grind_world::StaticProvider::authored` from polylines and re-binds the air trajectory. Never swap while grinding. |
+| Engine-neutral AR world | `crates/skate-game/src/xr/link.rs` | `ArWorld` (room quads, mesh triangles, ledge edges, piece surfaces, rails, game metres) plus `TeleportSkater` and `SkaterLink`. Both tiers' adapters consume it. |
+| Collision for `sk8` | `crates/skate-game/src/clean/collide.rs` (~150 lines, tested) | Uniform XZ grid over triangles answering segment casts; surface ids for sounds. |
+| Stepping, time scale, markers | `clean/sim.rs`, `clean/menu.rs` | Fixed 1/60 s steps from frame time × game speed, pause and frame step, teleports. |
 | Room → collision | `xr/real_world.rs` | Planes/boxes → one-sided quads (walls double-sided), furniture tops become grindable ledges, scanned mesh only where no plane covers it, and the placed pieces. Rebuilds only when the room or layout changes. |
 | Planes from the room mesh | `xr/mesh_planes.rs` (pure, 5 tests) | Spectacles has its own world mesh and plane APIs; this is the fallback/reference for fitting rideable flat patches. |
 | Park pieces | `xr/build/pieces.rs` (pure, 7 tests) | Kicker, quarter pipe, half pipe, rail, ledge, fun box, platform, bank, stairs + handrail, spine as quads + grind polylines. Winding rule: quads face out of the solid (course collision is one-sided). |
 | Placement UX | `xr/build/mod.rs` | Ray-cast ghost, snap yaw to table edges (`snap.rs`), move/turn/resize/copy/undo, starter park, layout save (`layout.rs`). |
 | World scale | `xr/rig.rs` + `build/mod.rs` `finish_rescale` | See 3.3. |
+| Park scale | `xr/build/mod.rs` `Placed::world_transform(root, park_scale)` | Every placed piece is scaled about its base (0.25-4x) while the skater keeps its size; after a change the skater is dropped onto whatever is now under it. |
+| World-space menu panel | `xr/panel.rs` | UI camera → image → unlit quad in tracking space (there is no flat HUD in XR). |
 | Spatial audio | `xr/spatial_audio.rs`, `player_audio_clean.rs` | Listener at the head, every sound emitted at the skater, distances in real metres. |
-| Clean sound driver | `player_audio_clean.rs` | Loops (rolling per surface, grinds, powerslide) faded by board speed; one-shots on state edges (pop, flip+catch, land, push, footstep, bail). ~300 lines; reads the same fields `Presentation` exposes. |
+| Clean sound driver | `player_audio_clean.rs` (`install_sk8`, `observe_sk8`) | Loops (rolling per surface, grinds, powerslide) faded by board speed; one-shots from `sk8` events (pop, flip+catch, land, push, bail, bank chime). |
 
 ### 3.3 Conventions you need
 
@@ -142,7 +136,7 @@ small and mostly pure math. File references are in this repo:
   `world = W + R_yaw * (k * tracking)`. The default is `k = 12` (a 1.8 m skater
   is 15 cm), and the left stick sets anywhere from 1 (life size) to 60. When
   `k` changes, the skater is teleported to the same real spot
-  (`SkaterRuntime::travel_to`) and the collision is rebuilt. On Spectacles
+  (`TeleportSkater`) and the collision is rebuilt. On Spectacles
   you can drop this: put a scale on the root node that holds the skater, and
   feed collision in game units (real metres × `k`).
 - **Collision winding:** quad triangles `(0,2,1)` and `(0,3,2)`, normal

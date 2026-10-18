@@ -183,5 +183,9 @@ fn read(
         menu: button(&actions.menu),
     };
     latest.0 = touch;
-    pad.set(mapper.map(&touch, time.delta_secs()));
+    let mut state = mapper.map(&touch, time.delta_secs());
+    // A menu tap is Start, which opens the flat pause menu; its camera is off
+    // in XR, so the game would freeze behind a menu nobody can see.
+    state.buttons &= !super::touch::START;
+    pad.set(state);
 }
