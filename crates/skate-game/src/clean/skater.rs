@@ -34,7 +34,9 @@ enum Clip {
     Crouch,
     Pop,
     Air,
-    Flip,
+    FlipKick,
+    FlipHeel,
+    FlipShuv,
     Land,
     Push,
     Manual,
@@ -47,8 +49,9 @@ enum Clip {
     Bail,
 }
 
-const CLIP_NAMES: [&str; 15] = [
-    "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip", "sk8_land", "sk8_push", "sk8_manual",
+const CLIPS: usize = 17;
+const CLIP_NAMES: [&str; CLIPS] = [
+    "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
     "sk8_nose_manual", "sk8_grind", "sk8_boardslide", "sk8_powerslide", "sk8_grab_toe", "sk8_grab_heel", "sk8_bail",
 ];
 /// Authored lengths, seconds (see skater_anims.py).
@@ -70,7 +73,7 @@ pub(crate) struct Avatar {
     nodes: Option<Vec<AnimationNodeIndex>>,
     player: Option<Entity>,
     ankles: Vec<Entity>,
-    weights: [f32; 15],
+    weights: [f32; CLIPS],
 }
 
 pub(crate) fn spawn(
@@ -96,7 +99,7 @@ pub(crate) fn spawn(
         nodes: None,
         player: None,
         ankles: Vec::new(),
-        weights: [0.0; 15],
+        weights: [0.0; CLIPS],
     });
 
     let mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32, metal: f32| {
@@ -206,9 +209,21 @@ pub(crate) struct Clock {
     ride: f32,
 }
 
+/// Which way the front foot leaves the board for this trick.
+fn flip_clip(trick: &str) -> Clip {
+    let t = trick.to_ascii_lowercase();
+    if t.contains("heel") || t.contains("laser") {
+        Clip::FlipHeel
+    } else if t.contains("flip") || t.contains("hardflip") {
+        Clip::FlipKick
+    } else {
+        Clip::FlipShuv
+    }
+}
+
 /// (target weight, time) per clip for this state.
-fn targets(s: &State, c: &Clock) -> [(f32, f32); 15] {
-    let mut t = [(0.0, 0.0); 15];
+fn targets(s: &State, c: &Clock, trick: &str) -> [(f32, f32); CLIPS] {
+    let mut t = [(0.0, 0.0); CLIPS];
     let mut set = |clip: Clip, w: f32, time: f32| t[clip as usize] = (w, time);
     match s.mode {
         Mode::Bail => set(Clip::Bail, 1.0, s.bail_time.unwrap_or(0.0).min(BAIL_LEN)),
@@ -221,7 +236,7 @@ fn targets(s: &State, c: &Clock) -> [(f32, f32); 15] {
             if c.since_pop < POP_LEN {
                 set(Clip::Pop, 1.0, c.since_pop);
             } else if let Some(p) = s.flip_progress {
-                set(Clip::Flip, 1.0, p * FLIP_LEN);
+                set(flip_clip(trick), 1.0, p * FLIP_LEN);
             } else if s.grab & 1 != 0 {
                 set(Clip::GrabHeel, 1.0, 0.0);
             } else if s.grab & 2 != 0 {
@@ -280,7 +295,7 @@ pub(crate) fn animate(
     }
 
     // Clip weights and times.
-    let goals = targets(b, &clock);
+    let goals = targets(b, &clock, &sim.rider.trick());
     let k = 1.0 - (-BLEND_RATE * dt).exp();
     for (w, (goal, _)) in avatar.weights.iter_mut().zip(goals.iter()) {
         *w += (goal - *w) * k;
@@ -307,7 +322,8 @@ pub(crate) fn animate(
     // with them), so the board follows the lower ankle (last frame's pose).
     if let Ok(mut tf) = board.single_mut() {
         let mut at = pos + up * DECK_CENTRE;
-        if matches!(b.mode, Mode::Air) {
+        // During a flip the legs open out of the way and the board turns below them instead.
+        if matches!(b.mode, Mode::Air) && b.flip_progress.is_none() {
             let lowest = avatar
                 .ankles
                 .iter()

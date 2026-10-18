@@ -28,8 +28,8 @@ def P(**kw):
     """A pose. Missing parts take the riding stance."""
     pose = {
         "hips": (0.0, 0.0, 0.86),
-        "hips_rot": (0.0, 0.0, 0.0),      # pitch (forward bend about X), roll, yaw (degrees)
-        "spine": (12.0, 0.0, 10.0),        # bend forward, side, twist toward the nose
+        "hips_rot": (8.0, 0.0, 0.0),      # pitch (forward bend about X), roll, yaw (degrees)
+        "spine": (16.0, 0.0, 10.0),        # bend forward, side, twist toward the nose
         "head": (-8.0, 0.0, 55.0),         # nod, tilt, turn toward the nose
         "lf": foot(FRONT_X, 0.0, 0.0, yaw=-20.0),
         "rf": foot(BACK_X, 0.0, 0.0, yaw=8.0),
@@ -42,16 +42,34 @@ def P(**kw):
 
 
 STANCE = P()
-CROUCH = P(hips=(0.0, 0.03, 0.66), hips_rot=(18, 0, 0), spine=(28, 0, 12), lh=(0.34, -0.25, 0.62), rh=(-0.34, -0.2, 0.6))
-POP_TOP = P(hips=(-0.02, 0.0, 0.94), hips_rot=(4, 0, 0), spine=(6, 0, 8),
-            lf=foot(FRONT_X + 0.06, 0.0, 0.12, yaw=-25, pitch=12), rf=foot(BACK_X - 0.04, 0.0, 0.04, yaw=8),
-            lh=(0.42, -0.08, 1.02), rh=(-0.4, -0.05, 0.98))
-AIR_TUCK = P(hips=(0.0, 0.02, 0.7), hips_rot=(20, 0, 0), spine=(26, 0, 10),
-             lf=foot(FRONT_X, 0.0, 0.18, yaw=-20), rf=foot(BACK_X, 0.0, 0.16, yaw=8),
-             lh=(0.42, -0.18, 0.9), rh=(-0.42, -0.14, 0.88))
-FLIP_OPEN = P(hips=(0.0, 0.02, 0.76), hips_rot=(14, 0, 0), spine=(18, 0, 10),
-              lf=foot(FRONT_X + 0.08, -0.06, 0.32, yaw=-30), rf=foot(BACK_X - 0.04, 0.02, 0.26, yaw=10),
-              lh=(0.45, -0.1, 1.0), rh=(-0.45, -0.08, 0.98))
+CROUCH = P(hips=(0.0, 0.05, 0.64), hips_rot=(24, 0, 0), spine=(22, 0, 12), head=(-20, 0, 55),
+           lh=(0.3, -0.3, 0.58), rh=(-0.3, -0.24, 0.56))
+# From reference footage (scripts/cleanroom/reference): at the pop the back leg snaps straight to
+# slam the tail, the front knee drives up and the front foot drags toward the nose, and the arms
+# fly up and out wide; in the air the knees come up high with the board under the feet.
+POP_TOP = P(hips=(-0.03, 0.02, 0.86), hips_rot=(14, 0, 0), spine=(12, 0, 8), head=(-18, 0, 55),
+            lf=foot(FRONT_X + 0.1, 0.0, 0.18, yaw=-25, pitch=14), rf=foot(BACK_X - 0.02, 0.0, 0.0, yaw=8),
+            lh=(0.66, -0.1, 1.22), rh=(-0.62, -0.02, 1.18), knee_out=0.55)
+AIR_TUCK = P(hips=(0.0, 0.03, 0.76), hips_rot=(16, 0, 0), spine=(16, 0, 10), head=(-20, 0, 55),
+             lf=foot(FRONT_X, 0.0, 0.3, yaw=-20), rf=foot(BACK_X, 0.0, 0.28, yaw=8),
+             lh=(0.64, -0.14, 1.2), rh=(-0.62, -0.08, 1.16), knee_out=0.6)
+# Flip tricks: the legs split up and out of the way and the board turns underneath, arms high and
+# wide, then the feet come back down onto it. Kickflips kick the front foot out forward over the
+# toe side, heelflips forward over the heel side; shove-its lift both feet straight up.
+def flip_open(front_y, back_z):
+    return P(hips=(0.0, 0.02, 0.86), hips_rot=(8, 0, 0), spine=(8, 0, 8), head=(-26, 0, 50),
+             lf=foot(FRONT_X + 0.24, front_y, 0.42, yaw=-40, pitch=-15), rf=foot(BACK_X - 0.1, 0.0, back_z, yaw=12),
+             lh=(0.72, -0.05, 1.42), rh=(-0.7, 0.0, 1.38), knee_out=0.7)
+
+
+FLIP_KICK = flip_open(-0.26, 0.24)
+FLIP_HEEL = flip_open(0.2, 0.3)
+FLIP_SHUV = P(hips=(0.0, 0.02, 0.86), hips_rot=(10, 0, 0), spine=(10, 0, 8), head=(-24, 0, 50),
+              lf=foot(FRONT_X + 0.02, 0.0, 0.38, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.36, yaw=8),
+              lh=(0.7, -0.08, 1.34), rh=(-0.68, -0.02, 1.3), knee_out=0.6)
+FLIP_CATCH = P(hips=(0.0, 0.03, 0.78), hips_rot=(16, 0, 0), spine=(18, 0, 10), head=(-26, 0, 50),
+               lf=foot(FRONT_X, 0.0, 0.12, yaw=-20), rf=foot(BACK_X, 0.0, 0.11, yaw=8),
+               lh=(0.66, -0.1, 1.24), rh=(-0.64, -0.04, 1.2), knee_out=0.55)
 LAND_LOW = P(hips=(0.0, 0.04, 0.6), hips_rot=(22, 0, 0), spine=(30, 0, 12), lh=(0.36, -0.28, 0.62), rh=(-0.36, -0.24, 0.6))
 MANUAL = P(hips=(-0.13, 0.0, 0.8), hips_rot=(-4, 0, 0), spine=(-2, 0, 12), lh=(0.38, -0.05, 1.02), rh=(-0.5, -0.05, 1.0))
 NOSE_MANUAL = P(hips=(0.14, 0.0, 0.78), hips_rot=(14, 0, 0), spine=(24, 0, 14), lh=(0.52, -0.08, 1.0), rh=(-0.36, -0.08, 1.04))
@@ -70,14 +88,27 @@ GRAB_HEEL = P(hips=(0.0, 0.05, 0.6), hips_rot=(26, 0, 0), spine=(34, 0, 14),
 
 
 def push_frame(phase):
-    """Kick-push: the body turns toward the nose and the back foot sweeps the ground on the chest side."""
-    swing = math.sin(phase * math.pi)
-    x = 0.12 - 0.62 * phase
-    lift = 0.07 * (1 - swing)
-    return P(hips=(0.05, -0.02, 0.8 - 0.05 * swing), hips_rot=(10, 0, 55), spine=(12, 0, 20), head=(-6, 0, 20),
-             lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=60),
-             rf=foot(x, -0.24, DECK_TOP_TO_GROUND + lift, yaw=55),
-             lh=(0.45, -0.18, 0.92), rh=(-0.3 - 0.15 * swing, -0.12, 0.88 + 0.05 * swing))
+    """Kick-push, after reference footage: the front foot turns to point down the board and the hips
+    and chest face the way of travel; the pushing foot swings forward, plants beside the front truck,
+    drives straight back along the ground, then lifts and comes forward again. The front knee bends
+    as the foot plants; the arms swing a little against the leg."""
+    plant, release = 0.18, 0.62
+    if phase < plant:                       # swinging forward to plant
+        k = phase / plant
+        x, lift = -0.35 + 0.47 * k, 0.1 * math.sin(math.pi * (0.5 + 0.5 * k))
+    elif phase < release:                   # driving back on the ground
+        k = (phase - plant) / (release - plant)
+        x, lift = 0.12 - 0.62 * k, 0.0
+    else:                                   # lifting off and coming forward
+        k = (phase - release) / (1 - release)
+        x, lift = -0.5 + 0.15 * k, 0.12 * math.sin(math.pi * k)
+    drive = math.sin(math.pi * min(1.0, max(0.0, (phase - plant) / (release - plant))))
+    swing = math.sin(2 * math.pi * phase)
+    return P(hips=(0.06, -0.06, 0.78 - 0.11 * drive), hips_rot=(20 + 8 * drive, 0, 75), spine=(18 + 6 * drive, 0, 12),
+             head=(-16, 0, 8),
+             lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=80),
+             rf=foot(x, -0.17, DECK_TOP_TO_GROUND + lift, yaw=78),
+             lh=(0.36 + 0.1 * swing, -0.3, 0.74), rh=(-0.1 - 0.12 * swing, -0.26, 0.72), knee_out=0.5)
 
 
 def bail_frame(t):
@@ -100,7 +131,9 @@ CLIPS = {
     "crouch": (False, [(0.0, CROUCH), (0.1, CROUCH)]),
     "pop": (False, [(0.0, CROUCH), (0.1, POP_TOP), (0.3, AIR_TUCK)]),
     "air": (False, [(0.0, AIR_TUCK), (0.1, AIR_TUCK)]),
-    "flip": (False, [(0.0, AIR_TUCK), (0.12, FLIP_OPEN), (0.3, FLIP_OPEN), (0.45, AIR_TUCK)]),
+    "flip_kick": (False, [(0.0, POP_TOP), (0.1, FLIP_KICK), (0.26, FLIP_KICK), (0.38, FLIP_CATCH), (0.45, AIR_TUCK)]),
+    "flip_heel": (False, [(0.0, POP_TOP), (0.1, FLIP_HEEL), (0.26, FLIP_HEEL), (0.38, FLIP_CATCH), (0.45, AIR_TUCK)]),
+    "flip_shuv": (False, [(0.0, POP_TOP), (0.1, FLIP_SHUV), (0.26, FLIP_SHUV), (0.38, FLIP_CATCH), (0.45, AIR_TUCK)]),
     "land": (False, [(0.0, AIR_TUCK), (0.08, LAND_LOW), (0.35, STANCE)]),
     "push": (True, [(i / 10 * 0.62, push_frame(i / 10)) for i in range(11)]),
     "manual": (False, [(0.0, MANUAL), (0.1, MANUAL)]),
@@ -134,13 +167,37 @@ def add_controls(rig):
         pb = rig.pose.bones
         ik = pb[knee].constraints.new("IK")
         ik.target, ik.pole_target, ik.chain_count = c[f"foot_{side}"], c[f"kpole_{side}"], 2
-        ik.pole_angle = math.radians(90)  # knees toward the pole in front (checked by render)
+        # pole angles are set by calibrate_poles (left and right rolls mirror each other)
         rot = pb[ankle].constraints.new("COPY_ROTATION")
         rot.target = c[f"foot_{side}"]
         ik = pb[elbow].constraints.new("IK")
         ik.target, ik.pole_target, ik.chain_count = c[f"hand_{side}"], c[f"epole_{side}"], 2
-        ik.pole_angle = math.radians(-90)
     return c
+
+
+def calibrate_poles(rig, c, rest_ankle):
+    """Pick each IK chain's pole angle so the knee or elbow points straight at its pole target
+    (the bones' rolls differ per side, so no single angle works for both)."""
+    apply_pose(rig, c, STANCE, rest_ankle)
+    pb = rig.pose.bones
+    for mid, root, end, pole in (("knee.L", "leg.L", "ankle.L", "kpole_l"), ("knee.R", "leg.R", "ankle.R", "kpole_r"),
+                                 ("elbow.L", "arm.L", "wrist.L", "epole_l"), ("elbow.R", "arm.R", "wrist.R", "epole_r")):
+        ik = next(con for con in pb[mid].constraints if con.type == "IK")
+        best = None
+        for deg in range(-180, 180, 2):
+            ik.pole_angle = math.radians(deg)
+            bpy.context.view_layer.update()
+            a = rig.matrix_world @ pb[root].head
+            axis = ((rig.matrix_world @ pb[end].head) - a).normalized()
+            off = (rig.matrix_world @ pb[mid].head) - a
+            off -= axis * off.dot(axis)
+            want = c[pole].location - a
+            want -= axis * want.dot(axis)
+            err = off.angle(want) if off.length > 1e-5 and want.length > 1e-5 else 9.0
+            if best is None or err < best[0]:
+                best = (err, deg)
+        ik.pole_angle = math.radians(best[1])
+        print(f"SKATER pole {mid}: {best[1]} deg (off by {math.degrees(best[0]):.1f})")
 
 
 def apply_pose(rig, c, pose, rest_ankle):
@@ -190,6 +247,7 @@ def bake_clips(rig):
     rest_ankle = {s: (rig.matrix_world @ rig.data.bones[f"ankle.{s.upper()}"].matrix_local).to_quaternion()
                   for s in ("l", "r")}
     c = add_controls(rig)
+    calibrate_poles(rig, c, rest_ankle)
     bpy.context.view_layer.objects.active = rig
     made = []
     for name, (loop, keys) in CLIPS.items():

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pose-estimate reference skateboarding clips (MediaPipe Pose Landmarker, heavy model).
 
-    <venv>/bin/python extract_poses.py <reference dir>
+    <venv>/bin/python extract_poses.py <reference dir> [trick ...]   (tricks first, in that order)
 
 For every videos/<trick>/<id>.(mp4|webm) under the reference dir, writes poses/<trick>/<id>.npz:
   world  (frames, 33, 3)  metric 3D joints, hip-centred, y up (MediaPipe world landmarks, y flipped)
@@ -69,7 +69,10 @@ def extract(video, out):
 
 
 def main():
-    for video in sorted((ROOT / "videos").glob("*/*")):
+    first = sys.argv[2:]
+    videos = sorted((ROOT / "videos").glob("*/*"),
+                    key=lambda v: (first.index(v.parent.name) if v.parent.name in first else len(first), str(v)))
+    for video in videos:
         if video.suffix not in (".mp4", ".webm", ".mkv"):
             continue
         out = ROOT / "poses" / video.parent.name / (video.stem + ".npz")

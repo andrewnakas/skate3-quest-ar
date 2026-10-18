@@ -158,15 +158,19 @@ def preview(clips):
     rig = bpy.data.objects["skater_rig"]
     rig.animation_data_create()
     frames = []
+    views = {"front": ((2.2, -3.4, 1.3), (80, 0, 33)), "side": ((4.0, 0.0, 0.8), (90, 0, 90))}
     for name in clips:
         act = bpy.data.actions[name]
         rig.animation_data.action = act
         lo, hi = act.frame_range
         scene.frame_set(int((lo + hi) / 2))
-        out = PREVIEW.with_name(f"{PREVIEW.stem}_{name}.png")
-        scene.render.filepath = str(out)
-        bpy.ops.render.render(write_still=True)
-        frames.append(out)
+        for view, (loc, rot) in views.items():
+            cam.location = loc
+            cam.rotation_euler = [math.radians(a) for a in rot]
+            out = PREVIEW.with_name(f"{PREVIEW.stem}_{view}_{name}.png")
+            scene.render.filepath = str(out)
+            bpy.ops.render.render(write_still=True)
+            frames.append(out)
     rig.animation_data.action = None
     bpy.data.objects.remove(board)
     bpy.data.objects.remove(cam)
