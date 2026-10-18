@@ -180,6 +180,21 @@ fn build(options: Options) -> App {
                 .before(feed_sounds),
         );
     }
+    // SK8_FIXED_DT=1: every frame advances exactly 1/60 s (deterministic SK8_ANIM_TRACE runs).
+    if std::env::var_os("SK8_FIXED_DT").is_some() {
+        app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(std::time::Duration::from_secs_f64(
+            1.0 / 60.0,
+        )));
+        // SK8_FRAMES=n: quit after n frames, so runs cover exactly the same simulated time.
+        if let Some(limit) = std::env::var("SK8_FRAMES").ok().and_then(|v| v.parse::<u32>().ok()) {
+            app.add_systems(Last, move |mut n: Local<u32>, mut exit: MessageWriter<AppExit>| {
+                *n += 1;
+                if *n >= limit {
+                    exit.write(AppExit::Success);
+                }
+            });
+        }
+    }
     // SK8_CAPTURE=<dir>: every frame advances exactly 1/60 s and is saved (f00000.jpg, ...), so a
     // capture is deterministic however slowly frames are written; SK8_CAPTURE_FRAMES stops it.
     if let Ok(dir) = std::env::var("SK8_CAPTURE") {

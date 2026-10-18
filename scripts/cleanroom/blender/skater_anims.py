@@ -53,7 +53,7 @@ CROUCH = P(hips=(0.0, 0.05, 0.74), hips_rot=(22, 0, 0), spine=(20, 0, 12), head=
 POP_TOP = P(hips=(-0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 8), head=(-18, 0, 55),
             lf=foot(FRONT_X + 0.1, 0.0, 0.16, yaw=-25, pitch=14), rf=foot(BACK_X - 0.02, 0.0, 0.0, yaw=8),
             # hands up and out but elbows kept bent: a near-straight arm lets the elbow flip about
-            lh=(0.62, -0.12, 1.16), rh=(-0.6, -0.06, 1.13), knee_out=0.55)
+            lh=(0.58, -0.14, 1.07), rh=(-0.56, -0.08, 1.04), knee_out=0.55)
 AIR_TUCK = P(hips=(0.0, 0.03, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 10), head=(-20, 0, 55),
              lf=foot(FRONT_X, 0.0, 0.22, yaw=-20), rf=foot(BACK_X, 0.0, 0.21, yaw=8),
              lh=(0.68, -0.1, 1.2), rh=(-0.66, -0.04, 1.17), knee_out=0.6)
@@ -75,7 +75,7 @@ FLIP_SHUV = P(hips=(0.0, 0.04, 0.88), hips_rot=(22, 0, 0), spine=(20, 0, 8), hea
               lh=(0.62, -0.1, 1.44), rh=(-0.6, -0.04, 1.42), knee_out=0.65)
 FLIP_CATCH = P(hips=(0.0, 0.03, 0.88), hips_rot=(16, 0, 0), spine=(18, 0, 10), head=(-26, 0, 50),
                lf=foot(FRONT_X, 0.0, 0.1, yaw=-20), rf=foot(BACK_X, 0.0, 0.09, yaw=8),
-               lh=(0.66, -0.1, 1.16), rh=(-0.64, -0.04, 1.13), knee_out=0.55)
+               lh=(0.64, -0.1, 1.32), rh=(-0.62, -0.04, 1.29), knee_out=0.55)  # arms still high at the catch
 LAND_LOW = P(hips=(0.0, 0.04, 0.72), hips_rot=(22, 0, 0), spine=(22, 0, 12), lh=(0.4, -0.26, 0.8), rh=(-0.4, -0.2, 0.78))
 MANUAL = P(hips=(-0.13, 0.0, 0.8), hips_rot=(-4, 0, 0), spine=(-2, 0, 12), lh=(0.38, -0.05, 1.02), rh=(-0.5, -0.05, 1.0))
 NOSE_MANUAL = P(hips=(0.14, 0.0, 0.78), hips_rot=(14, 0, 0), spine=(24, 0, 14), lh=(0.52, -0.08, 1.0), rh=(-0.36, -0.08, 1.04))
@@ -98,7 +98,7 @@ GRAB_HEEL = P(hips=(0.0, 0.05, 0.6), hips_rot=(26, 0, 0), spine=(34, 0, 14),
 # the tuck then reaches the legs back down for the landing.
 POP_DRIVE = P(hips=(-0.02, 0.03, 0.86), hips_rot=(16, 0, 0), spine=(14, 0, 10), head=(-20, 0, 55),
               lf=foot(FRONT_X + 0.04, 0.0, 0.05, yaw=-22, pitch=6), rf=foot(BACK_X - 0.01, 0.0, 0.0, yaw=8),
-              lh=(0.42, -0.22, 0.86), rh=(-0.42, -0.16, 0.84), knee_out=0.45)
+              lh=(0.5, -0.2, 0.95), rh=(-0.49, -0.14, 0.93), knee_out=0.45)  # arms on their way up
 POP_SLIDE = P(hips=(0.0, 0.02, 0.95), hips_rot=(12, 0, 0), spine=(12, 0, 9), head=(-20, 0, 55),
               lf=foot(FRONT_X + 0.06, 0.0, 0.17, yaw=-22, pitch=4), rf=foot(BACK_X, 0.0, 0.1, yaw=8),
               lh=(0.68, -0.1, 1.22), rh=(-0.66, -0.04, 1.19), knee_out=0.6)
@@ -115,9 +115,10 @@ AIR_REACH = P(hips=(0.0, 0.03, 0.94), hips_rot=(14, 0, 0), spine=(16, 0, 10), he
               lh=(0.48, -0.18, 0.98), rh=(-0.46, -0.12, 0.95), knee_out=0.5)
 LAND_CONTACT = P(hips=(0.0, 0.03, 0.84), hips_rot=(16, 0, 0), spine=(18, 0, 11), head=(-18, 0, 55),
                  lh=(0.6, -0.16, 1.06), rh=(-0.6, -0.1, 1.03), knee_out=0.5)
+# The arms come down from the air over the whole absorb, not in the first few frames.
 LAND_DEEP = P(hips=(0.0, 0.05, 0.7), hips_rot=(24, 0, 0), spine=(24, 0, 12), head=(-14, 0, 55),
-              lh=(0.42, -0.27, 0.76), rh=(-0.42, -0.21, 0.74), knee_out=0.45)
-LAND_RISE = P(hips=(0.0, 0.01, 0.87), hips_rot=(9, 0, 0), spine=(15, 0, 10), lh=(0.34, -0.14, 0.86), rh=(-0.35, -0.11, 0.85))
+              lh=(0.54, -0.22, 0.94), rh=(-0.54, -0.16, 0.92), knee_out=0.45)
+LAND_RISE = P(hips=(0.0, 0.01, 0.87), hips_rot=(9, 0, 0), spine=(15, 0, 10), lh=(0.4, -0.15, 0.9), rh=(-0.41, -0.12, 0.89))
 
 
 def flip_part(open_pose, k):
@@ -300,8 +301,9 @@ def sample(keys, t, looped):
 
 
 for _name, _open in (("flip_kick", FLIP_KICK), ("flip_heel", FLIP_HEEL), ("flip_shuv", FLIP_SHUV)):
-    CLIPS[_name] = (False, [(0.0, POP_TOP), (0.07, flip_part(_open, 0.6)), (0.14, _open), (0.26, _open),
-                            (0.37, FLIP_CATCH), (0.45, AIR_TUCK)])
+    # The arms take most of a fifth of a second to go up into the V.
+    CLIPS[_name] = (False, [(0.0, POP_TOP), (0.08, flip_part(_open, 0.5)), (0.18, _open), (0.28, _open),
+                            (0.38, FLIP_CATCH), (0.45, AIR_TUCK)])
 
 
 # ---------------------------------------------------------------- rig controls

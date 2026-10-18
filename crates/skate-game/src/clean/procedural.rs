@@ -116,7 +116,10 @@ impl Loose {
 /// far a pinned foot slides on the deck, flagging spikes with the mode they happened in.
 #[derive(Default)]
 struct Trace {
+    /// Frames traced so far: the first half second (the rest pose giving way to the clips) is skipped.
+    frames: u32,
     last: Vec<Quat>,
+    last_local: Vec<Quat>,
     feet: [Option<Vec3>; 2],
     worst: (f32, &'static str, String),
     slip: f32,
@@ -228,7 +231,11 @@ pub(crate) fn layer(
     let s: &State = b;
     let pos = Vec3::from_array(a.position).lerp(Vec3::from_array(b.position), t);
     let rider_rot = Quat::from_array(a.rider_rot).slerp(Quat::from_array(b.rider_rot), t);
-    let board_rot = Quat::from_array(a.board_rot).slerp(Quat::from_array(b.board_rot), t);
+    // A board is the same either way round: when the engine snaps a shove-it's half turn back on
+    // landing, blend from the equivalent orientation instead of sweeping half a turn in one frame.
+    let (qa, qb) = (Quat::from_array(a.board_rot), Quat::from_array(b.board_rot));
+    let qa = if ((qa.inverse() * qb) * Vec3::Z).z < -0.5 { qa * Quat::from_rotation_y(std::f32::consts::PI) } else { qa };
+    let board_rot = qa.slerp(qb, t);
     let lean = a.lean + (b.lean - a.lean) * t;
     let up = rider_rot * Vec3::Y;
     let fwd = rider_rot * Vec3::Z;
@@ -361,12 +368,24 @@ pub(crate) fn layer(
     }
 
     // Feet onto the deck.
-    let deck_m = deck_tf.compute_affine();
+    // Feet attach to the deck as the rider sees it: during a flip (catch included) that is an
+    // un-flipped deck in the same place, or the feet would twist with the spinning board and, after a
+    // shove-it, land on the wrong ends of it.
+    let pin_tf = if s.flip_progress.is_some() {
+        Transform::from_translation(at).with_rotation(rider_rot)
+    } else {
+        // A board is the same either way round: a deck turned more than a quarter turn from the
+        // rider (after a shove-it) is used half a turn back, so the feet keep their ends.
+        let rel = rider_rot.inverse() * deck;
+        let nose = rel * Vec3::Z;
+        let rel = if nose.z < 0.0 { rel * Quat::from_rotation_y(std::f32::consts::PI) } else { rel };
+        Transform::from_translation(at).with_rotation(rider_rot * rel)
+    };
+    let deck_m = pin_tf.compute_affine();
     let deck_inv = deck_m.inverse();
     let sole = skater::DECK_TOP - skater::DECK_CENTRE;
     // Pinned feet turn with the deck (manual pitch, carve roll, powerslide yaw, the pop).
-    let tilt = deck * rider_rot.inverse();
-    let tilt = if flipping { Quat::IDENTITY } else { tilt };
+    let tilt = pin_tf.rotation * rider_rot.inverse();
     for (i, chain) in set.legs.iter().enumerate() {
         let Some(ankle) = ankles.get(i).copied() else { continue };
         let height = deck_inv.transform_point3(ankle).y - sole - skater::ANKLE;
@@ -403,8 +422,11 @@ pub(crate) fn layer(
             let to_rider = rot(&root).inverse();
             let now: Vec<Quat> =
                 set.watched.iter().map(|(e, _)| in_space(*e, rider, &bones).map_or(Quat::IDENTITY, |m| to_rider * rot(&m))).collect();
+            let local: Vec<Quat> =
+                set.watched.iter().map(|(e, _)| bones.get(*e).map_or(Quat::IDENTITY, |(t, _)| t.rotation)).collect();
             let mode = format!("{:?} flip={:?} push={:?}", s.mode, s.flip_progress.map(|p| (p * 100.0).round()), s.push_phase.is_some());
-            if tr.last.len() == now.len() {
+            tr.frames += 1;
+            if tr.last.len() == now.len() && tr.frames > 30 {
                 for (k, (q, last)) in now.iter().zip(&tr.last).enumerate() {
                     let deg = q.angle_between(*last).to_degrees() / (dt * 60.0);
                     if deg > SPIKE_DEG {
@@ -420,6 +442,10 @@ pub(crate) fn layer(
                             .map(|(w, i)| format!("{}={:.2}@{:.2}", skater::CLIP_NAMES[*i], w, avatar.times[*i]))
                             .collect();
                         info!("SK8 anim jump clips: {}", playing.join(" "));
+                        if let Some(prev) = tr.last_local.get(k) {
+                            info!("SK8 anim jump local {} {:?} -> {:?} ({:.0} deg)", set.watched[k].1, prev, local[k],
+                                prev.angle_between(local[k]).to_degrees());
+                        }
                     }
                     if deg > tr.worst.0 {
                         tr.worst = (deg, set.watched[k].1, mode.clone());
@@ -427,6 +453,7 @@ pub(crate) fn layer(
                 }
             }
             tr.last = now;
+            tr.last_local = local;
             for (i, chain) in set.legs.iter().enumerate() {
                 let foot = in_space(chain[2], rider, &bones).map(|m| deck_inv.transform_point3(m.translation.into()));
                 if let (Some(f), Some(prev)) = (foot, tr.feet[i]) {
