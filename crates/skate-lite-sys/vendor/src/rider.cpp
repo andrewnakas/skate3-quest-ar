@@ -207,6 +207,9 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	if (mode_ == SK8_MODE_SLIDE)
 		rate *= 0.5f;
 	fwd_ = unit(flatten(rotate(fwd_, up_, -rate * kDt), up_), fwd_);
+	// The wheels carry the motion round with the board (a carve keeps its speed).
+	if (mode_ != SK8_MODE_SLIDE)
+		vel_ = rotate(vel_, up_, -rate * kDt);
 
 	// gravity along the surface
 	vel_ += flatten(V3{0, -p[Gravity], 0}, up_) * kDt;
@@ -461,7 +464,8 @@ void Rider::land(const Hit &h)
 	fakie_ = fakie;
 	// line the wheels up with the motion
 	V3 travel = fakie ? -fwd_ : fwd_;
-	vel_ = travel * dot(vflat, travel) + vflat * 0.15f;
+	float along = dot(vflat, travel);
+	vel_ = travel * along + (vflat - travel * along) * 0.15f;
 	bool clean = tilt < p[LandClean] * kDeg && side < 20 * kDeg;
 
 	int halves = int(std::lround(std::fabs(spin_total_) / kPi));
