@@ -196,10 +196,13 @@ pub(crate) fn views(
     if beside.dot(chest) < 0.0 {
         beside = -beside;
     }
-    let aim = pos + Vec3::Y * 0.85;
+    // SK8_VIEW_DIST / SK8_VIEW_AIM: closer in and lower for checking the feet on the board.
+    let env = |k: &str, d: f32| std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d);
+    let (dist, aim_y) = (env("SK8_VIEW_DIST", 4.6), env("SK8_VIEW_AIM", 0.85));
+    let aim = pos + Vec3::Y * aim_y;
     for (v, mut cam, mut tf) in &mut fixed {
         cam.viewport = viewport(1 + v.0 as u32);
-        let at = aim + if v.0 == 0 { beside } else { *d } * 4.6 + Vec3::Y * 0.1;
+        let at = aim + if v.0 == 0 { beside } else { *d } * dist + Vec3::Y * 0.1;
         *tf = Transform::from_translation(at).looking_at(aim, Vec3::Y);
     }
 }

@@ -5,6 +5,7 @@
 //! Nothing here reads a file from an imported disc. The imported-disc tier
 //! (the faithful port) runs instead when `files/use-retail-data` exists on
 //! the Quest, or without `--clean` on the desktop.
+mod board;
 mod collide;
 mod input;
 mod menu;

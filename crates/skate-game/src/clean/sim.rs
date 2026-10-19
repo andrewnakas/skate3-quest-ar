@@ -62,7 +62,11 @@ impl CleanSkate {
     }
 
     pub(crate) fn place(&mut self, position: Vec3, facing: f32) {
-        self.rider.place(position.to_array(), facing, 0.0);
+        self.place_rolling(position, facing, 0.0);
+    }
+
+    pub(crate) fn place_rolling(&mut self, position: Vec3, facing: f32, speed: f32) {
+        self.rider.place(position.to_array(), facing, speed);
         self.spawn = (position.to_array(), facing);
         self.current = self.rider.state();
         self.previous = self.current;

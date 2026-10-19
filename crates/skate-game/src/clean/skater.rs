@@ -10,15 +10,9 @@ use bevy::prelude::*;
 use skate_lite_sys::{EventKind, Mode, State};
 use std::f32::consts::FRAC_PI_2;
 
-pub(crate) const DECK_TOP: f32 = 0.105;
-const DECK_LEN: f32 = 0.8;
-const DECK_WIDTH: f32 = 0.205;
-const DECK_THICK: f32 = 0.013;
-const KICK_LEN: f32 = 0.13;
-const KICK_ANGLE: f32 = 0.33;
-const WHEEL_R: f32 = 0.027;
-const AXLE_Z: f32 = 0.235;
-pub(crate) const DECK_CENTRE: f32 = 0.09;
+
+pub(crate) use super::board::{DECK_CENTRE, DECK_TOP};
+use super::board::{TRUCK_Z, WHEEL_R};
 /// Ankle height above the sole in the authored clips.
 pub(crate) const ANKLE: f32 = 0.075;
 /// Where the pop clip reaches its full extension (the flip clips start from that pose).
@@ -139,64 +133,9 @@ pub(crate) fn spawn(
         times: [0.0; CLIPS],
     });
 
-    let mat = |m: &mut Assets<StandardMaterial>, c: Color, rough: f32, metal: f32| {
-        m.add(StandardMaterial {
-            base_color: c,
-            perceptual_roughness: rough,
-            metallic: metal,
-            ..default()
-        })
-    };
-    let deck = mat(&mut materials, Color::srgb(0.86, 0.62, 0.3), 0.6, 0.0);
-    let grip = mat(&mut materials, Color::srgb(0.06, 0.06, 0.07), 0.95, 0.0);
-    let metal = mat(&mut materials, Color::srgb(0.72, 0.73, 0.76), 0.35, 0.9);
-    let urethane = mat(&mut materials, Color::srgb(0.95, 0.93, 0.86), 0.5, 0.0);
     // Board: root at the deck centre so flips turn about it.
-    let board = commands
-        .spawn((BoardRoot, Transform::default(), Visibility::default()))
-        .id();
-    let mut piece = |mesh: Mesh, material: &Handle<StandardMaterial>, t: Transform| {
-        let child = commands
-            .spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()), t))
-            .id();
-        commands.entity(board).add_child(child);
-    };
-    let flat = DECK_LEN - 2.0 * KICK_LEN;
-    let y = DECK_TOP - DECK_CENTRE - DECK_THICK * 0.5;
-    piece(Cuboid::new(DECK_WIDTH, DECK_THICK, flat).into(), &deck, Transform::from_xyz(0.0, y, 0.0));
-    piece(
-        Cuboid::new(DECK_WIDTH * 0.98, 0.002, flat).into(),
-        &grip,
-        Transform::from_xyz(0.0, y + DECK_THICK * 0.5 + 0.001, 0.0),
-    );
-    for end in [1.0f32, -1.0] {
-        let hinge = Vec3::new(0.0, y, end * flat * 0.5);
-        let rot = Quat::from_rotation_x(-end * KICK_ANGLE);
-        let centre = hinge + rot * Vec3::new(0.0, 0.0, end * KICK_LEN * 0.5);
-        piece(
-            Cuboid::new(DECK_WIDTH * 0.96, DECK_THICK, KICK_LEN).into(),
-            &deck,
-            Transform::from_translation(centre).with_rotation(rot),
-        );
-        piece(
-            Cuboid::new(DECK_WIDTH * 0.96, 0.002, KICK_LEN).into(),
-            &grip,
-            Transform::from_translation(centre + rot * Vec3::Y * (DECK_THICK * 0.5 + 0.001)).with_rotation(rot),
-        );
-        let axle = WHEEL_R - DECK_CENTRE;
-        piece(
-            Cuboid::new(0.16, 0.03, 0.045).into(),
-            &metal,
-            Transform::from_xyz(0.0, (axle + y) * 0.5, end * AXLE_Z),
-        );
-        for x in [-1.0f32, 1.0] {
-            piece(
-                Cylinder::new(WHEEL_R, 0.032).mesh().resolution(20).into(),
-                &urethane,
-                Transform::from_xyz(x * 0.085, axle, end * AXLE_Z).with_rotation(Quat::from_rotation_z(FRAC_PI_2)),
-            );
-        }
-    }
+    let board = commands.spawn((BoardRoot, Transform::default(), Visibility::default())).id();
+    super::board::build(&mut commands, board, &mut meshes, &mut materials);
 }
 
 /// Once the glTF is in: one animation graph with every clip, on the scene's player.
@@ -465,7 +404,7 @@ pub(crate) fn pop_snap(deck: Quat, since_pop: f32, nollie: bool) -> (Vec3, Quat)
     // A nollie snaps the nose down and pivots on the front wheels instead.
     let end = if nollie { 1.0 } else { -1.0 };
     let pitch = Quat::from_rotation_x(end * POP_PITCH * k);
-    let pivot = Vec3::new(0.0, WHEEL_R - DECK_CENTRE, end * AXLE_Z);
+    let pivot = Vec3::new(0.0, WHEEL_R - DECK_CENTRE, end * TRUCK_Z);
     (deck * (pivot - pitch * pivot), deck * pitch)
 }
 

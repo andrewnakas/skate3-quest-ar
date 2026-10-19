@@ -16,12 +16,18 @@ FPS = 30
 DECK_TOP_TO_GROUND = -0.105  # the ground under the wheels, in the rider frame
 ANKLE = 0.075                # ankle height above whatever the foot stands on
 
-FRONT_X, BACK_X = 0.22, -0.25
+# Where the feet stand on the deck (board.rs has the same deck: trucks at +-0.2, kicks from +-0.245):
+# the front foot over the front bolts, the back foot on the start of the tail.
+FRONT_X, BACK_X = 0.19, -0.28
+# The ankle sits toward the heel, so a foot centred across the deck has its ankle this far to the heel
+# side (+Y; the toes point -Y): with the ankle on the centre line the toes hung over the toe edge.
+FOOT_Y = 0.05
 
 
 def foot(x, y=0.0, z=0.0, yaw=0.0, pitch=0.0):
-    """Ankle target for a foot standing at (x, y) on a surface at height z; yaw turns the toes."""
-    return {"at": (x, y, z + ANKLE), "rot": (pitch, 0.0, yaw)}
+    """Ankle target for a foot centred across the deck at x (y offsets it), standing on a surface at
+    height z; yaw turns the toes, pitch tips them."""
+    return {"at": (x, y + FOOT_Y, z + ANKLE), "rot": (pitch, 0.0, yaw)}
 
 
 def P(**kw):
@@ -223,7 +229,7 @@ def push_frame(phase):
     return P(hips=(0.05, -0.05, 0.83 - 0.09 * drive), hips_rot=(8 + 6 * drive, 0, 75),
              spine=(8 + 5 * drive, 0, 12 + 20 * arm), head=(-6, 0, 8 - 15 * arm),
              lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=80),
-             rf=foot(x, -0.17, DECK_TOP_TO_GROUND + lift, yaw=78),
+             rf=foot(x, -0.22, DECK_TOP_TO_GROUND + lift, yaw=78),  # beside the toe edge
              lh=(0.12 - arm, 0.28, 0.8 + 0.2 * max(0.0, -arm)),
              rh=(0.12 + arm, -0.42, 0.8 + 0.2 * max(0.0, arm)), knee_out=0.5)
 

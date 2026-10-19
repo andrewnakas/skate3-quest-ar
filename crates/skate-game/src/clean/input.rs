@@ -186,9 +186,19 @@ pub(crate) fn log_gamepads(pads: Query<(Entity, Option<&Name>), Added<Gamepad>>)
     }
 }
 
+/// The slot (one trick) a slotted demo is in, so each starts again at the spawn.
+fn demo_slot(t: f32) -> Option<usize> {
+    match std::env::var("SK8_DEMO").as_deref() {
+        Ok("flips") if t >= 2.0 => Some(((t - 2.0) / 3.0) as usize),
+        Ok("grabs") if t >= 3.0 => Some(((t - 3.0) / 2.6) as usize),
+        _ => None,
+    }
+}
+
 pub(crate) fn read_desktop(
     time: Res<Time<Real>>,
     mut demo: Local<Option<f32>>,
+    mut demo_at: Local<Option<usize>>,
     keys: Res<ButtonInput<KeyCode>>,
     pads: Query<&Gamepad>,
     ui: Res<UiCapture>,
@@ -200,10 +210,18 @@ pub(crate) fn read_desktop(
     }
     if demo.is_none() && std::env::var_os("SK8_DEMO").is_some() {
         *demo = Some(0.0);
+        // Face away from the test park: open floor, so no run ends in a box.
+        sim.place(Vec3::ZERO, std::f32::consts::PI);
     }
     if let Some(t) = demo.as_mut() {
         if !sim.paused {
             *t += time.delta_secs().min(0.1) * sim.time_scale;
+        }
+        let slot = demo_slot(*t);
+        if slot.is_some() && slot != *demo_at {
+            *demo_at = slot;
+            // Back to the spawn, rolling, for the next trick (open floor ahead every time).
+            sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 4.0);
         }
         sim.input = match std::env::var("SK8_DEMO").as_deref() {
             Ok("grabs") => demo_grabs(*t),

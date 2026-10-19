@@ -433,9 +433,11 @@ pub(crate) fn layer(
         if w < 1e-3 {
             continue;
         }
-        local.y = sole + skater::ANKLE;
         local.x = local.x.clamp(-PIN_HALF_WIDTH, PIN_HALF_WIDTH);
         local.z = local.z.clamp(-PIN_HALF_LEN, PIN_HALF_LEN);
+        // on the deck's real surface: concave across, rising up the nose and tail
+        let u = local.x / (super::board::DECK_WIDTH * 0.5);
+        local.y = super::board::deck_top(local.z, u) + skater::ANKLE;
         let target = ankle.lerp(deck_m.transform_point3(local), w);
         two_bone(*chain, target, Quat::IDENTITY.slerp(tilt, w), rider, &mut bones);
     }
