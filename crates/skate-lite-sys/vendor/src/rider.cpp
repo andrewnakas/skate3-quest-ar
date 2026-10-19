@@ -271,10 +271,12 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	} else {
 		since_stroke_ += kDt;
 	}
-	if ((in.buttons & SK8_PUSH) && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 &&
+	if ((in.buttons & (SK8_PUSH | SK8_PUSH_MONGO)) && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 &&
 		std::fabs(dot(vel_, travel)) < p[PushTop]) {
-		// straight on from the last stroke the foot is already off the board
-		push_lead_ = since_stroke_ < 0.05f ? 0.0f : p[PushLead];
+		bool mongo = (in.buttons & SK8_PUSH_MONGO) || p[PushMongo] > 0.5f;
+		// straight on from the last stroke (same foot) the foot is already off the board
+		push_lead_ = since_stroke_ < 0.05f && mongo == push_mongo_ ? 0.0f : p[PushLead];
+		push_mongo_ = mongo;
 		push_cooldown_ = push_lead_ + p[PushPeriod];
 		push_time_ = 0;
 		emit(SK8_EV_PUSH);
@@ -746,7 +748,7 @@ void Rider::state(sk8_state &s) const
 	s.lean = lean_;
 	s.push_phase = push_time_ >= push_lead_ ? clampf((push_time_ - push_lead_) / std::max(p[PushPeriod], 0.01f), 0, 1) : -1;
 	s.push_start = push_time_ >= 0 && push_time_ < push_lead_ ? push_time_ / push_lead_ : -1;
-	s.push_mongo = p[PushMongo] > 0.5f;
+	s.push_mongo = push_mongo_;
 	s.grab = grab_;
 	s.grab_style = grab_style_;
 	s.flip_progress = flip_ >= 0 ? clampf(flip_time_ / flip_duration_, 0, 1) : -1;

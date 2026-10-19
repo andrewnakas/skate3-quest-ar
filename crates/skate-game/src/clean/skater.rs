@@ -236,8 +236,8 @@ fn blend_time(clip: Clip) -> f32 {
     match clip {
         Clip::Pop | Clip::PopNollie => 0.035,
         Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv | Clip::FlipHard | Clip::FlipTre => 0.05,
-        Clip::Land | Clip::Bail => 0.05,
-        Clip::Air | Clip::Grind | Clip::Grind50 | Clip::Boardslide => 0.08,
+        Clip::Land | Clip::Bail => 0.06,
+        Clip::Air | Clip::Grind | Clip::Grind50 | Clip::Boardslide => 0.1,
         Clip::GrabIndy
         | Clip::GrabCrail
         | Clip::GrabTail
@@ -250,8 +250,8 @@ fn blend_time(clip: Clip) -> f32 {
         | Clip::GrabSuperman
         | Clip::GrabNoFoot
         | Clip::GrabStiffy
-        | Clip::Manual | Clip::ManualNose | Clip::Powerslide => 0.1,
-        Clip::Ride | Clip::Crouch => 0.13,
+        | Clip::Manual | Clip::ManualNose | Clip::Powerslide => 0.13,
+        Clip::Ride | Clip::Crouch => 0.16,
         // The step-off clips do the turn to face down the board themselves.
         Clip::StepOff | Clip::StepOffMongo => 0.06,
         // Into a stroke from anything else (a landing, a powerslide): the body turns, not in a snap.

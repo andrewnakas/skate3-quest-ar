@@ -18,6 +18,8 @@ pub mod buttons {
     pub const MANUAL: u32 = 1 << 4;
     pub const NOSE_MANUAL: u32 = 1 << 5;
     pub const SLIDE: u32 = 1 << 6;
+    /// Push with the front foot (mongo).
+    pub const PUSH_MONGO: u32 = 1 << 7;
 }
 
 pub mod flags {

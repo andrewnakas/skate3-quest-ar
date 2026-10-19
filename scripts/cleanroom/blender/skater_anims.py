@@ -33,14 +33,14 @@ def foot(x, y=0.0, z=0.0, yaw=0.0, pitch=0.0):
 def P(**kw):
     """A pose. Missing parts take the riding stance."""
     pose = {
-        "hips": (0.0, 0.0, 0.86),
-        "hips_rot": (8.0, 0.0, 0.0),      # pitch (forward bend about X), roll, yaw (degrees)
-        "spine": (16.0, 0.0, 10.0),        # bend forward, side, twist toward the nose
-        "head": (-8.0, 0.0, 55.0),         # nod, tilt, turn toward the nose
+        "hips": (0.0, 0.01, 0.85),
+        "hips_rot": (9.0, 0.0, 0.0),      # pitch (forward bend about X), roll, yaw (degrees)
+        "spine": (18.0, 2.0, 10.0),        # bend forward, side, twist toward the nose
+        "head": (-6.0, 3.0, 55.0),         # nod, tilt, turn toward the nose
         "lf": foot(FRONT_X, 0.0, 0.0, yaw=-20.0),
         "rf": foot(BACK_X, 0.0, 0.0, yaw=8.0),
-        "lh": (0.32, -0.12, 0.88),         # front hand
-        "rh": (-0.34, -0.1, 0.86),         # back hand
+        "lh": (0.28, -0.12, 0.8),          # front hand: hanging easy, a little ahead
+        "rh": (-0.28, -0.08, 0.78),        # back hand
         "knee_out": 0.35,                  # knees point toward the chest side
     }
     pose.update(kw)
@@ -341,19 +341,26 @@ BAIL_REST = P(hips=(0.0, -0.5, 0.28), hips_rot=(64, 12, 15), spine=(36, 0, 0), h
 
 
 def ride_frame(t):
-    s = math.sin(2 * math.pi * t)
-    return P(hips=(0.01 * s, 0.0, 0.86 + 0.008 * math.sin(4 * math.pi * t)), spine=(12 + 1.5 * s, 0, 10),
-             head=(-8, 0, 55 + 3 * math.sin(2 * math.pi * t + 1.0)))
+    """Rolling along, loose: a knee bounce twice a loop, the weight rocking between the feet, the
+    arms swinging a little out of time with it and the head easy."""
+    s, b = math.sin(2 * math.pi * t), math.sin(4 * math.pi * t)
+    base = P()
+    lh, rh = base["lh"], base["rh"]
+    return P(hips=(0.018 * s, 0.01, 0.85 + 0.014 * b), hips_rot=(9 + 1.5 * b, 0.8 * s, 0),
+             spine=(18 + 2.5 * s, 2 + 1.5 * math.sin(2 * math.pi * t + 0.8), 10 + 2 * s),
+             head=(-6 + 2 * math.sin(4 * math.pi * t + 1.4), 3, 55 + 4 * math.sin(2 * math.pi * t + 1.0)),
+             lh=(lh[0] + 0.03 * math.sin(2 * math.pi * t + 0.6), lh[1], lh[2] + 0.025 * math.sin(2 * math.pi * t + 1.2)),
+             rh=(rh[0] - 0.03 * math.sin(2 * math.pi * t + 0.3), rh[1], rh[2] - 0.025 * math.sin(2 * math.pi * t + 0.9)))
 
 
-def idle(pose, t, sway=0.012, arms=0.03):
+def idle(pose, t, sway=0.016, arms=0.045):
     """`pose` alive: a slow breath and balance sway (t = 0..1 around the loop)."""
     s, c = math.sin(2 * math.pi * t), math.sin(4 * math.pi * t + 0.7)
     h = pose["hips"]
     sp = pose["spine"]
     lh, rh = pose["lh"], pose["rh"]
-    return dict(pose, hips=(h[0] + sway * s, h[1], h[2] + 0.4 * sway * c), spine=(sp[0] + 1.5 * c, sp[1], sp[2] + 2 * s),
-                lh=(lh[0], lh[1], lh[2] + arms * s), rh=(rh[0], rh[1], rh[2] - arms * s))
+    return dict(pose, hips=(h[0] + sway * s, h[1], h[2] + 0.6 * sway * c), spine=(sp[0] + 2.5 * c, sp[1] + 1.5 * s, sp[2] + 2.5 * s),
+                lh=(lh[0] + 0.4 * arms * c, lh[1], lh[2] + arms * s), rh=(rh[0] - 0.4 * arms * c, rh[1], rh[2] - arms * s))
 
 
 def loop(fn, length, n=8):
@@ -388,8 +395,13 @@ CLIPS = {
 }
 # Overlapping action: parts sample the clip this much later (s), so the head and arms trail the
 # hips instead of every joint arriving on the same frame.
-PART_DELAY = {"hips": 0.0, "hips_rot": 0.0, "lf": 0.0, "rf": 0.0, "knee_out": 0.0, "spine": 0.02,
-              "head": 0.05, "lh": 0.05, "rh": 0.05}
+PART_DELAY = {"hips": 0.0, "hips_rot": 0.01, "lf": 0.0, "rf": 0.0, "knee_out": 0.0, "spine": 0.03,
+              "head": 0.07, "lh": 0.075, "rh": 0.075}
+# Parts on curves flattened at every turning point (they arrive and stop on each key): the feet,
+# which must land exactly where the deck is. Everything else flows through its keys on plain
+# Catmull-Rom curves, carrying a little past a pose before it settles (follow-through), which is
+# most of the difference between a stiff and a fluid look.
+FLAT_PARTS = {"lf", "rf"}
 
 # ---------------------------------------------------------------- sampling
 
@@ -415,9 +427,10 @@ def mix(a, b, k):
     return {part: _unflat(a[part], [x + (y - x) * k for x, y in zip(_flat(a, part), _flat(b, part))]) for part in a}
 
 
-def _hermite(times, values, t, looped, length):
-    """Smooth curve through (times, values) with Catmull-Rom tangents, flattened where a key is a
-    turning point or at the ends of a one-shot clip, so it never overshoots a pose."""
+def _hermite(times, values, t, looped, length, flat=True):
+    """Smooth curve through (times, values) with Catmull-Rom tangents; `flat` flattens them where a
+    key is a turning point, so it never overshoots a pose. The ends of a one-shot clip are always
+    flat (it settles into its last pose)."""
     n = len(times)
     if looped:
         t %= length
@@ -436,7 +449,7 @@ def _hermite(times, values, t, looped, length):
             return 0.0
         d_lo = (values[k] - v_lo) / max(dt_lo, 1e-6)
         d_hi = (v_hi - values[k]) / max(dt_hi, 1e-6)
-        if d_lo * d_hi <= 0:
+        if flat and d_lo * d_hi <= 0:
             return 0.0
         return (v_hi - v_lo) / max(dt_lo + dt_hi, 1e-6)
 
@@ -457,7 +470,53 @@ def sample(keys, t, looped):
         flat = [_flat(p, part) for _, p in keys]
         tp = t - PART_DELAY.get(part, 0.0)
         out[part] = _unflat(keys[0][1][part],
-                            [_hermite(times, [f[c] for f in flat], tp, looped, length) for c in range(len(flat[0]))])
+                            [_hermite(times, [f[c] for f in flat], tp, looped, length, part in FLAT_PARTS)
+                             for c in range(len(flat[0]))])
+    return out
+
+
+SHOULDER_UP, SHOULDER_HALF = 0.47, 0.18
+ARM_REACH_MAX = 0.41
+# The bail's hands reach for the ground and are left alone; in a grab only the free hand (above the
+# board) relaxes.
+REACHING = ("bail",)
+GRABBING = "grab_"
+
+
+def relaxed(pose, above=-9.0):
+    """The arms never quite straight: each hand is pulled in toward its shoulder in proportion to
+    how far it reaches, so the elbows always keep some bend and the arms read loose."""
+    hx, hy, hz = pose["hips"]
+    pitch = math.radians(pose["hips_rot"][0] + pose["spine"][0] * 0.8)
+    yaw = math.radians(pose["hips_rot"][2])
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    # the trunk leans toward the chest (-Y before the yaw), the shoulder line runs along X
+    up = (SHOULDER_UP * math.sin(pitch) * sy, -SHOULDER_UP * math.sin(pitch) * cy, SHOULDER_UP * math.cos(pitch))
+    out = dict(pose)
+    for key, side in (("lh", 1.0), ("rh", -1.0)):
+        if pose[key][2] < above:
+            continue
+        sh = (hx + up[0] + side * SHOULDER_HALF * cy, hy + up[1] + side * SHOULDER_HALF * sy, hz + up[2])
+        d = [a - b for a, b in zip(pose[key], sh)]
+        reach = math.sqrt(sum(c * c for c in d))
+        if reach < 1e-4:
+            continue
+        k = 1.0 - 0.3 * min(1.0, max(0.0, (reach - 0.24) / 0.3))
+        # and never past ~80% of the arm's length (0.52 m), however far out the pose put the hand
+        k = min(k, ARM_REACH_MAX / reach)
+        fwd = (0.03 * sy, -0.03 * cy)  # every hand rides slightly in front of the body
+        hang = min(1.0, max(0.0, (sh[2] - pose[key][2] - 0.2) / 0.15))
+        if hang > 0:
+            # A hanging arm isn't pulled up toward the shoulder (that bends it into hands on hips):
+            # the hand comes a little up and forward, so the elbow softens with the forearm ahead.
+            pulled = (sh[0] + d[0] * k, sh[1] + d[1] * k, sh[2] + d[2] * k)
+            low = (pose[key][0] + 2 * fwd[0], pose[key][1] + 2 * fwd[1], pose[key][2] + 0.04)
+            new = tuple(p + (q - p) * hang for p, q in zip(pulled, low))
+        else:
+            new = (sh[0] + d[0] * k, sh[1] + d[1] * k, sh[2] + d[2] * k)
+        # Raised arms come down toward chest height: out for balance, not held up stiff.
+        lift = max(0.0, new[2] - (hz + 0.18))
+        out[key] = (new[0] + fwd[0], new[1] + fwd[1], new[2] - 0.45 * lift)
     return out
 
 
@@ -573,9 +632,16 @@ def apply_pose(rig, c, pose, rest_ankle):
         # The offset turns with the hips, so a body facing down the board (pushing) still bends its
         # elbows out and back from itself.
         yaw = math.radians(pose["hips_rot"][2])
-        dx, dy = hx * 0.45, 0.55
+        # Hanging arms bend their elbows back (aimed out to the side they read as hands on hips);
+        # raised arms flare them out.
+        raised = min(1.0, max(0.0, (pose[hand][2] - pose["hips"][2] - 0.05) / 0.3))
+        dx, dy = hx * (0.12 + 0.33 * raised), 0.55
         dx, dy = dx * math.cos(yaw) - dy * math.sin(yaw), dx * math.sin(yaw) + dy * math.cos(yaw)
-        c[f"epole_{side}"].location = (pose[hand][0] + dx, pose[hand][1] + dy, 0.5 * (1.38 + pose[hand][2]))
+        # A raised arm's elbow sags below the shoulder-to-hand line (loose, seen bent from any side)
+        # instead of bending straight back, which from the front looked like a straight arm.
+        ez = 0.5 * (1.38 + pose[hand][2])
+        ez += (pose[hand][2] - 0.55 - ez) * raised
+        c[f"epole_{side}"].location = (pose[hand][0] + dx, pose[hand][1] + dy * (1 - 0.8 * raised), ez)
 
 
 def _fcurves(action):
@@ -600,7 +666,10 @@ def bake_clips(rig):
         for f in range(last + 1):
             frame = 1 + f
             scene.frame_set(frame)
-            apply_pose(rig, c, sample(keys, f / FPS, looped), rest_ankle)
+            pose = sample(keys, f / FPS, looped)
+            if not name.startswith(REACHING):
+                pose = relaxed(pose, GRAB_DECK + 0.25 if name.startswith(GRABBING) else -9.0)
+            apply_pose(rig, c, pose, rest_ankle)
             for ob in c.values():
                 ob.keyframe_insert("location", frame=frame)
                 ob.keyframe_insert("rotation_quaternion" if ob.rotation_mode == "QUATERNION" else "rotation_euler",

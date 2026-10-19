@@ -3,16 +3,16 @@
 //! Quest Touch (skating):
 //! - left stick: steer; in the air, spin; in a manual, balance (up/down)
 //! - right stick: hold down to crouch, flick to pop and flip (see How to play)
-//! - A: push (hold to keep pushing), B: brake
+//! - A: push (hold to keep pushing), B: mongo push, Y: brake
 //! - X held while steering: powerslide
 //! - triggers in the air: grab (left / right hand)
 //! - right grip: manual, left grip: nose manual
 //! - left menu: tap for the menu, hold for build mode (see `xr::build`)
 //!
 //! Desktop (`--clean` without a headset): A/D steer, W/S balance, Space push,
-//! Left Shift brake, arrow keys = right stick, Q/E grabs, Z manual, X nose
-//! manual, C powerslide; or any gamepad (left stick, right stick, South push,
-//! East brake, West powerslide, triggers grab, bumpers manual).
+//! Left Alt mongo push, Left Shift brake, arrow keys = right stick, Q/E grabs, Z manual, X nose
+//! manual, C powerslide; or any gamepad (left stick, right stick, South push, East mongo push,
+//! North brake, West powerslide, triggers grab, bumpers manual).
 use super::sim::CleanSkate;
 use super::UiCapture;
 use bevy::prelude::*;
@@ -28,6 +28,9 @@ pub(crate) fn from_touch(touch: &crate::xr::touch::TouchState) -> Input {
         b |= buttons::PUSH;
     }
     if touch.b {
+        b |= buttons::PUSH_MONGO;
+    }
+    if touch.y {
         b |= buttons::BRAKE;
     }
     if touch.x {
@@ -272,6 +275,7 @@ pub(crate) fn read_desktop(
     };
     for (k, bit) in [
         (KeyCode::Space, buttons::PUSH),
+        (KeyCode::AltLeft, buttons::PUSH_MONGO),
         (KeyCode::ShiftLeft, buttons::BRAKE),
         (KeyCode::KeyQ, buttons::GRAB_LEFT),
         (KeyCode::KeyE, buttons::GRAB_RIGHT),
@@ -299,7 +303,8 @@ pub(crate) fn read_desktop(
         }
         for (b, bit) in [
             (GamepadButton::South, buttons::PUSH),
-            (GamepadButton::East, buttons::BRAKE),
+            (GamepadButton::East, buttons::PUSH_MONGO),
+            (GamepadButton::North, buttons::BRAKE),
             (GamepadButton::West, buttons::SLIDE),
             (GamepadButton::LeftTrigger2, buttons::GRAB_LEFT),
             (GamepadButton::RightTrigger2, buttons::GRAB_RIGHT),

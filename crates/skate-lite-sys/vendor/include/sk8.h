@@ -55,6 +55,7 @@ enum
 	SK8_MANUAL = 1 << 4,      /* hold on the ground: manual (tail) */
 	SK8_NOSE_MANUAL = 1 << 5, /* hold on the ground: nose manual */
 	SK8_SLIDE = 1 << 6,       /* hold while steering: powerslide */
+	SK8_PUSH_MONGO = 1 << 7,  /* kick-push with the front foot (mongo), whatever push_mongo says */
 };
 
 typedef struct sk8_input
@@ -124,7 +125,8 @@ typedef struct sk8_state
 	int manual_dir;      /* 1 manual (tail down), -1 nose manual, 0 none */
 	int grab_style;      /* sk8_grab_style while grabbing, 0 otherwise */
 	float push_start;    /* 0..1 through the step off the board before the first stroke, -1 otherwise */
-	int push_mongo;      /* 1 when the front foot pushes (mongo), 0 for the back foot */
+	int push_mongo;      /* 1 when the front foot pushes (mongo), 0 for the back foot: this push's (or
+	                      * the last one's, while stepping back on) */
 } sk8_state;
 
 /* Where in a stroke (push_phase) the pushing foot is on the ground; the push's speed is added
