@@ -73,6 +73,39 @@ pub(crate) fn read_touch(
     };
 }
 
+/// `SK8_DEMO=grabs`: push, then an ollie into each of the twelve grab styles in turn (trigger(s)
+/// plus the left stick's direction at the start of the grab).
+fn demo_grabs(t: f32) -> Input {
+    const START: f32 = 3.0;
+    const EACH: f32 = 2.6;
+    let mut i = Input::default();
+    if t < START {
+        i.buttons |= buttons::PUSH;
+        return i;
+    }
+    let n = ((t - START) / EACH) as usize % 12;
+    let d = (t - START) % EACH;
+    // A short push between airs keeps the speed up.
+    if d > 2.0 {
+        i.buttons |= buttons::PUSH;
+    }
+    if d < 0.35 {
+        i.flick = [0.0, -1.0];
+    } else if d < 0.4 {
+        i.flick = [0.0, 0.0];
+    } else if d < 0.5 {
+        i.flick = [0.0, 1.0];
+    }
+    let (hand, dir) = (n / 4, n % 4);
+    if (0.55..1.15).contains(&d) {
+        i.buttons |= [buttons::GRAB_RIGHT, buttons::GRAB_LEFT, buttons::GRAB_LEFT | buttons::GRAB_RIGHT][hand];
+        if d < 0.58 {
+            i.steer = [[0.0, 0.0], [0.0, 1.0], [0.0, -1.0], [1.0, 0.0]][dir];
+        }
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -120,6 +153,13 @@ fn demo_input(t: f32) -> Input {
     i
 }
 
+/// Log controllers as they connect, so "my pad does nothing" can be told apart from "not seen".
+pub(crate) fn log_gamepads(pads: Query<(Entity, Option<&Name>), Added<Gamepad>>) {
+    for (e, name) in &pads {
+        info!("SK8 gamepad connected: {} ({e:?})", name.map_or("unnamed", |n| n.as_str()));
+    }
+}
+
 pub(crate) fn read_desktop(
     time: Res<Time<Real>>,
     mut demo: Local<Option<f32>>,
@@ -139,7 +179,7 @@ pub(crate) fn read_desktop(
         if !sim.paused {
             *t += time.delta_secs().min(0.1) * sim.time_scale;
         }
-        sim.input = demo_input(*t);
+        sim.input = if std::env::var("SK8_DEMO").is_ok_and(|v| v == "grabs") { demo_grabs(*t) } else { demo_input(*t) };
         return;
     }
     let key = |k| if keys.pressed(k) { 1.0 } else { 0.0 };

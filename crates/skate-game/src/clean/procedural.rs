@@ -18,6 +18,7 @@ pub(crate) struct Bones {
     chest: Entity,
     /// leg, knee, ankle; front (left) foot first.
     legs: [[Entity; 3]; 2],
+    wrists: [Entity; 2],
     /// Everything `SK8_ANIM_TRACE` watches, with names.
     watched: Vec<(Entity, &'static str)>,
 }
@@ -37,6 +38,7 @@ impl Bones {
                 [by("leg.L")?, by("knee.L")?, by("ankle.L")?],
                 [by("leg.R")?, by("knee.R")?, by("ankle.R")?],
             ],
+            wrists: [by("wrist.L")?, by("wrist.R")?],
         })
     }
 }
@@ -73,6 +75,8 @@ pub(crate) struct Motion {
     last_vel: Option<Vec3>,
     air_vy: f32,
     pin: [f32; 2],
+    /// 0..1: how much the board is held in the hands (grabs where both feet leave it).
+    held: f32,
     /// How far the board rides up under the feet in the air (m), and its rate.
     lift: f32,
     lift_vel: f32,
@@ -332,6 +336,20 @@ pub(crate) fn layer(
         motion.lift = 0.0;
         motion.lift_vel = 0.0;
     }
+    // No Foot and Superman: both feet leave the board, which hangs from the hands on its edges.
+    let hand_held = s.mode == Mode::Air
+        && matches!(s.grab_style, skate_lite_sys::grab_style::NO_FOOT | skate_lite_sys::grab_style::SUPERMAN);
+    if dt > 0.0 {
+        let k = 1.0 - (-dt / 0.08).exp();
+        motion.held += ((hand_held as u8 as f32) - motion.held) * k;
+    }
+    if motion.held > 1e-3 {
+        let wrists: Vec<Vec3> = set.wrists.iter().filter_map(|e| in_space(*e, rider, &bones)).map(|m| m.translation.into()).collect();
+        if wrists.len() == 2 {
+            let grip = (wrists[0] + wrists[1]) * 0.5 - up * 0.04;
+            at = at.lerp(grip, motion.held);
+        }
+    }
     let mut deck = board_rot;
     if carving {
         deck = Quat::from_axis_angle(fwd, -lean * BOARD_ROLL) * deck;
@@ -394,11 +412,15 @@ pub(crate) fn layer(
         let mut local = rest_inv.transform_point3(ankle);
         let wanted = match s.mode {
             Mode::Bail => false,
+            // The board is in the hands: the feet are off it.
+            Mode::Air if motion.held > 0.5 => false,
             Mode::Air => !flipping,
             // The back foot is on the ground while it pushes.
             Mode::Ride if s.push_phase.is_some() => i == 0,
             _ => true,
         } && height < PIN_REACH
+            // only over the deck: a foot stepping back on from beside the board isn't dragged across
+            && local.x.abs() < PIN_HALF_WIDTH + 0.03
             && height > -0.2;
         let k = 1.0 - (-dt / PIN_BLEND).exp();
         motion.pin[i] += ((wanted as u8 as f32) - motion.pin[i]) * if dt > 0.0 { k } else { 0.0 };

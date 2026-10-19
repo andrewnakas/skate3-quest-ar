@@ -175,7 +175,7 @@ fn build(options: Options) -> App {
     if !xr {
         app.add_systems(Startup, view::desktop_world).add_systems(
             Update,
-            (menu::keyboard_nav, menu::update, input::read_desktop, sim::step, view::chase, view::views)
+            (menu::keyboard_nav, menu::update, input::log_gamepads, input::read_desktop, sim::step, view::chase, view::views)
                 .chain()
                 .before(feed_sounds),
         );

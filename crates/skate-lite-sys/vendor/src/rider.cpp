@@ -6,6 +6,39 @@
 
 namespace sk8 {
 
+namespace
+{
+struct GrabDef
+{
+	const char *name;
+	unsigned points;
+};
+
+// Indexed by sk8_grab_style.
+const GrabDef kGrabs[] = {
+	{"", 0},
+	{"Indy", 150},      {"Crail", 220},     {"Tail Grab", 180}, {"Stalefish", 240},
+	{"Melon", 150},     {"Nose Grab", 180}, {"Tuck Knee", 200}, {"Judo", 260},
+	{"Double Grab", 200}, {"Superman", 320}, {"No Foot", 300},  {"Stiffy", 260},
+};
+
+const GrabDef &grab_def(int style)
+{
+	return kGrabs[(style > 0 && style < int(sizeof kGrabs / sizeof kGrabs[0])) ? style : 0];
+}
+
+// hands: 1 front (left trigger), 2 back (right trigger), 3 both. Stick y up is toward the nose.
+int grab_style_for(int hands, float x, float y)
+{
+	int dir = 0; // 0 centre, 1 nose, 2 tail, 3 sideways
+	if (x * x + y * y > 0.25f)
+		dir = std::fabs(y) >= std::fabs(x) ? (y > 0 ? 1 : 2) : 3;
+	int base = hands == 2 ? SK8_GRAB_INDY : hands == 1 ? SK8_GRAB_MELON : SK8_GRAB_DOUBLE;
+	return base + dir;
+}
+} // namespace
+
+
 namespace {
 
 constexpr float kDt = SK8_DT;
@@ -398,19 +431,24 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	if (flip_ >= 0)
 		flip_time_ += kDt;
 
-	// grabs
-	grab_ = ((in.buttons & SK8_GRAB_LEFT) ? 1 : 0) | ((in.buttons & SK8_GRAB_RIGHT) ? 2 : 0);
+	// grabs: the hands come from the triggers, the style from where the left stick points when the
+	// grab starts (it keeps spinning the board after that)
+	int hands = ((in.buttons & SK8_GRAB_LEFT) ? 1 : 0) | ((in.buttons & SK8_GRAB_RIGHT) ? 2 : 0);
+	if (hands && hands != grab_)
+		grab_style_ = grab_style_for(hands, in.steer[0], in.steer[1]);
+	grab_ = hands;
 	if (grab_) {
 		grab_time_ += kDt;
 		if (grab_time_ > 0.3f && !grab_scored_) {
 			grab_scored_ = true;
-			const char *name = grab_ == 3 ? "Double Grab" : grab_ == 1 ? "Melon" : "Indy";
-			pending_.push_back({name, 150});
+			const GrabDef &g = grab_def(grab_style_);
+			pending_.push_back({g.name, g.points});
 			if (flip_ < 0)
-				trick_ = name;
+				trick_ = g.name;
 		}
 	} else {
 		grab_time_ = 0;
+		grab_style_ = 0;
 	}
 
 	if (try_grind(w))
@@ -483,6 +521,7 @@ void Rider::land(const Hit &h)
 	spin_total_ = spin_speed_ = 0;
 	air_time_ = 0;
 	grab_ = 0;
+	grab_style_ = 0;
 	mode_ = SK8_MODE_RIDE;
 	trick_.clear();
 }
@@ -690,6 +729,7 @@ void Rider::state(sk8_state &s) const
 	s.lean = lean_;
 	s.push_phase = push_time_ >= 0 ? clampf(push_time_ / std::max(p[PushPeriod], 0.01f), 0, 1) : -1;
 	s.grab = grab_;
+	s.grab_style = grab_style_;
 	s.flip_progress = flip_ >= 0 ? clampf(flip_time_ / flip_duration_, 0, 1) : -1;
 	s.balance = clampf(balance_, -1, 1);
 	s.air_time = air_time_;

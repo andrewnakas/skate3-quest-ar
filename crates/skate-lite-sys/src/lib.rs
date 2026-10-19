@@ -88,6 +88,7 @@ struct RawState {
     combo_count: c_uint,
     score: u64,
     manual_dir: c_int,
+    grab_style: c_int,
 }
 
 /// One step's output. Rotations are quaternions `[x, y, z, w]`.
@@ -122,6 +123,8 @@ pub struct State {
     pub score: u64,
     /// 1 manual (tail down), -1 nose manual, 0 none.
     pub manual_dir: i32,
+    /// The grab being held (see [`grab_style`]), 0 when not grabbing.
+    pub grab_style: u32,
 }
 
 impl From<RawState> for State {
@@ -148,8 +151,27 @@ impl From<RawState> for State {
             combo_count: r.combo_count,
             score: r.score,
             manual_dir: r.manual_dir,
+            grab_style: r.grab_style.max(0) as u32,
         }
     }
+}
+
+/// Grab styles (`sk8_grab_style`): the trigger(s) pick the hand, the left stick's direction when
+/// the grab starts picks the style.
+pub mod grab_style {
+    pub const NONE: u32 = 0;
+    pub const INDY: u32 = 1;
+    pub const CRAIL: u32 = 2;
+    pub const TAIL: u32 = 3;
+    pub const STALEFISH: u32 = 4;
+    pub const MELON: u32 = 5;
+    pub const NOSE: u32 = 6;
+    pub const TUCK_KNEE: u32 = 7;
+    pub const JUDO: u32 = 8;
+    pub const DOUBLE: u32 = 9;
+    pub const SUPERMAN: u32 = 10;
+    pub const NO_FOOT: u32 = 11;
+    pub const STIFFY: u32 = 12;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -48,17 +48,30 @@ enum Clip {
     Grind,
     Boardslide,
     Powerslide,
-    GrabToe,
-    GrabHeel,
     Bail,
     PushEnd,
+    // One per grab style, in sk8_grab_style order (style n is GRAB_FIRST + n - 1).
+    GrabIndy,
+    GrabCrail,
+    GrabTail,
+    GrabStalefish,
+    GrabMelon,
+    GrabNose,
+    GrabTuckKnee,
+    GrabJudo,
+    GrabDouble,
+    GrabSuperman,
+    GrabNoFoot,
+    GrabStiffy,
 }
 
-const CLIPS: usize = 18;
+const CLIPS: usize = 28;
+const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
-    "sk8_nose_manual", "sk8_grind", "sk8_boardslide", "sk8_powerslide", "sk8_grab_toe", "sk8_grab_heel", "sk8_bail",
-    "sk8_push_end",
+    "sk8_nose_manual", "sk8_grind", "sk8_boardslide", "sk8_powerslide", "sk8_bail", "sk8_push_end",
+    "sk8_grab_indy", "sk8_grab_crail", "sk8_grab_tail", "sk8_grab_stalefish", "sk8_grab_melon", "sk8_grab_nose",
+    "sk8_grab_tuck_knee", "sk8_grab_judo", "sk8_grab_double", "sk8_grab_superman", "sk8_grab_no_foot", "sk8_grab_stiffy",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
 const LOOPED: [Clip; 8] =
@@ -255,7 +268,19 @@ fn blend_time(clip: Clip) -> f32 {
         Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv => 0.05,
         Clip::Land | Clip::Bail => 0.05,
         Clip::Air | Clip::Grind | Clip::Boardslide => 0.08,
-        Clip::GrabToe | Clip::GrabHeel | Clip::Manual | Clip::NoseManual | Clip::Powerslide => 0.1,
+        Clip::GrabIndy
+        | Clip::GrabCrail
+        | Clip::GrabTail
+        | Clip::GrabStalefish
+        | Clip::GrabMelon
+        | Clip::GrabNose
+        | Clip::GrabTuckKnee
+        | Clip::GrabJudo
+        | Clip::GrabDouble
+        | Clip::GrabSuperman
+        | Clip::GrabNoFoot
+        | Clip::GrabStiffy
+        | Clip::Manual | Clip::NoseManual | Clip::Powerslide => 0.1,
         Clip::Ride | Clip::Crouch => 0.13,
         // The front foot turns ~100 degrees to point down the board: not in a snap.
         Clip::Push => 0.2,
@@ -287,10 +312,15 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             } else if let Some(p) = s.flip_progress {
                 let clip = flip_clip(trick);
                 set(clip, 1.0, p * len[clip as usize]);
-            } else if s.grab & 1 != 0 {
-                set(Clip::GrabHeel, 1.0, c.since_grab);
-            } else if s.grab & 2 != 0 {
-                set(Clip::GrabToe, 1.0, c.since_grab);
+            } else if s.grab != 0 {
+                // The engine's grab style picks the clip; an unknown one falls back by hand.
+                let style = match s.grab_style as usize {
+                    n @ 1..=12 => n,
+                    _ if s.grab == 3 => 9,
+                    _ if s.grab & 1 != 0 => 5,
+                    _ => 1,
+                };
+                set(CLIP_ORDER[GRAB_FIRST + style - 1], 1.0, c.since_grab);
             } else {
                 // Tuck, hold, then reach the legs down for the landing.
                 set(Clip::Air, 1.0, c.since_pop - pop_len);
@@ -404,8 +434,9 @@ pub(crate) fn pop_snap(deck: Quat, since_pop: f32) -> (Vec3, Quat) {
 
 const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::Ride, Clip::Crouch, Clip::Pop, Clip::Air, Clip::FlipKick, Clip::FlipHeel, Clip::FlipShuv, Clip::Land, Clip::Push,
-    Clip::Manual, Clip::NoseManual, Clip::Grind, Clip::Boardslide, Clip::Powerslide, Clip::GrabToe, Clip::GrabHeel, Clip::Bail,
-    Clip::PushEnd,
+    Clip::Manual, Clip::NoseManual, Clip::Grind, Clip::Boardslide, Clip::Powerslide, Clip::Bail, Clip::PushEnd,
+    Clip::GrabIndy, Clip::GrabCrail, Clip::GrabTail, Clip::GrabStalefish, Clip::GrabMelon, Clip::GrabNose, Clip::GrabTuckKnee,
+    Clip::GrabJudo, Clip::GrabDouble, Clip::GrabSuperman, Clip::GrabNoFoot, Clip::GrabStiffy,
 ];
 
 fn smooth01(x: f32) -> f32 {

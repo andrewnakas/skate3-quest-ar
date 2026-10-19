@@ -85,12 +85,55 @@ BOARDSLIDE = P(hips=(0.0, 0.03, 0.74), hips_rot=(12, 0, 30), spine=(16, 0, 30), 
 POWERSLIDE = P(hips=(0.0, 0.16, 0.68), hips_rot=(-12, 0, 10), spine=(-6, 0, 20),
                lf=foot(FRONT_X, 0.03, 0.0, yaw=-25), rf=foot(BACK_X, 0.03, 0.0, yaw=5),
                lh=(0.5, 0.05, 0.95), rh=(-0.5, 0.15, 0.9))
-GRAB_TOE = P(hips=(0.0, 0.0, 0.58), hips_rot=(32, 0, 0), spine=(40, 0, 6),
-             lf=foot(FRONT_X, 0.0, 0.2, yaw=-20), rf=foot(BACK_X, 0.0, 0.18, yaw=8),
-             rh=(0.0, -0.13, 0.22), lh=(0.42, -0.32, 0.86))  # free arm out in front for balance
-GRAB_HEEL = P(hips=(0.0, 0.05, 0.6), hips_rot=(26, 0, 0), spine=(34, 0, 14),
-              lf=foot(FRONT_X, 0.0, 0.2, yaw=-20), rf=foot(BACK_X, 0.0, 0.18, yaw=8),
-              lh=(0.02, 0.12, 0.22), rh=(-0.42, -0.3, 0.86))
+# Grabs: a compact tuck with the board pulled up under the feet and a hand on the deck. The deck top is
+# at GRAB_DECK (the soles), its toe edge at y -0.11 and heel edge at +0.11, nose x +0.4, tail x -0.4.
+# Shapes after the 3-angle grab footage; every number our own. Judo kicks the front foot off, and in
+# No Foot and Superman both feet leave the board, which then follows the hands (runtime).
+GRAB_DECK = 0.3
+
+
+def grab_pose(**kw):
+    base = dict(hips=(0.0, 0.02, 0.6), hips_rot=(34, 0, 0), spine=(38, 0, 6), head=(-14, 0, 45),
+                lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK, yaw=-20), rf=foot(BACK_X + 0.02, 0.0, GRAB_DECK - 0.01, yaw=8),
+                lh=(0.5, -0.3, 0.92), rh=(-0.5, -0.26, 0.9), knee_out=0.65)
+    base.update(kw)
+    return P(**base)
+
+
+D = GRAB_DECK - 0.01  # hand height on the edge
+GRAB_POSES = {
+    # back hand
+    "indy": grab_pose(rh=(0.0, -0.12, D)),
+    "crail": grab_pose(rh=(0.38, -0.1, D + 0.02), spine=(44, 0, 22), head=(-18, 0, 60),
+                       lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK + 0.03, yaw=-20), lh=(-0.4, -0.22, 1.0)),
+    "tail": grab_pose(rh=(-0.42, -0.04, D - 0.01), hips_rot=(28, 0, 0), spine=(34, 0, -18), head=(-14, 0, 25),
+                      lh=(0.52, -0.28, 0.98)),
+    "stalefish": grab_pose(rh=(-0.08, 0.13, D), hips_rot=(30, -8, 0), spine=(32, 0, -12), head=(-14, 0, 40),
+                           lh=(0.52, -0.3, 0.98)),
+    # front hand
+    "melon": grab_pose(lh=(0.02, 0.13, D), spine=(36, 0, 14), rh=(-0.5, -0.26, 0.94)),
+    "nose": grab_pose(lh=(0.42, -0.02, D + 0.02), spine=(42, 0, 20), head=(-18, 0, 60),
+                      lf=foot(FRONT_X + 0.04, 0.0, GRAB_DECK + 0.02, yaw=-20), rh=(-0.5, -0.26, 0.96)),
+    "tuck_knee": grab_pose(hips=(0.0, 0.03, 0.58), spine=(42, 0, 8), lh=(0.06, -0.12, D + 0.06),
+                           lf=foot(FRONT_X - 0.04, 0.0, GRAB_DECK + 0.07, yaw=-20),
+                           rf=foot(BACK_X + 0.04, 0.0, GRAB_DECK + 0.06, yaw=8), rh=(-0.46, -0.24, 0.96)),
+    "judo": grab_pose(hips=(0.0, 0.0, 0.66), spine=(30, 0, 18), lh=(0.36, 0.11, D - 0.02),
+                      lf=foot(0.62, -0.34, 0.46, yaw=-10, pitch=-25), rh=(-0.5, -0.08, 1.16), knee_out=0.5),
+    # both hands
+    "double": grab_pose(spine=(42, 0, 6), lh=(0.14, -0.12, D), rh=(-0.14, -0.12, D)),
+    "superman": P(hips=(0.0, 0.16, 0.86), hips_rot=(55, 0, 0), spine=(14, 0, 4), head=(-40, 0, 20),
+                  lf=foot(0.18, 0.46, 0.74, yaw=-20, pitch=40), rf=foot(-0.22, 0.5, 0.8, yaw=8, pitch=40),
+                  lh=(0.16, -0.5, 0.92), rh=(-0.16, -0.5, 0.92), knee_out=0.2),
+    "no_foot": P(hips=(0.0, 0.04, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 6), head=(-22, 0, 40),
+                 lf=foot(0.46, -0.16, 0.36, yaw=-35, pitch=-15), rf=foot(-0.5, 0.14, 0.4, yaw=25, pitch=15),
+                 lh=(0.13, -0.3, 0.72), rh=(-0.13, -0.3, 0.72), knee_out=0.45),  # legs kicked out wide
+    "stiffy": grab_pose(hips=(0.0, 0.1, 0.8), hips_rot=(58, 0, 0), spine=(40, 0, 6), head=(-6, 0, 40),
+                        lf=foot(FRONT_X + 0.04, 0.0, 0.2, yaw=-20), rf=foot(BACK_X - 0.04, 0.0, 0.19, yaw=8),
+                        lh=(0.12, -0.12, 0.19), rh=(-0.12, -0.12, 0.19), knee_out=0.2),  # legs near straight
+}
+# The old names, kept for the poses other code refers to.
+GRAB_TOE = GRAB_POSES["indy"]
+GRAB_HEEL = GRAB_POSES["melon"]
 
 
 # Breakdowns between the key poses (motion reads smooth when the in-betweens are designed, not left
@@ -220,9 +263,6 @@ CLIPS = {
     "grind": (True, loop(lambda t: idle(GRIND, t, 0.012, 0.06), IDLE_LEN)),
     "boardslide": (True, loop(lambda t: idle(BOARDSLIDE, t, 0.012, 0.06), IDLE_LEN)),
     "powerslide": (True, loop(lambda t: idle(POWERSLIDE, t, 0.01, 0.03), IDLE_LEN)),
-    # The reach for the board takes a quarter second (a faster one whipped the arms).
-    "grab_toe": (False, [(0.0, AIR_TUCK), (0.26, GRAB_TOE), (0.6, idle(GRAB_TOE, 0.25, 0.01, 0.0))]),
-    "grab_heel": (False, [(0.0, AIR_TUCK), (0.26, GRAB_HEEL), (0.6, idle(GRAB_HEEL, 0.25, 0.01, 0.0))]),
     "bail": (False, [(0.0, STANCE), (0.18, BAIL_STUMBLE), (0.42, BAIL_REACH), (0.62, BAIL_DOWN), (1.2, BAIL_REST)]),
 }
 # Overlapping action: parts sample the clip this much later (s), so the head and arms trail the
@@ -300,6 +340,9 @@ def sample(keys, t, looped):
     return out
 
 
+# One clip per grab style: reach for the board over a quarter second, then hold with a slight sway.
+for _name, _pose in GRAB_POSES.items():
+    CLIPS[f"grab_{_name}"] = (False, [(0.0, AIR_TUCK), (0.26, _pose), (0.6, idle(_pose, 0.25, 0.01, 0.0))])
 for _name, _open in (("flip_kick", FLIP_KICK), ("flip_heel", FLIP_HEEL), ("flip_shuv", FLIP_SHUV)):
     # The arms take most of a fifth of a second to go up into the V.
     CLIPS[_name] = (False, [(0.0, POP_TOP), (0.08, flip_part(_open, 0.5)), (0.18, _open), (0.28, _open),

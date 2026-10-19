@@ -62,7 +62,7 @@ private:
 	Flick flick_;
 	float crouch_ = 0, crouch_time_ = 0, lean_ = 0;
 	float push_cooldown_ = 0, push_time_ = -1;
-	int grab_ = 0;
+	int grab_ = 0, grab_style_ = 0;
 	float grab_time_ = 0;
 	bool grab_scored_ = false;
 

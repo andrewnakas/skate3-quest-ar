@@ -181,10 +181,11 @@ def preview(clips):
     print("SKATER previews", len(frames))
 
 
-basemesh = build()
-finish(basemesh)
-clips = skater_anims.bake_clips(bpy.data.objects["skater_rig"])
-print("SKATER clips", clips)
-if PREVIEW:
-    preview(clips)
-export()
+if __name__ == "__main__":  # importable (build/finish/preview/export) by other Blender scripts
+    basemesh = build()
+    finish(basemesh)
+    clips = skater_anims.bake_clips(bpy.data.objects["skater_rig"])
+    print("SKATER clips", clips)
+    if PREVIEW:
+        preview(clips)
+    export()
