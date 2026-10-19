@@ -465,7 +465,7 @@ const PRESETS: [(&str, Preset); 8] = [
     ("Mega pop", |m, s| scale_params(m, s, &[("pop_low", 1.9), ("pop_high", 1.9)])),
     ("Moon gravity", |m, s| set_params(m, s, &[("gravity", 4.5), ("spin_rate", 3.2)])),
     ("Spin cycle", |m, s| set_params(m, s, &[("spin_rate", 14.0), ("spin_ease", 30.0)])),
-    ("Fast", |m, s| set_params(m, s, &[("push_top", 14.0), ("push_kick", 2.6), ("carve", 3.0)])),
+    ("Fast", |m, s| set_params(m, s, &[("push_top", 14.0), ("push_kick", 3.6), ("carve", 3.0)])),
     ("Never bail", |m, _| m.never_bail = true),
     ("Slow motion", |_, s| s.time_scale = 0.35),
     ("Real time", |_, s| s.time_scale = 1.0),

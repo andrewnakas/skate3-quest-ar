@@ -110,7 +110,8 @@ typedef struct sk8_state
 	int fakie;
 	float crouch;        /* 0..1 */
 	float lean;          /* -1..1 */
-	float push_phase;    /* 0..1 while kicking, -1 otherwise */
+	float push_phase;    /* 0..1 through a stroke (foot plants at SK8_PUSH_PLANT, lifts at
+	                      * SK8_PUSH_RELEASE), -1 otherwise */
 	int grab;            /* 0 none, 1 left, 2 right, 3 both */
 	float flip_progress; /* 0..1 during a flip trick, -1 otherwise */
 	float balance;       /* -1..1 manual / grind balance */
@@ -122,7 +123,14 @@ typedef struct sk8_state
 	unsigned long long score;
 	int manual_dir;      /* 1 manual (tail down), -1 nose manual, 0 none */
 	int grab_style;      /* sk8_grab_style while grabbing, 0 otherwise */
+	float push_start;    /* 0..1 through the step off the board before the first stroke, -1 otherwise */
+	int push_mongo;      /* 1 when the front foot pushes (mongo), 0 for the back foot */
 } sk8_state;
+
+/* Where in a stroke (push_phase) the pushing foot is on the ground; the push's speed is added
+ * between the two, while the foot drives. */
+#define SK8_PUSH_PLANT 0.18f
+#define SK8_PUSH_RELEASE 0.62f
 
 /* Grab styles: the trigger(s) held pick the hand, the left stick's direction when the grab starts
  * picks the style (centre, toward the nose, toward the tail, sideways). */

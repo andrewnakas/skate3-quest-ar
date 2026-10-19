@@ -38,12 +38,12 @@ enum Clip {
     Land,
     Push,
     Manual,
-    NoseManual,
+    ManualNose,
     Grind,
     Boardslide,
     Powerslide,
     Bail,
-    PushEnd,
+    StepOn,
     // One per grab style, in sk8_grab_style order (style n is GRAB_FIRST + n - 1).
     GrabIndy,
     GrabCrail,
@@ -61,24 +61,30 @@ enum Clip {
     FlipHard,
     FlipTre,
     Grind50,
+    StepOff,
+    PushMongo,
+    StepOffMongo,
+    StepOnMongo,
 }
 
-const CLIPS: usize = 32;
+const CLIPS: usize = 36;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
     "sk8_nose_manual", "sk8_grind", "sk8_boardslide", "sk8_powerslide", "sk8_bail", "sk8_push_end",
     "sk8_grab_indy", "sk8_grab_crail", "sk8_grab_tail", "sk8_grab_stalefish", "sk8_grab_melon", "sk8_grab_nose",
     "sk8_grab_tuck_knee", "sk8_grab_judo", "sk8_grab_double", "sk8_grab_superman", "sk8_grab_no_foot", "sk8_grab_stiffy",
-    "sk8_pop_nollie", "sk8_flip_hard", "sk8_flip_tre", "sk8_grind_5_0",
+    "sk8_pop_nollie", "sk8_flip_hard", "sk8_flip_tre", "sk8_grind_5_0", "sk8_push_start", "sk8_push_mongo",
+    "sk8_push_start_mongo", "sk8_push_end_mongo",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
-const LOOPED: [Clip; 9] = [
+const LOOPED: [Clip; 10] = [
     Clip::Ride,
     Clip::Crouch,
     Clip::Push,
+    Clip::PushMongo,
     Clip::Manual,
-    Clip::NoseManual,
+    Clip::ManualNose,
     Clip::Grind,
     Clip::Grind50,
     Clip::Boardslide,
@@ -244,11 +250,13 @@ fn blend_time(clip: Clip) -> f32 {
         | Clip::GrabSuperman
         | Clip::GrabNoFoot
         | Clip::GrabStiffy
-        | Clip::Manual | Clip::NoseManual | Clip::Powerslide => 0.1,
+        | Clip::Manual | Clip::ManualNose | Clip::Powerslide => 0.1,
         Clip::Ride | Clip::Crouch => 0.13,
-        // The front foot turns ~100 degrees to point down the board: not in a snap.
-        Clip::Push => 0.2,
-        Clip::PushEnd => 0.12,
+        // The step-off clips do the turn to face down the board themselves.
+        Clip::StepOff | Clip::StepOffMongo => 0.06,
+        // Into a stroke from anything else (a landing, a powerslide): the body turns, not in a snap.
+        Clip::Push | Clip::PushMongo => 0.16,
+        Clip::StepOn | Clip::StepOnMongo => 0.1,
     }
 }
 
@@ -266,7 +274,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
         Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, c.idle),
         Mode::Grind if s.grind_kind == 4 => set(Clip::Grind50, 1.0, c.idle),
         Mode::Grind => set(Clip::Grind, 1.0, c.idle),
-        Mode::Manual if s.manual_dir < 0 => set(Clip::NoseManual, 1.0, c.idle),
+        Mode::Manual if s.manual_dir < 0 => set(Clip::ManualNose, 1.0, c.idle),
         Mode::Manual => set(Clip::Manual, 1.0, c.idle),
         Mode::Slide => set(Clip::Powerslide, 1.0, c.idle),
         Mode::Air => {
@@ -294,10 +302,15 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
         Mode::Ride => {
             if c.since_land < len[Clip::Land as usize] {
                 set(Clip::Land, 1.0, c.since_land);
+            } else if let Some(k) = s.push_start {
+                let clip = if s.push_mongo { Clip::StepOffMongo } else { Clip::StepOff };
+                set(clip, 1.0, k * len[clip as usize]);
             } else if let Some(phase) = s.push_phase {
-                set(Clip::Push, 1.0, phase * len[Clip::Push as usize]);
-            } else if c.since_push < len[Clip::PushEnd as usize] {
-                set(Clip::PushEnd, 1.0, c.since_push);
+                let clip = if s.push_mongo { Clip::PushMongo } else { Clip::Push };
+                set(clip, 1.0, phase * len[clip as usize]);
+            } else if c.since_push < len[Clip::StepOn as usize] {
+                let clip = if s.push_mongo { Clip::StepOnMongo } else { Clip::StepOn };
+                set(clip, 1.0, c.since_push);
             } else {
                 set(Clip::Ride, 1.0 - s.crouch, c.idle);
                 set(Clip::Crouch, s.crouch, c.idle);
@@ -352,7 +365,10 @@ pub(crate) fn animate(
     let mut smooth = blend_time(CLIP_ORDER[lead]);
     // Popping straight out of a push: the body still faces down the board and must turn back to the
     // side, which in the pop's quick blend whips the whole torso round.
-    let pushing = avatar.weights[Clip::Push as usize] + avatar.weights[Clip::PushEnd as usize];
+    let pushing: f32 = [Clip::Push, Clip::StepOn, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo]
+        .iter()
+        .map(|c| avatar.weights[*c as usize])
+        .sum();
     if matches!(CLIP_ORDER[lead], Clip::Pop | Clip::PopNollie) && pushing > 0.05 {
         smooth = smooth.max(0.12);
     }
@@ -410,13 +426,13 @@ pub(crate) fn pop_snap(deck: Quat, since_pop: f32, nollie: bool) -> (Vec3, Quat)
 
 const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::Ride, Clip::Crouch, Clip::Pop, Clip::Air, Clip::FlipKick, Clip::FlipHeel, Clip::FlipShuv, Clip::Land, Clip::Push,
-    Clip::Manual, Clip::NoseManual, Clip::Grind, Clip::Boardslide, Clip::Powerslide, Clip::Bail, Clip::PushEnd,
+    Clip::Manual, Clip::ManualNose, Clip::Grind, Clip::Boardslide, Clip::Powerslide, Clip::Bail, Clip::StepOn,
     Clip::GrabIndy, Clip::GrabCrail, Clip::GrabTail, Clip::GrabStalefish, Clip::GrabMelon, Clip::GrabNose, Clip::GrabTuckKnee,
     Clip::GrabJudo, Clip::GrabDouble, Clip::GrabSuperman, Clip::GrabNoFoot, Clip::GrabStiffy, Clip::PopNollie,
-    Clip::FlipHard, Clip::FlipTre, Clip::Grind50,
+    Clip::FlipHard, Clip::FlipTre, Clip::Grind50, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo,
 ];
 
-fn smooth01(x: f32) -> f32 {
+pub(crate) fn smooth01(x: f32) -> f32 {
     let x = x.clamp(0.0, 1.0);
     x * x * (3.0 - 2.0 * x)
 }

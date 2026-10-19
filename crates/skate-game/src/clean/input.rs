@@ -132,6 +132,24 @@ fn demo_flips(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=push`: from a standstill, pushing (step off, chained strokes), a coast and the step
+/// back on, a single tap, then a pop straight out of a stroke; regular in even slots, mongo in odd.
+const PUSH_EACH: f32 = 9.0;
+fn demo_push(t: f32) -> Input {
+    let d = t % PUSH_EACH;
+    let mut i = Input::default();
+    if d < 3.6 || (5.0..5.05).contains(&d) || (6.8..7.6).contains(&d) {
+        i.buttons |= buttons::PUSH;
+    }
+    // an ollie fired mid-stroke
+    if (7.3..7.6).contains(&d) {
+        i.flick = [0.0, -1.0];
+    } else if (7.6..7.7).contains(&d) {
+        i.flick = [0.0, 1.0];
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -152,13 +170,13 @@ fn demo_input(t: f32) -> Input {
         flick(6.0, 0.35, &[centre, up]),
         flick(8.5, 0.35, &[centre, up_left]),
         flick(11.0, 0.35, &[centre, up_right]),
-        flick(13.5, 0.3, &[down_left, left, centre]),
+        flick(13.55, 0.3, &[down_left, left, centre]),
         flick(16.5, 0.35, &[centre, up]),
     ];
     if let Some(f) = flicks.into_iter().flatten().next() {
         i.flick = f;
     }
-    let push = t < 3.0 || (14.8..16.0).contains(&t) || t > 23.5;
+    let push = t < 3.0 || (14.8..16.0).contains(&t) || t > 23.45;
     if push {
         i.buttons |= buttons::PUSH;
     }
@@ -191,6 +209,7 @@ fn demo_slot(t: f32) -> Option<usize> {
     match std::env::var("SK8_DEMO").as_deref() {
         Ok("flips") if t >= 2.0 => Some(((t - 2.0) / 3.0) as usize),
         Ok("grabs") if t >= 3.0 => Some(((t - 3.0) / 2.6) as usize),
+        Ok("push") => Some((t / PUSH_EACH) as usize),
         _ => None,
     }
 }
@@ -220,12 +239,21 @@ pub(crate) fn read_desktop(
         let slot = demo_slot(*t);
         if slot.is_some() && slot != *demo_at {
             *demo_at = slot;
-            // Back to the spawn, rolling, for the next trick (open floor ahead every time).
-            sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 4.0);
+            if std::env::var("SK8_DEMO").as_deref() == Ok("push") {
+                // From a standstill, mongo every other slot.
+                sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 0.0);
+                if let Some(p) = skate_lite_sys::params().iter().find(|p| p.key == "push_mongo") {
+                    sim.rider.set_param(p.index, (slot.unwrap_or(0) % 2) as f32);
+                }
+            } else {
+                // Back to the spawn, rolling, for the next trick (open floor ahead every time).
+                sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 4.0);
+            }
         }
         sim.input = match std::env::var("SK8_DEMO").as_deref() {
             Ok("grabs") => demo_grabs(*t),
             Ok("flips") => demo_flips(*t),
+            Ok("push") => demo_push(*t),
             _ => demo_input(*t),
         };
         return;

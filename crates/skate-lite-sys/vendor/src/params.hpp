@@ -10,7 +10,7 @@ enum Param : int
 	// Pop & Jump
 	PopLow, PopHigh, CrouchCharge, NolliePop, GrindPop,
 	// Gravity & Speed
-	Gravity, PushKick, PushPeriod, PushTop, RollDrag, AirDrag, Brake, Carve, Grip, SlideDrag, GroundSnap,
+	Gravity, PushKick, PushPeriod, PushTop, PushLead, PushMongo, RollDrag, AirDrag, Brake, Carve, Grip, SlideDrag, GroundSnap,
 	// Spin
 	SpinRate, SpinEase, AirLevel,
 	// Flips

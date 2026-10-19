@@ -163,6 +163,12 @@ void Rider::step(World &w, const sk8_input &in)
 	if (grind_cooldown_ > 0)
 		grind_cooldown_ -= kDt;
 
+	// a stroke cut short (a pop, a grind, a bail) is over: it doesn't pick up again on landing
+	if (mode_ != SK8_MODE_RIDE && push_time_ >= 0) {
+		push_time_ = -1;
+		push_cooldown_ = 0;
+	}
+
 	switch (mode_) {
 	case SK8_MODE_RIDE:
 	case SK8_MODE_MANUAL:
@@ -247,18 +253,29 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	// gravity along the surface
 	vel_ += flatten(V3{0, -p[Gravity], 0}, up_) * kDt;
 
-	// push
+	// push: a step off the board (first stroke only), then strokes; the speed comes on while the
+	// foot is on the ground driving back, not the moment the button goes down
 	if (push_cooldown_ > 0)
 		push_cooldown_ -= kDt;
 	if (push_time_ >= 0) {
+		float period = std::max(p[PushPeriod], 0.01f);
+		float t0 = push_lead_ + SK8_PUSH_PLANT * period, t1 = push_lead_ + SK8_PUSH_RELEASE * period;
+		float drive = std::min(push_time_ + kDt, t1) - std::max(push_time_, t0);
+		if (mode_ == SK8_MODE_RIDE && drive > 0 && std::fabs(dot(vel_, travel)) < p[PushTop])
+			vel_ += travel * (p[PushKick] * drive / (t1 - t0));
 		push_time_ += kDt;
-		if (push_time_ > p[PushPeriod])
+		if (push_time_ > push_lead_ + period || mode_ != SK8_MODE_RIDE) {
 			push_time_ = -1;
+			since_stroke_ = 0;
+		}
+	} else {
+		since_stroke_ += kDt;
 	}
-	if ((in.buttons & SK8_PUSH) && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 &&
+	if ((in.buttons & SK8_PUSH) && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 &&
 		std::fabs(dot(vel_, travel)) < p[PushTop]) {
-		vel_ += travel * p[PushKick];
-		push_cooldown_ = p[PushPeriod];
+		// straight on from the last stroke the foot is already off the board
+		push_lead_ = since_stroke_ < 0.05f ? 0.0f : p[PushLead];
+		push_cooldown_ = push_lead_ + p[PushPeriod];
 		push_time_ = 0;
 		emit(SK8_EV_PUSH);
 	}
@@ -727,7 +744,9 @@ void Rider::state(sk8_state &s) const
 	s.fakie = fakie_;
 	s.crouch = crouch_;
 	s.lean = lean_;
-	s.push_phase = push_time_ >= 0 ? clampf(push_time_ / std::max(p[PushPeriod], 0.01f), 0, 1) : -1;
+	s.push_phase = push_time_ >= push_lead_ ? clampf((push_time_ - push_lead_) / std::max(p[PushPeriod], 0.01f), 0, 1) : -1;
+	s.push_start = push_time_ >= 0 && push_time_ < push_lead_ ? push_time_ / push_lead_ : -1;
+	s.push_mongo = p[PushMongo] > 0.5f;
 	s.grab = grab_;
 	s.grab_style = grab_style_;
 	s.flip_progress = flip_ >= 0 ? clampf(flip_time_ / flip_duration_, 0, 1) : -1;

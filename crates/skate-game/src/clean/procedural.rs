@@ -65,6 +65,26 @@ const PIN_HALF_WIDTH: f32 = 0.07;
 const PIN_HALF_LEN: f32 = 0.36;
 /// Room left between the feet and a flipping board (m).
 const FLIP_ROOM: f32 = 0.09;
+/// The pushing foot: seconds to take hold of the ground at the plant, and to lift off it (rising
+/// this far, m) and ease back into the clip's swing; it lets go early past this share of the leg's
+/// reach. A foot leaving the ground keeps going back with the ground's speed, losing it in LIFT_CARRY s.
+const LIFT_CARRY: f32 = 0.05;
+const PLANT_IN: f32 = 0.07;
+const LIFT_TIME: f32 = 0.14;
+const LIFT_HEIGHT: f32 = 0.05;
+const PLANT_REACH: f32 = 0.96;
+
+/// The pushing foot's hold on the ground.
+#[derive(Default, Clone, Copy)]
+enum Ground {
+    #[default]
+    Off,
+    /// Standing at `at` (world), taking hold over PLANT_IN.
+    Planted { at: Vec3, w: f32 },
+    /// Lifting off from `rel` (rider frame, so it rides along with the board), `t` s ago, still
+    /// carried back at `vel` (rider frame) as it leaves the ground, slowing.
+    Lifting { rel: Vec3, vel: Vec3, t: f32 },
+}
 
 #[derive(Default)]
 pub(crate) struct Motion {
@@ -75,6 +95,9 @@ pub(crate) struct Motion {
     last_vel: Option<Vec3>,
     air_vy: f32,
     pin: [f32; 2],
+    ground: Ground,
+    /// This stroke's foot has planted already (one plant per stroke).
+    planted: bool,
     /// 0..1: how much the board is held in the hands (grabs where both feet leave it).
     held: f32,
     /// How far the board rides up under the feet in the air (m), and its rate.
@@ -127,6 +150,8 @@ struct Trace {
     feet: [Option<Vec3>; 2],
     worst: (f32, &'static str, String),
     slip: f32,
+    /// How far a planted pushing foot ends up from its spot on the ground (m).
+    ground: f32,
     since_report: f32,
 }
 
@@ -404,6 +429,7 @@ pub(crate) fn layer(
         let rel = if nose.z < 0.0 { rel * Quat::from_rotation_y(std::f32::consts::PI) } else { rel };
         Transform::from_translation(at).with_rotation(rider_rot * rel)
     };
+    let pusher = if s.push_mongo { 0 } else { 1 };
     let deck_m = pin_tf.compute_affine();
     let deck_inv = deck_m.inverse();
     let sole = skater::DECK_TOP - skater::DECK_CENTRE;
@@ -420,8 +446,9 @@ pub(crate) fn layer(
             // The board is in the hands: the feet are off it.
             Mode::Air if motion.held > 0.5 => false,
             Mode::Air => !flipping,
-            // The back foot is on the ground while it pushes.
-            Mode::Ride if s.push_phase.is_some() => i == 0,
+            // The pushing foot is on the ground (the back foot, or the front one pushing mongo), and
+            // lets go of the deck as it steps off.
+            Mode::Ride if s.push_phase.is_some() || s.push_start.is_some_and(|k| k > 0.4) => i != pusher,
             _ => true,
         } && height < PIN_REACH
             // only over the deck: a foot stepping back on from beside the board isn't dragged across
@@ -442,6 +469,63 @@ pub(crate) fn layer(
         two_bone(*chain, target, Quat::IDENTITY.slerp(tilt, w), rider, &mut bones);
     }
 
+    // The pushing foot on the ground: from the plant it stays where it touched down while the board
+    // rolls on (the stroke gets longer the faster the board goes), then lifts off from wherever it
+    // got to and eases back into the clip's swing. The clip's own stroke is one fixed length, which
+    // would skate along the ground at every speed but one.
+    let phase = s.push_phase.filter(|_| s.mode == Mode::Ride);
+    if phase.is_none_or(|p| p < skate_lite_sys::PUSH_PLANT) {
+        motion.planted = false;
+    }
+    let in_drive = phase.is_some_and(|p| (skate_lite_sys::PUSH_PLANT..skate_lite_sys::PUSH_RELEASE).contains(&p));
+    let chain = set.legs[pusher];
+    let mut ground_err = None;
+    if let (Some(hip), Some(knee), Some(ankle)) =
+        (in_space(chain[0], rider, &bones), in_space(chain[1], rider, &bones), in_space(chain[2], rider, &bones))
+    {
+        let (hip, knee, ankle): (Vec3, Vec3, Vec3) = (hip.translation.into(), knee.translation.into(), ankle.translation.into());
+        let reach = (hip.distance(knee) + knee.distance(ankle)) * PLANT_REACH;
+        let ground_at = |p: Vec3| p - up * (p - pos).dot(up) + up * skater::ANKLE;
+        let inv = rider_rot.inverse();
+        let lift_from = |at: Vec3| Ground::Lifting { rel: inv * (at - rider_at), vel: -(inv * vel), t: 0.0 };
+        motion.ground = match motion.ground {
+            Ground::Off if in_drive && !motion.planted && dt > 0.0 => {
+                motion.planted = true;
+                Ground::Planted { at: ground_at(ankle), w: 0.0 }
+            }
+            Ground::Planted { at, .. } if !in_drive || hip.distance(at) > reach => lift_from(at),
+            Ground::Planted { at, w } => Ground::Planted { at, w: (w + dt / PLANT_IN).min(1.0) },
+            Ground::Lifting { t, .. } if t >= LIFT_TIME => Ground::Off,
+            Ground::Lifting { rel, vel, t } => {
+                Ground::Lifting { rel: rel + vel * dt, vel: vel * (-dt / LIFT_CARRY).exp(), t: t + dt }
+            }
+            g => g,
+        };
+        // A bail, a pop or the end of pushing lets go at once.
+        if phase.is_none() {
+            motion.ground = Ground::Off;
+        }
+        let target = match motion.ground {
+            Ground::Planted { at, w } => Some((at, skater::smooth01(w))),
+            Ground::Lifting { rel, t, .. } => {
+                let k = (t / LIFT_TIME).clamp(0.0, 1.0);
+                let at = rider_at + rider_rot * rel + up * LIFT_HEIGHT * (std::f32::consts::PI * k).sin().max(0.0) * (1.0 - k * 0.5);
+                Some((at, 1.0 - skater::smooth01(k)))
+            }
+            Ground::Off => None,
+        };
+        if let Some((at, w)) = target {
+            if w > 1e-3 {
+                two_bone(chain, ankle.lerp(at, w), Quat::IDENTITY, rider, &mut bones);
+            }
+            if let (Ground::Planted { at, w }, Some(m)) = (motion.ground, in_space(chain[2], rider, &bones)) {
+                if w >= 1.0 {
+                    ground_err = Some(Vec3::from(m.translation).distance(at));
+                }
+            }
+        }
+    }
+
     if motion.trace.is_none() && std::env::var_os("SK8_ANIM_TRACE").is_some() {
         motion.trace = Some(Trace::default());
     }
@@ -453,7 +537,9 @@ pub(crate) fn layer(
                 set.watched.iter().map(|(e, _)| in_space(*e, rider, &bones).map_or(Quat::IDENTITY, |m| to_rider * rot(&m))).collect();
             let local: Vec<Quat> =
                 set.watched.iter().map(|(e, _)| bones.get(*e).map_or(Quat::IDENTITY, |(t, _)| t.rotation)).collect();
-            let mode = format!("{:?} flip={:?} push={:?}", s.mode, s.flip_progress.map(|p| (p * 100.0).round()), s.push_phase.is_some());
+            let r2 = |v: Option<f32>| v.map(|p| (p * 100.0).round() / 100.0);
+            let mode = format!("{:?} flip={:?} push={:?} start={:?} mongo={} v={:.1} t={:.2}", s.mode, r2(s.flip_progress),
+                r2(s.push_phase), r2(s.push_start), s.push_mongo, s.speed, tr.frames as f32 / 60.0);
             tr.frames += 1;
             if tr.last.len() == now.len() && tr.frames > 30 {
                 for (k, (q, last)) in now.iter().zip(&tr.last).enumerate() {
@@ -496,9 +582,17 @@ pub(crate) fn layer(
                 }
                 tr.feet[i] = foot;
             }
+            if let Some(e) = ground_err {
+                tr.ground = tr.ground.max(e);
+                if e > SLIP_M {
+                    info!("SK8 anim ground slip {:.3} m (planted foot off its spot) at speed {:.1}", e, s.speed);
+                }
+            }
             tr.since_report += dt;
             if tr.since_report > 2.0 {
-                info!("SK8 anim worst {:.1} deg/frame ({} in {}), max pinned slip {:.3} m", tr.worst.0, tr.worst.1, tr.worst.2, tr.slip);
+                info!("SK8 anim worst {:.1} deg/frame ({} in {}), max pinned slip {:.3} m, ground slip {:.3} m",
+                    tr.worst.0, tr.worst.1, tr.worst.2, tr.slip, tr.ground);
+                tr.ground = 0.0;
                 tr.since_report = 0.0;
                 tr.worst = (0.0, "", String::new());
                 tr.slip = 0.0;

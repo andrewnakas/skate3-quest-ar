@@ -89,7 +89,13 @@ struct RawState {
     score: u64,
     manual_dir: c_int,
     grab_style: c_int,
+    push_start: f32,
+    push_mongo: c_int,
 }
+
+/// Where in a stroke the pushing foot plants and lifts (`SK8_PUSH_PLANT`, `SK8_PUSH_RELEASE`).
+pub const PUSH_PLANT: f32 = 0.18;
+pub const PUSH_RELEASE: f32 = 0.62;
 
 /// One step's output. Rotations are quaternions `[x, y, z, w]`.
 #[derive(Clone, Copy, Debug)]
@@ -107,8 +113,12 @@ pub struct State {
     pub fakie: bool,
     pub crouch: f32,
     pub lean: f32,
-    /// 0..1 while kicking.
+    /// 0..1 through a stroke: the foot is on the ground from [`PUSH_PLANT`] to [`PUSH_RELEASE`].
     pub push_phase: Option<f32>,
+    /// 0..1 through the step off the board before the first stroke.
+    pub push_start: Option<f32>,
+    /// The front foot pushes (mongo).
+    pub push_mongo: bool,
     /// Bit 1 left hand, bit 2 right hand.
     pub grab: u32,
     pub flip_progress: Option<f32>,
@@ -141,6 +151,8 @@ impl From<RawState> for State {
             crouch: r.crouch,
             lean: r.lean,
             push_phase: (r.push_phase >= 0.0).then_some(r.push_phase),
+            push_start: (r.push_start >= 0.0).then_some(r.push_start),
+            push_mongo: r.push_mongo != 0,
             grab: r.grab as u32,
             flip_progress: (r.flip_progress >= 0.0).then_some(r.flip_progress),
             balance: r.balance,

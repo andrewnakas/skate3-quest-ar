@@ -24,9 +24,11 @@ const sk8_param kTable[ParamCount] = {
 	{"grind_pop", "Pop off rails share", kPop, 0.3f, 1.5f, 0.82f, 0.01f},
 
 	{"gravity", "Gravity, m/s^2", kSpeed, 1.0f, 40.0f, 12.55f, 0.05f},
-	{"push_kick", "Push strength, m/s", kSpeed, 0.0f, 6.0f, 1.62f, 0.02f},
-	{"push_period", "Time between pushes, s", kSpeed, 0.15f, 2.0f, 0.62f, 0.01f},
+	{"push_kick", "Push strength, m/s", kSpeed, 0.0f, 6.0f, 2.42f, 0.02f},
+	{"push_period", "Time between pushes, s", kSpeed, 0.15f, 2.0f, 0.84f, 0.01f},
 	{"push_top", "Top pushing speed, m/s", kSpeed, 1.0f, 30.0f, 8.35f, 0.05f},
+	{"push_lead", "Step off before the first push, s", kSpeed, 0.0f, 0.6f, 0.3f, 0.01f},
+	{"push_mongo", "Mongo push (0 off, 1 on)", kSpeed, 0.0f, 1.0f, 0.0f, 1.0f},
 	{"roll_drag", "Rolling drag, m/s^2", kSpeed, 0.0f, 3.0f, 0.03f, 0.01f},
 	{"air_drag", "Air drag", kSpeed, 0.0f, 0.05f, 0.0006f, 0.0005f},
 	{"brake", "Brake, m/s^2", kSpeed, 0.0f, 20.0f, 4.65f, 0.05f},

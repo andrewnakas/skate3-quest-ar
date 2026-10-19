@@ -202,38 +202,83 @@ def flip_part(open_pose, k):
     return mix(POP_TOP, open_pose, k)
 
 
+# Push timing, shared with the engine (sk8.h SK8_PUSH_PLANT/RELEASE) and the runtime: a stroke is
+# PUSH_LEN long (the engine's push_period), the foot is on the ground from PLANT to RELEASE; the first
+# stroke follows a PUSH_LEAD step off the board (push_lead).
+PUSH_LEN, PUSH_LEAD = 0.84, 0.3
+PUSH_PLANT, PUSH_RELEASE = 0.18, 0.62
+GROUND = DECK_TOP_TO_GROUND
+
+
+def _smooth(k):
+    k = min(1.0, max(0.0, k))
+    return k * k * (3 - 2 * k)
+
+
+def _hermite1(p0, m0, p1, m1, u):
+    u2, u3 = u * u, u * u * u
+    return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1
+
+
+def stroke(phase, ahead, behind, lift, flick):
+    """The pushing foot over a stroke: (x along the board, height above the ground, toe pitch).
+    On the ground it drives straight back from `ahead` to `behind` at an even pace; off it, it rises
+    with the heel flicking up behind (knee bent), swings forward and reaches down to plant, on one
+    smooth curve whose speed matches the drive's at both ends (no kink at plant or lift-off)."""
+    drive = PUSH_RELEASE - PUSH_PLANT
+    v = (behind - ahead) / drive                      # per unit of phase (negative: going back)
+    if PUSH_PLANT <= phase <= PUSH_RELEASE:
+        k = (phase - PUSH_PLANT) / drive
+        # the toes tip down as the foot passes under and behind the hips, pushing off them
+        return ahead + (behind - ahead) * k, 0.0, -18.0 * _smooth((k - 0.55) / 0.45)
+    swing = 1.0 - drive
+    u = ((phase - PUSH_RELEASE) % 1.0) / swing
+    # leaving and arriving at a third of the drive's speed: carried back briefly, then forward
+    x = _hermite1(behind, v * swing * 0.35, ahead, v * swing * 0.35, u)
+    z = lift * math.sin(math.pi * u) ** 1.2 * (1.0 + flick * math.sin(math.pi * u) * (1 - u))
+    # pushed off the toes, the sole turns up behind (heel flick), then levels to plant flat
+    pitch = -18.0 * (1 - _smooth(u / 0.3))
+    return x, z, pitch
+
+
+def _drive_bump(phase, early=0.07, late=0.1):
+    """0..1..0 over the drive, eased, starting a little before the plant (the standing knee loads)
+    and fading after the lift-off; periodic, so the loop has no seam."""
+    a, b = PUSH_PLANT - early, PUSH_RELEASE + late
+    k = ((phase - a) % 1.0) / (b - a)
+    return math.sin(math.pi * k) ** 2 if k < 1.0 else 0.0
+
+
 def push_frame(phase):
     """Kick-push, after reference footage: the front foot turns to point down the board and the hips
-    and chest face the way of travel; the pushing foot swings forward, plants beside the front truck,
-    drives straight back along the ground, then lifts and comes forward again. The front knee bends
-    as the foot plants and the hips bob with each drive; the shoulders counter-turn against the
-    pushing leg and the arms swing with them."""
-    plant, release = 0.18, 0.62
-    if phase < plant:                       # swinging forward to plant
-        k = phase / plant
-        x, lift = -0.35 + 0.47 * k, 0.1 * math.sin(math.pi * (0.5 + 0.5 * k))
-    elif phase < release:                   # driving back on the ground, a long stroke past the tail
-        k = (phase - plant) / (release - plant)
-        x, lift = 0.12 - 0.74 * k, 0.0
-    else:                                   # lifting off and coming forward
-        k = (phase - release) / (1 - release)
-        # ends at the swing's starting height so the loop has no seam; the heel kicks up behind
-        # (knee bent) as the leg swings forward, as in gameplay footage
-        x, lift = -0.62 + 0.27 * k, 0.24 * math.sin(math.pi * k) + 0.1 * k * k * (3 - 2 * k)
-    drive = math.sin(math.pi * min(1.0, max(0.0, (phase - plant) / (release - plant))))
-    # The body faces down the board (+X) while pushing, so its left side is +Y and its right -Y. The
-    # arms hang at those sides and swing against the pushing leg: right arm forward as it drives back.
-    arm = max(-0.2, min(0.2, (-0.25 - x) * 0.5))
-    # Upright: the trunk leans only a little into each drive (a deep forward bend read as hunched),
-    # and the standing knee bends to let the pushing foot reach the ground.
-    return P(hips=(0.05, -0.05, 0.83 - 0.09 * drive), hips_rot=(8 + 6 * drive, 0, 75),
-             spine=(8 + 5 * drive, 0, 12 + 20 * arm), head=(-6, 0, 8 - 15 * arm),
+    and chest face the way of travel; the back foot swings forward, plants beside the front truck,
+    drives straight back along the ground past the tail, then lifts with a heel flick and comes
+    forward again. The standing knee loads before the plant and the body leans forward into each
+    drive and rises out of it; the shoulders counter-turn against the pushing leg and the arms swing
+    with them (right arm forward as the right leg drives back). The runtime pins the planted foot to
+    the ground, so the stroke on screen gets longer the faster the board rolls."""
+    x, lift, pitch = stroke(phase, 0.16, -0.62, 0.15, 0.6)
+    d = _drive_bump(phase)
+    # the leg's counter-swing: +1 with the pushing foot furthest back, -1 furthest forward
+    sw = math.cos(2 * math.pi * (phase - 0.6))
+    return P(hips=(0.05 + 0.04 * d, -0.06, 0.84 - 0.1 * d), hips_rot=(10 + 8 * d, 0, 75 - 4 * sw),
+             spine=(10 + 9 * d, 0, 12 + 7 * sw), head=(-8 - 6 * d, 0, 10 - 8 * sw),
              lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=80),
-             rf=foot(x, -0.22, DECK_TOP_TO_GROUND + lift, yaw=78),  # beside the toe edge
-             lh=(0.12 - arm, 0.28, 0.8 + 0.2 * max(0.0, -arm)),
-             rh=(0.12 + arm, -0.42, 0.8 + 0.2 * max(0.0, arm)), knee_out=0.5)
+             rf=foot(x, -0.22, GROUND + lift, yaw=76, pitch=pitch),  # beside the toe edge
+             # about the shoulders, which the lean carries ahead of the hips
+             lh=(0.22 - 0.17 * sw, 0.28, 0.78 + 0.08 * max(0.0, -sw) - 0.03 * d),
+             rh=(0.22 + 0.22 * sw, -0.42, 0.78 + 0.12 * max(0.0, sw) - 0.03 * d), knee_out=0.5)
 
 
+# Stepping off to push: the hips and chest turn to face down the board while the front foot pivots
+# on the bolts to point the same way, then the back foot lifts off the tail and swings out over the
+# toe edge into the first stroke's forward swing.
+PUSH_PIVOT = P(hips=(0.03, -0.03, 0.83), hips_rot=(10, 0, 40), spine=(12, 0, 12), head=(-8, 0, 30),
+               lf=foot(FRONT_X - 0.01, 0.0, 0.0, yaw=55), rf=foot(BACK_X, 0.0, 0.0, yaw=24),
+               lh=(0.2, 0.06, 0.8), rh=(-0.12, -0.3, 0.8), knee_out=0.45)
+PUSH_STEP_OFF = P(hips=(0.05, -0.05, 0.82), hips_rot=(11, 0, 66), spine=(12, 0, 12), head=(-8, 0, 16),
+                  lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=78), rf=foot(BACK_X + 0.01, -0.15, 0.11, yaw=60),
+                  lh=(0.14, 0.2, 0.8), rh=(-0.02, -0.38, 0.8), knee_out=0.5)
 # Stopping pushing: the back foot steps back onto the tail (still pointing ahead), then the front
 # foot pivots back across the board and the hips and chest turn back to the side.
 PUSH_STEP_ON = P(hips=(0.03, -0.04, 0.84), hips_rot=(9, 0, 45), spine=(10, 0, 12), head=(-8, 0, 30),
@@ -242,6 +287,41 @@ PUSH_STEP_ON = P(hips=(0.03, -0.04, 0.84), hips_rot=(9, 0, 45), spine=(10, 0, 12
 PUSH_TURN = P(hips=(0.01, -0.01, 0.84), hips_rot=(10, 0, 12), spine=(15, 0, 10), head=(-9, 0, 48),
               lf=foot(FRONT_X, 0.0, 0.0, yaw=0), rf=foot(BACK_X, 0.0, 0.0, yaw=12),
               lh=(0.28, -0.08, 0.84), rh=(-0.28, -0.12, 0.84))
+
+# Mongo: the back foot stays on the board and the front foot pushes. The back foot slides up onto
+# the back bolts and turns to point down the board, the hips and chest turn to face the way of
+# travel, and the front (left) foot steps off on its own side, the heel edge, plants ahead beside
+# the front truck and drives back to beside the back foot; the weight sits over the back leg.
+MONGO_BACK_X = -0.17
+
+
+def mongo_push_frame(phase):
+    x, lift, pitch = stroke(phase, 0.42, -0.12, 0.13, 0.5)
+    d = _drive_bump(phase)
+    sw = math.cos(2 * math.pi * (phase - 0.6))
+    # the body faces down the board (+X): its left side is +Y (heel edge), its right -Y
+    return P(hips=(-0.07 + 0.03 * d, 0.04, 0.83 - 0.09 * d), hips_rot=(10 + 8 * d, 0, 68 + 4 * sw),
+             spine=(10 + 9 * d, 0, 10 - 7 * sw), head=(-8 - 6 * d, 0, 12 + 8 * sw),
+             lf=foot(x, 0.24 - FOOT_Y * 2, GROUND + lift, yaw=78, pitch=pitch),  # beside the heel edge
+             rf=foot(MONGO_BACK_X, 0.0, 0.0, yaw=76),
+             # counter-swing: the right arm forward as the left leg comes through, and back as it drives
+             lh=(0.1 + 0.2 * sw, 0.38, 0.78 + 0.12 * max(0.0, sw) - 0.03 * d),
+             rh=(0.1 - 0.17 * sw, -0.3, 0.78 + 0.08 * max(0.0, -sw) - 0.03 * d), knee_out=0.5)
+
+
+# Stepping off mongo: the back foot slides up to the bolts as the hips turn to face down the board,
+# then the front foot lifts off and steps out over the heel edge into the stroke's forward swing.
+MONGO_SHIFT = P(hips=(-0.05, 0.02, 0.83), hips_rot=(10, 0, 40), spine=(12, 0, 12), head=(-8, 0, 30),
+                lf=foot(FRONT_X - 0.01, 0.0, 0.0, yaw=40), rf=foot(MONGO_BACK_X - 0.04, 0.0, 0.0, yaw=55),
+                lh=(0.16, 0.22, 0.8), rh=(0.1, -0.3, 0.8), knee_out=0.45)
+MONGO_STEP_OFF = P(hips=(-0.07, 0.04, 0.82), hips_rot=(11, 0, 64), spine=(11, 0, 11), head=(-8, 0, 16),
+                   lf=foot(FRONT_X + 0.04, 0.15, 0.11, yaw=70), rf=foot(MONGO_BACK_X, 0.0, 0.0, yaw=74),
+                   lh=(0.12, 0.36, 0.8), rh=(0.16, -0.3, 0.8), knee_out=0.5)
+# Stopping: the front foot steps back on over the front bolts, then the back foot slides back to the
+# tail and both turn back across the board.
+MONGO_STEP_ON = P(hips=(-0.05, 0.02, 0.84), hips_rot=(9, 0, 42), spine=(10, 0, 12), head=(-8, 0, 30),
+                  lf=foot(FRONT_X, 0.0, 0.0, yaw=45), rf=foot(MONGO_BACK_X, 0.0, 0.0, yaw=60),
+                  lh=(0.16, 0.2, 0.78), rh=(0.06, -0.3, 0.78), knee_out=0.45)
 
 
 # The bail: the back foot steps off and the body pitches forward over the toe side (stumble), the
@@ -292,8 +372,13 @@ CLIPS = {
     "air": (False, [(0.0, AIR_TUCK), (0.18, AIR_PEAK), (0.6, AIR_HOLD)]),
     # Absorb deep, then rise slowly: in gameplay footage the recovery takes about half a second.
     "land": (False, [(0.0, LAND_CONTACT), (0.07, LAND_DEEP), (0.18, LAND_DEEP), (0.42, LAND_RISE), (0.6, STANCE)]),
-    "push": (True, [(i / 10 * 0.62, push_frame(i / 10)) for i in range(11)]),
+    "push": (True, [(i / 20 * PUSH_LEN, push_frame(i / 20)) for i in range(21)]),
+    "push_start": (False, [(0.0, STANCE), (0.13, PUSH_PIVOT), (0.22, PUSH_STEP_OFF), (PUSH_LEAD, push_frame(0.0))]),
     "push_end": (False, [(0.0, push_frame(1.0)), (0.16, PUSH_STEP_ON), (0.32, PUSH_TURN), (0.46, STANCE)]),
+    "push_mongo": (True, [(i / 20 * PUSH_LEN, mongo_push_frame(i / 20)) for i in range(21)]),
+    "push_start_mongo": (False, [(0.0, STANCE), (0.13, MONGO_SHIFT), (0.22, MONGO_STEP_OFF),
+                                 (PUSH_LEAD, mongo_push_frame(0.0))]),
+    "push_end_mongo": (False, [(0.0, mongo_push_frame(1.0)), (0.16, MONGO_STEP_ON), (0.32, PUSH_TURN), (0.46, STANCE)]),
     "manual": (True, loop(lambda t: idle(MANUAL, t, 0.02, 0.05), IDLE_LEN)),
     "nose_manual": (True, loop(lambda t: idle(NOSE_MANUAL, t, 0.018, 0.05), IDLE_LEN)),
     "grind": (True, loop(lambda t: idle(GRIND, t, 0.012, 0.06), IDLE_LEN)),
@@ -475,7 +560,12 @@ def apply_pose(rig, c, pose, rest_ankle):
             Euler((0, 0, math.radians(yaw))).to_quaternion() @ Euler((math.radians(pitch), 0, 0)).to_quaternion()
             @ rest_ankle[side])
         hx = 1 if side == "l" else -1
-        c[f"kpole_{side}"].location = (f["at"][0] + 0.15 * hx * 0.3, -1.0 * pose["knee_out"] - 0.4, 0.5)
+        # The knees point the way the pelvis faces: toward the chest, turned with the hips' yaw (a
+        # body facing down the board to push bends its knees forward, not out over the toe edge).
+        kyaw = math.radians(pose["hips_rot"][2])
+        kx, ky = 0.15 * hx * 0.3, -1.0 * pose["knee_out"] - 0.4
+        kx, ky = kx * math.cos(kyaw) - ky * math.sin(kyaw), kx * math.sin(kyaw) + ky * math.cos(kyaw)
+        c[f"kpole_{side}"].location = (f["at"][0] + kx, ky, 0.5)
         c[f"hand_{side}"].location = pose[hand]
         # Elbows bend out to the side and back, aimed from behind the shoulder line at a height between
         # shoulder and hand: the pole then moves smoothly with the hand and never crosses the arm

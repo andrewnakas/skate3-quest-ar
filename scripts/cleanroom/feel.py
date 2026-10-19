@@ -49,6 +49,10 @@ KICKFLIP = [(0, -1)] * 30 + [(0, 0), (-0.707, 0.707), (-0.707, 0.707), (-0.707, 
 # name -> (action script relative to the action start, ticks to run, metric function name)
 SCENARIOS = {
     "coast": ("", 180, "coast"),
+    # A held from rolling: when the speed starts to come on, gain per second, cadence
+    # (braked down first: both start above the top pushing speed)
+    "push_hold": ("0 89 0 0 0 0 0x2000\n90 240 0 0 0 0 0x1000\n", 240, "push"),
+    "push_tap": ("0 89 0 0 0 0 0x2000\n90 92 0 0 0 0 0x1000\n", 180, "push"),
     "ollie_tap": (ollie(4), 120, "air"),
     "ollie_half": (ollie(12), 120, "air"),
     "ollie_full": (ollie(30), 120, "air"),
@@ -117,6 +121,21 @@ def m_air(s):
         "spin_deg": abs(math.degrees(yaw_turn)),
         "speed_after": s[-1][2],
     }
+
+
+def m_push(s):
+    s = s[90:]
+    v0 = s[0][2]
+    rise = [b[2] - a[2] for a, b in zip(s, s[1:])]
+    start = next((i for i, d in enumerate(rise) if d > 0.004), len(rise))
+    # strokes = separate runs of speeding up
+    strokes, on = 0, False
+    for d in rise:
+        if d > 0.004 and not on:
+            strokes += 1
+        on = d > 0.004
+    return {"speed_start": v0, "lag_s": start * DT, "gain_mps": max(x[2] for x in s) - v0,
+            "strokes": strokes, "gain_per_s": (s[-1][2] - v0) / ((len(s) - 1) * DT)}
 
 
 def m_carve(s):
