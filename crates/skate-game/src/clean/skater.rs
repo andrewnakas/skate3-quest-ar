@@ -63,19 +63,33 @@ enum Clip {
     GrabSuperman,
     GrabNoFoot,
     GrabStiffy,
+    PopNollie,
+    FlipHard,
+    FlipTre,
+    Grind50,
 }
 
-const CLIPS: usize = 28;
+const CLIPS: usize = 32;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
     "sk8_nose_manual", "sk8_grind", "sk8_boardslide", "sk8_powerslide", "sk8_bail", "sk8_push_end",
     "sk8_grab_indy", "sk8_grab_crail", "sk8_grab_tail", "sk8_grab_stalefish", "sk8_grab_melon", "sk8_grab_nose",
     "sk8_grab_tuck_knee", "sk8_grab_judo", "sk8_grab_double", "sk8_grab_superman", "sk8_grab_no_foot", "sk8_grab_stiffy",
+    "sk8_pop_nollie", "sk8_flip_hard", "sk8_flip_tre", "sk8_grind_5_0",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
-const LOOPED: [Clip; 8] =
-    [Clip::Ride, Clip::Crouch, Clip::Push, Clip::Manual, Clip::NoseManual, Clip::Grind, Clip::Boardslide, Clip::Powerslide];
+const LOOPED: [Clip; 9] = [
+    Clip::Ride,
+    Clip::Crouch,
+    Clip::Push,
+    Clip::Manual,
+    Clip::NoseManual,
+    Clip::Grind,
+    Clip::Grind50,
+    Clip::Boardslide,
+    Clip::Powerslide,
+];
 
 #[derive(Component)]
 pub(crate) struct RiderRoot;
@@ -237,6 +251,8 @@ pub(crate) struct Clock {
     since_grab: f32,
     /// Since the last kick ended (the back foot steps back on and the front foot turns back).
     since_push: f32,
+    /// The last pop was off the nose (from the pop event's trick name).
+    pub(crate) nollie: bool,
     /// Drives the idle loops (ride sway, manual and grind balance).
     idle: f32,
 }
@@ -244,30 +260,39 @@ pub(crate) struct Clock {
 impl Default for Clock {
     fn default() -> Self {
         // Long ago, so nothing plays its "just happened" clip at spawn.
-        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, idle: 0.0 }
+        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, idle: 0.0 }
     }
 }
 
-/// Which way the front foot leaves the board for this trick.
+/// Which way the feet leave the board for this trick.
 fn flip_clip(trick: &str) -> Clip {
     let t = trick.to_ascii_lowercase();
-    if t.contains("heel") || t.contains("laser") {
+    if t.contains("hardflip") {
+        Clip::FlipHard
+    } else if t.contains("tre") || t.contains("laser") {
+        Clip::FlipTre
+    } else if t.contains("heel") {
         Clip::FlipHeel
-    } else if t.contains("flip") || t.contains("hardflip") {
+    } else if t.contains("flip") {
         Clip::FlipKick
     } else {
         Clip::FlipShuv
     }
 }
 
+/// Nollies pop off the nose.
+pub(crate) fn is_nollie(trick: &str) -> bool {
+    trick.to_ascii_lowercase().starts_with("nollie")
+}
+
 /// How long a blend into this clip takes (smoothing time of a critically damped follow, s):
 /// the pop and catch are quick, body shifts like settling into a push or a manual slower.
 fn blend_time(clip: Clip) -> f32 {
     match clip {
-        Clip::Pop => 0.035,
-        Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv => 0.05,
+        Clip::Pop | Clip::PopNollie => 0.035,
+        Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv | Clip::FlipHard | Clip::FlipTre => 0.05,
         Clip::Land | Clip::Bail => 0.05,
-        Clip::Air | Clip::Grind | Clip::Boardslide => 0.08,
+        Clip::Air | Clip::Grind | Clip::Grind50 | Clip::Boardslide => 0.08,
         Clip::GrabIndy
         | Clip::GrabCrail
         | Clip::GrabTail
@@ -300,6 +325,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
     match s.mode {
         Mode::Bail => set(Clip::Bail, 1.0, s.bail_time.unwrap_or(0.0)),
         Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, c.idle),
+        Mode::Grind if s.grind_kind == 4 => set(Clip::Grind50, 1.0, c.idle),
         Mode::Grind => set(Clip::Grind, 1.0, c.idle),
         Mode::Manual if s.manual_dir < 0 => set(Clip::NoseManual, 1.0, c.idle),
         Mode::Manual => set(Clip::Manual, 1.0, c.idle),
@@ -308,7 +334,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             // A flip takes over from the pop at full extension, where its clip starts.
             let pop_until = if s.flip_progress.is_some() { POP_TOP_AT } else { pop_len };
             if c.since_pop < pop_until {
-                set(Clip::Pop, 1.0, c.since_pop);
+                set(if c.nollie { Clip::PopNollie } else { Clip::Pop }, 1.0, c.since_pop);
             } else if let Some(p) = s.flip_progress {
                 let clip = flip_clip(trick);
                 set(clip, 1.0, p * len[clip as usize]);
@@ -366,7 +392,10 @@ pub(crate) fn animate(
     clock.idle += game_dt * (0.7 + 0.3 * (b.speed / 6.0).min(1.0));
     for e in &sim.events {
         match e.kind {
-            EventKind::Pop => clock.since_pop = 0.0,
+            EventKind::Pop => {
+                clock.since_pop = 0.0;
+                clock.nollie = is_nollie(&e.name);
+            }
             EventKind::Land => clock.since_land = 0.0,
             _ => {}
         }
@@ -381,7 +410,13 @@ pub(crate) fn animate(
     // in and out, never overshooting), all at the pace of the clip being blended in.
     let goals = targets(b, &clock, &sim.rider.trick(), &avatar.lens);
     let lead = (0..CLIPS).max_by(|&i, &j| goals[i].0.total_cmp(&goals[j].0)).unwrap_or(0);
-    let smooth = blend_time(CLIP_ORDER[lead]);
+    let mut smooth = blend_time(CLIP_ORDER[lead]);
+    // Popping straight out of a push: the body still faces down the board and must turn back to the
+    // side, which in the pop's quick blend whips the whole torso round.
+    let pushing = avatar.weights[Clip::Push as usize] + avatar.weights[Clip::PushEnd as usize];
+    if matches!(CLIP_ORDER[lead], Clip::Pop | Clip::PopNollie) && pushing > 0.05 {
+        smooth = smooth.max(0.12);
+    }
     // A respawn is a cut: no standing up out of the bail in front of the camera.
     if sim.events.iter().any(|e| e.kind == EventKind::Respawn) {
         for i in 0..CLIPS {
@@ -418,7 +453,7 @@ pub(crate) fn animate(
 
 /// The pop's tail snap: the tail slams down and the nose comes up, pivoting on the tail wheels,
 /// then the front foot levels it out. Returns the board's shift and its turned rotation.
-pub(crate) fn pop_snap(deck: Quat, since_pop: f32) -> (Vec3, Quat) {
+pub(crate) fn pop_snap(deck: Quat, since_pop: f32, nollie: bool) -> (Vec3, Quat) {
     if since_pop >= POP_PITCH_END {
         return (Vec3::ZERO, deck);
     }
@@ -427,16 +462,19 @@ pub(crate) fn pop_snap(deck: Quat, since_pop: f32) -> (Vec3, Quat) {
     } else {
         1.0 - smooth01((since_pop - POP_PITCH_PEAK) / (POP_PITCH_END - POP_PITCH_PEAK))
     };
-    let pitch = Quat::from_rotation_x(-POP_PITCH * k);
-    let tail = Vec3::new(0.0, WHEEL_R - DECK_CENTRE, -AXLE_Z);
-    (deck * (tail - pitch * tail), deck * pitch)
+    // A nollie snaps the nose down and pivots on the front wheels instead.
+    let end = if nollie { 1.0 } else { -1.0 };
+    let pitch = Quat::from_rotation_x(end * POP_PITCH * k);
+    let pivot = Vec3::new(0.0, WHEEL_R - DECK_CENTRE, end * AXLE_Z);
+    (deck * (pivot - pitch * pivot), deck * pitch)
 }
 
 const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::Ride, Clip::Crouch, Clip::Pop, Clip::Air, Clip::FlipKick, Clip::FlipHeel, Clip::FlipShuv, Clip::Land, Clip::Push,
     Clip::Manual, Clip::NoseManual, Clip::Grind, Clip::Boardslide, Clip::Powerslide, Clip::Bail, Clip::PushEnd,
     Clip::GrabIndy, Clip::GrabCrail, Clip::GrabTail, Clip::GrabStalefish, Clip::GrabMelon, Clip::GrabNose, Clip::GrabTuckKnee,
-    Clip::GrabJudo, Clip::GrabDouble, Clip::GrabSuperman, Clip::GrabNoFoot, Clip::GrabStiffy,
+    Clip::GrabJudo, Clip::GrabDouble, Clip::GrabSuperman, Clip::GrabNoFoot, Clip::GrabStiffy, Clip::PopNollie,
+    Clip::FlipHard, Clip::FlipTre, Clip::Grind50,
 ];
 
 fn smooth01(x: f32) -> f32 {

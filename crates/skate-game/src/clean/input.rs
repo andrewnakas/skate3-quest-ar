@@ -106,6 +106,32 @@ fn demo_grabs(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=flips`: every trick in the engine's table in turn, using its own sample stick path
+/// (the crouch held a third of a second), with a push between them.
+fn demo_flips(t: f32) -> Input {
+    const START: f32 = 2.0;
+    const EACH: f32 = 3.0;
+    const HOLD: usize = 20;
+    let mut i = Input::default();
+    if t < START {
+        i.buttons |= buttons::PUSH;
+        return i;
+    }
+    let names = skate_lite_sys::trick_names();
+    let n = ((t - START) / EACH) as usize % names.len().max(1);
+    let d = (t - START) % EACH;
+    if d > 2.2 {
+        i.buttons |= buttons::PUSH;
+    }
+    let path = skate_lite_sys::trick_demo_path(n);
+    let k = (d * 60.0) as usize;
+    let k = if k < 4 { k } else if k < 4 + HOLD { 4 } else { k - HOLD + 1 };
+    if let Some(p) = path.get(k) {
+        i.flick = *p;
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -179,7 +205,11 @@ pub(crate) fn read_desktop(
         if !sim.paused {
             *t += time.delta_secs().min(0.1) * sim.time_scale;
         }
-        sim.input = if std::env::var("SK8_DEMO").is_ok_and(|v| v == "grabs") { demo_grabs(*t) } else { demo_input(*t) };
+        sim.input = match std::env::var("SK8_DEMO").as_deref() {
+            Ok("grabs") => demo_grabs(*t),
+            Ok("flips") => demo_flips(*t),
+            _ => demo_input(*t),
+        };
         return;
     }
     let key = |k| if keys.pressed(k) { 1.0 } else { 0.0 };

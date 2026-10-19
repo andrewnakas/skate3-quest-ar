@@ -131,6 +131,11 @@ struct Trace {
 }
 
 const SPIKE_DEG: f32 = 14.0;
+
+/// Above this a one-frame turn is logged with the clips playing (SK8_JUMP_DEG, default 42).
+fn jump_deg() -> f32 {
+    std::env::var("SK8_JUMP_DEG").ok().and_then(|v| v.parse().ok()).unwrap_or(3.0 * SPIKE_DEG)
+}
 const SLIP_M: f32 = 0.012;
 
 /// Damped spring towards `target`, semi-implicitly (stable at frame rates down to ~20 Hz for these
@@ -355,7 +360,7 @@ pub(crate) fn layer(
         deck = Quat::from_axis_angle(fwd, -lean * BOARD_ROLL) * deck;
     }
     if s.mode == Mode::Air {
-        let (shift, pitched) = skater::pop_snap(deck, clock.since_pop);
+        let (shift, pitched) = skater::pop_snap(deck, clock.since_pop, clock.nollie);
         at += shift;
         deck = pitched;
     }
@@ -454,7 +459,7 @@ pub(crate) fn layer(
                     if deg > SPIKE_DEG {
                         info!("SK8 anim spike {} {:.1} deg/frame in {}", set.watched[k].1, deg, mode);
                     }
-                    if deg > 3.0 * SPIKE_DEG {
+                    if deg > jump_deg() {
                         // A jump this big in one frame is a discontinuity: show what was playing.
                         let mut w: Vec<(f32, usize)> =
                             avatar.weights.iter().enumerate().map(|(i, w)| (*w, i)).filter(|(w, _)| *w > 0.01).collect();

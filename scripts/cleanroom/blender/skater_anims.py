@@ -63,16 +63,16 @@ AIR_TUCK = P(hips=(0.0, 0.03, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 10), hea
 def flip_open(front_y, back_z):
     """Both feet up in a compact tuck over the spinning board (the front foot only flicks a little
     toward its side), the chest hunched, arms thrown up and out in a V (as in gameplay footage)."""
-    return P(hips=(0.0, 0.04, 0.88), hips_rot=(22, 0, 0), spine=(20, 0, 8), head=(-30, 0, 50),
-             lf=foot(FRONT_X + 0.08, front_y, 0.4, yaw=-30, pitch=-10), rf=foot(BACK_X - 0.02, 0.0, back_z, yaw=10),
-             lh=(0.56, -0.08, 1.56), rh=(-0.54, -0.02, 1.54), knee_out=0.7)
+    return P(hips=(0.0, 0.04, 0.89), hips_rot=(16, 0, 0), spine=(15, 0, 8), head=(-26, 0, 50),
+             lf=foot(FRONT_X + 0.08, front_y, 0.36, yaw=-30, pitch=-10), rf=foot(BACK_X - 0.02, 0.0, back_z, yaw=10),
+             lh=(0.68, -0.08, 1.3), rh=(-0.66, -0.02, 1.28), knee_out=0.7)
 
 
-FLIP_KICK = flip_open(-0.12, 0.36)
-FLIP_HEEL = flip_open(0.1, 0.37)
-FLIP_SHUV = P(hips=(0.0, 0.04, 0.88), hips_rot=(22, 0, 0), spine=(20, 0, 8), head=(-28, 0, 50),
-              lf=foot(FRONT_X + 0.02, 0.0, 0.38, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.37, yaw=8),
-              lh=(0.62, -0.1, 1.44), rh=(-0.6, -0.04, 1.42), knee_out=0.65)
+FLIP_KICK = flip_open(-0.12, 0.33)
+FLIP_HEEL = flip_open(0.1, 0.34)
+FLIP_SHUV = P(hips=(0.0, 0.04, 0.89), hips_rot=(16, 0, 0), spine=(15, 0, 8), head=(-26, 0, 50),
+              lf=foot(FRONT_X + 0.02, 0.0, 0.34, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.33, yaw=8),
+              lh=(0.68, -0.1, 1.28), rh=(-0.66, -0.04, 1.26), knee_out=0.65)
 FLIP_CATCH = P(hips=(0.0, 0.03, 0.88), hips_rot=(16, 0, 0), spine=(18, 0, 10), head=(-26, 0, 50),
                lf=foot(FRONT_X, 0.0, 0.1, yaw=-20), rf=foot(BACK_X, 0.0, 0.09, yaw=8),
                lh=(0.64, -0.1, 1.32), rh=(-0.62, -0.04, 1.29), knee_out=0.55)  # arms still high at the catch
@@ -164,6 +164,33 @@ LAND_DEEP = P(hips=(0.0, 0.05, 0.7), hips_rot=(24, 0, 0), spine=(24, 0, 12), hea
 LAND_RISE = P(hips=(0.0, 0.01, 0.87), hips_rot=(9, 0, 0), spine=(15, 0, 10), lh=(0.4, -0.15, 0.9), rh=(-0.41, -0.12, 0.89))
 
 
+# Nollie: the mirror of the pop: weight forward, the front leg snaps straight to slam the nose, the
+# back knee drives up and the back foot drags toward the tail (after the port footage, our numbers).
+NOLLIE_CROUCH = P(hips=(0.05, 0.05, 0.74), hips_rot=(24, 0, 0), spine=(20, 0, 14), head=(-22, 0, 60),
+                  lh=(0.36, -0.28, 0.72), rh=(-0.32, -0.22, 0.7))
+NOLLIE_DRIVE = P(hips=(0.04, 0.03, 0.86), hips_rot=(16, 0, 0), spine=(14, 0, 12), head=(-20, 0, 58),
+                 lf=foot(FRONT_X + 0.01, 0.0, 0.0, yaw=-20), rf=foot(BACK_X - 0.04, 0.0, 0.05, yaw=8, pitch=-6),
+                 lh=(0.5, -0.2, 0.95), rh=(-0.49, -0.14, 0.93), knee_out=0.45)
+NOLLIE_TOP = P(hips=(0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 10), head=(-18, 0, 58),
+               lf=foot(FRONT_X + 0.02, 0.0, 0.0, yaw=-20), rf=foot(BACK_X - 0.1, 0.0, 0.16, yaw=12, pitch=-14),
+               lh=(0.58, -0.14, 1.07), rh=(-0.56, -0.08, 1.04), knee_out=0.55)
+NOLLIE_SLIDE = P(hips=(0.0, 0.02, 0.95), hips_rot=(12, 0, 0), spine=(12, 0, 9), head=(-20, 0, 55),
+                 lf=foot(FRONT_X, 0.0, 0.1, yaw=-20), rf=foot(BACK_X - 0.06, 0.0, 0.17, yaw=10, pitch=-4),
+                 lh=(0.68, -0.1, 1.22), rh=(-0.66, -0.04, 1.19), knee_out=0.6)
+# Hardflip: the legs open front to back (front foot forward and up, back foot up behind) and the board
+# flips upright between them. Tre flip: both feet up high, the back foot scooping round behind.
+FLIP_HARD = P(hips=(0.0, 0.03, 0.9), hips_rot=(16, 0, 0), spine=(15, 0, 8), head=(-28, 0, 50),
+              lf=foot(FRONT_X + 0.18, -0.04, 0.42, yaw=-25, pitch=-20), rf=foot(BACK_X - 0.1, 0.02, 0.36, yaw=12, pitch=10),
+              lh=(0.7, -0.08, 1.26), rh=(-0.68, -0.02, 1.23), knee_out=0.7)
+FLIP_TRE = P(hips=(0.0, 0.04, 0.89), hips_rot=(16, 0, 0), spine=(15, 0, 6), head=(-26, 0, 50),
+             lf=foot(FRONT_X + 0.06, -0.06, 0.38, yaw=-30, pitch=-10), rf=foot(BACK_X - 0.06, 0.1, 0.4, yaw=25),
+             lh=(0.68, -0.08, 1.3), rh=(-0.66, -0.02, 1.28), knee_out=0.7)
+# 5-0: on the back truck, weight back over the tail, the front leg long, arms out for balance.
+GRIND_50 = P(hips=(-0.1, 0.02, 0.76), hips_rot=(6, 0, 0), spine=(12, 0, 12), head=(-14, 0, 55),
+             lf=foot(FRONT_X, 0.0, 0.0, yaw=-20), rf=foot(BACK_X, 0.0, 0.0, yaw=8),
+             lh=(0.6, -0.06, 1.1), rh=(-0.62, -0.06, 1.06), knee_out=0.4)
+
+
 def flip_part(open_pose, k):
     """Part-way from the pop's extension into the flip's open pose."""
     return mix(POP_TOP, open_pose, k)
@@ -253,6 +280,9 @@ CLIPS = {
     "ride": (True, loop(ride_frame, IDLE_LEN)),
     "crouch": (True, loop(lambda t: idle(CROUCH, t, 0.008, 0.02), IDLE_LEN)),
     "pop": (False, [(0.0, CROUCH), (0.05, POP_DRIVE), (0.1, POP_TOP), (0.18, POP_SLIDE), (0.3, AIR_TUCK)]),
+    "pop_nollie": (False, [(0.0, NOLLIE_CROUCH), (0.05, NOLLIE_DRIVE), (0.1, NOLLIE_TOP), (0.18, NOLLIE_SLIDE),
+                           (0.3, AIR_TUCK)]),
+    "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
     "air": (False, [(0.0, AIR_TUCK), (0.18, AIR_PEAK), (0.6, AIR_HOLD)]),
     # Absorb deep, then rise slowly: in gameplay footage the recovery takes about half a second.
     "land": (False, [(0.0, LAND_CONTACT), (0.07, LAND_DEEP), (0.18, LAND_DEEP), (0.42, LAND_RISE), (0.6, STANCE)]),
@@ -343,9 +373,10 @@ def sample(keys, t, looped):
 # One clip per grab style: reach for the board over a quarter second, then hold with a slight sway.
 for _name, _pose in GRAB_POSES.items():
     CLIPS[f"grab_{_name}"] = (False, [(0.0, AIR_TUCK), (0.26, _pose), (0.6, idle(_pose, 0.25, 0.01, 0.0))])
-for _name, _open in (("flip_kick", FLIP_KICK), ("flip_heel", FLIP_HEEL), ("flip_shuv", FLIP_SHUV)):
+for _name, _open in (("flip_kick", FLIP_KICK), ("flip_heel", FLIP_HEEL), ("flip_shuv", FLIP_SHUV),
+                     ("flip_hard", FLIP_HARD), ("flip_tre", FLIP_TRE)):
     # The arms take most of a fifth of a second to go up into the V.
-    CLIPS[_name] = (False, [(0.0, POP_TOP), (0.08, flip_part(_open, 0.5)), (0.18, _open), (0.28, _open),
+    CLIPS[_name] = (False, [(0.0, POP_TOP), (0.1, flip_part(_open, 0.5)), (0.2, _open), (0.28, _open),
                             (0.38, FLIP_CATCH), (0.45, AIR_TUCK)])
 
 
