@@ -2,7 +2,8 @@
 //!
 //! Quest Touch (skating):
 //! - left stick: steer; in the air, spin; in a manual, balance (up/down)
-//! - right stick: hold down to crouch, flick to pop and flip (see How to play)
+//! - right stick: hold down to crouch, flick to pop and flip (see How to play); part-way down /
+//!   up and held: manual / nose manual (how far balances it)
 //! - A: push (hold to keep pushing), B: mongo push, Y: brake
 //! - X held while steering: powerslide
 //! - triggers in the air: grab (left / right hand)
@@ -153,6 +154,26 @@ fn demo_push(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=manual`: rolling, a manual (right stick part-way down), a nose manual (part-way up),
+/// then an ollie landed with the stick already part-way down (straight into a manual).
+const MANUAL_EACH: f32 = 7.0;
+fn demo_manual(t: f32) -> Input {
+    let d = t % MANUAL_EACH;
+    let mut i = Input::default();
+    if (0.4..2.2).contains(&d) {
+        i.flick = [0.0, -0.55];
+    } else if (2.8..4.6).contains(&d) {
+        i.flick = [0.0, 0.55];
+    } else if (5.0..5.3).contains(&d) {
+        i.flick = [0.0, -1.0];
+    } else if (5.3..5.4).contains(&d) {
+        i.flick = [0.0, 1.0];
+    } else if (5.75..6.9).contains(&d) {
+        i.flick = [0.0, -0.55];
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -191,8 +212,9 @@ fn demo_input(t: f32) -> Input {
     if (16.95..17.6).contains(&t) {
         i.buttons |= buttons::GRAB_RIGHT;
     }
+    // a manual on the right stick, part-way down
     if (18.5..20.0).contains(&t) {
-        i.buttons |= buttons::MANUAL;
+        i.flick = [0.0, -0.55];
     }
     if (20.5..22.5).contains(&t) {
         i.buttons |= buttons::SLIDE;
@@ -213,6 +235,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("flips") if t >= 2.0 => Some(((t - 2.0) / 3.0) as usize),
         Ok("grabs") if t >= 3.0 => Some(((t - 3.0) / 2.6) as usize),
         Ok("push") => Some((t / PUSH_EACH) as usize),
+        Ok("manual") => Some((t / MANUAL_EACH) as usize),
         _ => None,
     }
 }
@@ -257,6 +280,7 @@ pub(crate) fn read_desktop(
             Ok("grabs") => demo_grabs(*t),
             Ok("flips") => demo_flips(*t),
             Ok("push") => demo_push(*t),
+            Ok("manual") => demo_manual(*t),
             _ => demo_input(*t),
         };
         return;

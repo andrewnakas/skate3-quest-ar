@@ -17,8 +17,10 @@ DECK_TOP_TO_GROUND = -0.105  # the ground under the wheels, in the rider frame
 ANKLE = 0.075                # ankle height above whatever the foot stands on
 
 # Where the feet stand on the deck (board.rs has the same deck: trucks at +-0.2, kicks from +-0.245):
-# the front foot over the front bolts, the back foot on the start of the tail.
-FRONT_X, BACK_X = 0.19, -0.28
+# the front foot over the front bolts, the back foot on the tail.
+FRONT_X, BACK_X = 0.19, -0.31
+# Foot yaw (degrees, + turns the toes toward the nose) of the riding stance.
+FRONT_YAW, BACK_YAW = 15.0, 0.0
 # The ankle sits toward the heel, so a foot centred across the deck has its ankle this far to the heel
 # side (+Y; the toes point -Y): with the ankle on the centre line the toes hung over the toe edge.
 FOOT_Y = 0.05
@@ -37,8 +39,9 @@ def P(**kw):
         "hips_rot": (9.0, 0.0, 0.0),      # pitch (forward bend about X), roll, yaw (degrees)
         "spine": (18.0, 2.0, 10.0),        # bend forward, side, twist toward the nose
         "head": (-6.0, 3.0, 55.0),         # nod, tilt, turn toward the nose
-        "lf": foot(FRONT_X, 0.0, 0.0, yaw=-20.0),
-        "rf": foot(BACK_X, 0.0, 0.0, yaw=8.0),
+        # skater's stance: front toes turned 15 deg toward the nose, back foot square across the tail
+        "lf": foot(FRONT_X, 0.0, 0.0, yaw=FRONT_YAW),
+        "rf": foot(BACK_X, 0.0, 0.0, yaw=BACK_YAW),
         "lh": (0.28, -0.12, 0.8),          # front hand: hanging easy, a little ahead
         "rh": (-0.28, -0.08, 0.78),        # back hand
         "knee_out": 0.35,                  # knees point toward the chest side
@@ -57,11 +60,11 @@ CROUCH = P(hips=(0.0, 0.05, 0.74), hips_rot=(22, 0, 0), spine=(20, 0, 12), head=
 # The pop: the back leg snaps straight to slam the tail, the front knee drives up and the front foot
 # drags toward the nose, the arms lift and open.
 POP_TOP = P(hips=(-0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 8), head=(-18, 0, 55),
-            lf=foot(FRONT_X + 0.1, 0.0, 0.16, yaw=-25, pitch=14), rf=foot(BACK_X - 0.02, 0.0, 0.0, yaw=8),
+            lf=foot(FRONT_X + 0.1, 0.0, 0.16, yaw=10, pitch=14), rf=foot(BACK_X - 0.02, 0.0, 0.0, yaw=0),
             # hands up and out but elbows kept bent: a near-straight arm lets the elbow flip about
             lh=(0.58, -0.14, 1.07), rh=(-0.56, -0.08, 1.04), knee_out=0.55)
 AIR_TUCK = P(hips=(0.0, 0.03, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 10), head=(-20, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.22, yaw=-20), rf=foot(BACK_X, 0.0, 0.21, yaw=8),
+             lf=foot(FRONT_X, 0.0, 0.22, yaw=15), rf=foot(BACK_X, 0.0, 0.21, yaw=0),
              lh=(0.68, -0.1, 1.2), rh=(-0.66, -0.04, 1.17), knee_out=0.6)
 # Flip tricks: the legs split up and out of the way and the board turns underneath, arms up and
 # open, then the feet come back down onto it. Kickflips kick the front foot out forward over the toe
@@ -70,17 +73,17 @@ def flip_open(front_y, back_z):
     """Both feet up in a compact tuck over the spinning board (the front foot only flicks a little
     toward its side), the chest hunched, arms thrown up and out in a V (as in gameplay footage)."""
     return P(hips=(0.0, 0.04, 0.89), hips_rot=(16, 0, 0), spine=(15, 0, 8), head=(-26, 0, 50),
-             lf=foot(FRONT_X + 0.08, front_y, 0.36, yaw=-30, pitch=-10), rf=foot(BACK_X - 0.02, 0.0, back_z, yaw=10),
+             lf=foot(FRONT_X + 0.08, front_y, 0.36, yaw=5, pitch=-10), rf=foot(BACK_X - 0.02, 0.0, back_z, yaw=2),
              lh=(0.68, -0.08, 1.3), rh=(-0.66, -0.02, 1.28), knee_out=0.7)
 
 
 FLIP_KICK = flip_open(-0.12, 0.33)
 FLIP_HEEL = flip_open(0.1, 0.34)
 FLIP_SHUV = P(hips=(0.0, 0.04, 0.89), hips_rot=(16, 0, 0), spine=(15, 0, 8), head=(-26, 0, 50),
-              lf=foot(FRONT_X + 0.02, 0.0, 0.34, yaw=-20), rf=foot(BACK_X - 0.02, 0.0, 0.33, yaw=8),
+              lf=foot(FRONT_X + 0.02, 0.0, 0.34, yaw=15), rf=foot(BACK_X - 0.02, 0.0, 0.33, yaw=0),
               lh=(0.68, -0.1, 1.28), rh=(-0.66, -0.04, 1.26), knee_out=0.65)
 FLIP_CATCH = P(hips=(0.0, 0.03, 0.88), hips_rot=(16, 0, 0), spine=(18, 0, 10), head=(-26, 0, 50),
-               lf=foot(FRONT_X, 0.0, 0.1, yaw=-20), rf=foot(BACK_X, 0.0, 0.09, yaw=8),
+               lf=foot(FRONT_X, 0.0, 0.1, yaw=15), rf=foot(BACK_X, 0.0, 0.09, yaw=0),
                lh=(0.64, -0.1, 1.32), rh=(-0.62, -0.04, 1.29), knee_out=0.55)  # arms still high at the catch
 LAND_LOW = P(hips=(0.0, 0.04, 0.72), hips_rot=(22, 0, 0), spine=(22, 0, 12), lh=(0.4, -0.26, 0.8), rh=(-0.4, -0.2, 0.78))
 MANUAL = P(hips=(-0.13, 0.0, 0.8), hips_rot=(-4, 0, 0), spine=(-2, 0, 12), lh=(0.38, -0.05, 1.02), rh=(-0.5, -0.05, 1.0))
@@ -89,7 +92,7 @@ GRIND = P(hips=(0.0, 0.02, 0.74), hips_rot=(12, 0, 0), spine=(18, 0, 12), lh=(0.
 BOARDSLIDE = P(hips=(0.0, 0.03, 0.74), hips_rot=(12, 0, 30), spine=(16, 0, 30), head=(-6, 0, 70),
                lh=(0.6, -0.15, 1.06), rh=(-0.58, 0.1, 1.04))
 POWERSLIDE = P(hips=(0.0, 0.16, 0.68), hips_rot=(-12, 0, 10), spine=(-6, 0, 20),
-               lf=foot(FRONT_X, 0.03, 0.0, yaw=-25), rf=foot(BACK_X, 0.03, 0.0, yaw=5),
+               lf=foot(FRONT_X, 0.03, 0.0, yaw=10), rf=foot(BACK_X, 0.03, 0.0, yaw=-3),
                lh=(0.5, 0.05, 0.95), rh=(-0.5, 0.15, 0.9))
 # Grabs: a compact tuck with the board pulled up under the feet and a hand on the deck. The deck top is
 # at GRAB_DECK (the soles), its toe edge at y -0.11 and heel edge at +0.11, nose x +0.4, tail x -0.4.
@@ -100,7 +103,7 @@ GRAB_DECK = 0.3
 
 def grab_pose(**kw):
     base = dict(hips=(0.0, 0.02, 0.6), hips_rot=(34, 0, 0), spine=(38, 0, 6), head=(-14, 0, 45),
-                lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK, yaw=-20), rf=foot(BACK_X + 0.02, 0.0, GRAB_DECK - 0.01, yaw=8),
+                lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK, yaw=15), rf=foot(BACK_X + 0.02, 0.0, GRAB_DECK - 0.01, yaw=0),
                 lh=(0.5, -0.3, 0.92), rh=(-0.5, -0.26, 0.9), knee_out=0.65)
     base.update(kw)
     return P(**base)
@@ -111,7 +114,7 @@ GRAB_POSES = {
     # back hand
     "indy": grab_pose(rh=(0.0, -0.12, D)),
     "crail": grab_pose(rh=(0.38, -0.1, D + 0.02), spine=(44, 0, 22), head=(-18, 0, 60),
-                       lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK + 0.03, yaw=-20), lh=(-0.4, -0.22, 1.0)),
+                       lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK + 0.03, yaw=15), lh=(-0.4, -0.22, 1.0)),
     "tail": grab_pose(rh=(-0.42, -0.04, D - 0.01), hips_rot=(28, 0, 0), spine=(34, 0, -18), head=(-14, 0, 25),
                       lh=(0.52, -0.28, 0.98)),
     "stalefish": grab_pose(rh=(-0.08, 0.13, D), hips_rot=(30, -8, 0), spine=(32, 0, -12), head=(-14, 0, 40),
@@ -119,22 +122,22 @@ GRAB_POSES = {
     # front hand
     "melon": grab_pose(lh=(0.02, 0.13, D), spine=(36, 0, 14), rh=(-0.5, -0.26, 0.94)),
     "nose": grab_pose(lh=(0.42, -0.02, D + 0.02), spine=(42, 0, 20), head=(-18, 0, 60),
-                      lf=foot(FRONT_X + 0.04, 0.0, GRAB_DECK + 0.02, yaw=-20), rh=(-0.5, -0.26, 0.96)),
+                      lf=foot(FRONT_X + 0.04, 0.0, GRAB_DECK + 0.02, yaw=15), rh=(-0.5, -0.26, 0.96)),
     "tuck_knee": grab_pose(hips=(0.0, 0.03, 0.58), spine=(42, 0, 8), lh=(0.06, -0.12, D + 0.06),
-                           lf=foot(FRONT_X - 0.04, 0.0, GRAB_DECK + 0.07, yaw=-20),
-                           rf=foot(BACK_X + 0.04, 0.0, GRAB_DECK + 0.06, yaw=8), rh=(-0.46, -0.24, 0.96)),
+                           lf=foot(FRONT_X - 0.04, 0.0, GRAB_DECK + 0.07, yaw=15),
+                           rf=foot(BACK_X + 0.04, 0.0, GRAB_DECK + 0.06, yaw=0), rh=(-0.46, -0.24, 0.96)),
     "judo": grab_pose(hips=(0.0, 0.0, 0.66), spine=(30, 0, 18), lh=(0.36, 0.11, D - 0.02),
-                      lf=foot(0.62, -0.34, 0.46, yaw=-10, pitch=-25), rh=(-0.5, -0.08, 1.16), knee_out=0.5),
+                      lf=foot(0.62, -0.34, 0.46, yaw=25, pitch=-25), rh=(-0.5, -0.08, 1.16), knee_out=0.5),
     # both hands
     "double": grab_pose(spine=(42, 0, 6), lh=(0.14, -0.12, D), rh=(-0.14, -0.12, D)),
     "superman": P(hips=(0.0, 0.16, 0.86), hips_rot=(55, 0, 0), spine=(14, 0, 4), head=(-40, 0, 20),
-                  lf=foot(0.18, 0.46, 0.74, yaw=-20, pitch=40), rf=foot(-0.22, 0.5, 0.8, yaw=8, pitch=40),
+                  lf=foot(0.18, 0.46, 0.74, yaw=15, pitch=40), rf=foot(-0.22, 0.5, 0.8, yaw=0, pitch=40),
                   lh=(0.16, -0.5, 0.92), rh=(-0.16, -0.5, 0.92), knee_out=0.2),
     "no_foot": P(hips=(0.0, 0.04, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 6), head=(-22, 0, 40),
-                 lf=foot(0.46, -0.16, 0.36, yaw=-35, pitch=-15), rf=foot(-0.5, 0.14, 0.4, yaw=25, pitch=15),
+                 lf=foot(0.46, -0.16, 0.36, yaw=0, pitch=-15), rf=foot(-0.5, 0.14, 0.4, yaw=25, pitch=15),
                  lh=(0.13, -0.3, 0.72), rh=(-0.13, -0.3, 0.72), knee_out=0.45),  # legs kicked out wide
     "stiffy": grab_pose(hips=(0.0, 0.1, 0.8), hips_rot=(58, 0, 0), spine=(40, 0, 6), head=(-6, 0, 40),
-                        lf=foot(FRONT_X + 0.04, 0.0, 0.2, yaw=-20), rf=foot(BACK_X - 0.04, 0.0, 0.19, yaw=8),
+                        lf=foot(FRONT_X + 0.04, 0.0, 0.2, yaw=15), rf=foot(BACK_X - 0.04, 0.0, 0.19, yaw=0),
                         lh=(0.12, -0.12, 0.19), rh=(-0.12, -0.12, 0.19), knee_out=0.2),  # legs near straight
 }
 # The old names, kept for the poses other code refers to.
@@ -146,21 +149,21 @@ GRAB_HEEL = GRAB_POSES["melon"]
 # to the curve): the pop drives up off the back foot before the front foot slides; the air holds
 # the tuck then reaches the legs back down for the landing.
 POP_DRIVE = P(hips=(-0.02, 0.03, 0.86), hips_rot=(16, 0, 0), spine=(14, 0, 10), head=(-20, 0, 55),
-              lf=foot(FRONT_X + 0.04, 0.0, 0.05, yaw=-22, pitch=6), rf=foot(BACK_X - 0.01, 0.0, 0.0, yaw=8),
+              lf=foot(FRONT_X + 0.04, 0.0, 0.05, yaw=13, pitch=6), rf=foot(BACK_X - 0.01, 0.0, 0.0, yaw=0),
               lh=(0.5, -0.2, 0.95), rh=(-0.49, -0.14, 0.93), knee_out=0.45)  # arms on their way up
 POP_SLIDE = P(hips=(0.0, 0.02, 0.95), hips_rot=(12, 0, 0), spine=(12, 0, 9), head=(-20, 0, 55),
-              lf=foot(FRONT_X + 0.06, 0.0, 0.17, yaw=-22, pitch=4), rf=foot(BACK_X, 0.0, 0.1, yaw=8),
+              lf=foot(FRONT_X + 0.06, 0.0, 0.17, yaw=13, pitch=4), rf=foot(BACK_X, 0.0, 0.1, yaw=0),
               lh=(0.68, -0.1, 1.22), rh=(-0.66, -0.04, 1.19), knee_out=0.6)
 # Gameplay footage (3 fixed angles, pose-tracked): knees ~82 deg in the tuck and the tuck deepest late
 # in the air, held into the landing (no reaching the legs down first); pop to landing ~0.8 s.
 AIR_PEAK = P(hips=(0.0, 0.05, 0.84), hips_rot=(26, 0, 0), spine=(26, 0, 10), head=(-26, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.4, yaw=-20), rf=foot(BACK_X, 0.0, 0.39, yaw=8),
+             lf=foot(FRONT_X, 0.0, 0.4, yaw=15), rf=foot(BACK_X, 0.0, 0.39, yaw=0),
              lh=(0.7, -0.1, 1.2), rh=(-0.68, -0.04, 1.17), knee_out=0.65)  # arms wide for balance
 AIR_HOLD = P(hips=(0.0, 0.05, 0.84), hips_rot=(24, 0, 0), spine=(24, 0, 10), head=(-24, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.37, yaw=-20), rf=foot(BACK_X, 0.0, 0.36, yaw=8),
+             lf=foot(FRONT_X, 0.0, 0.37, yaw=15), rf=foot(BACK_X, 0.0, 0.36, yaw=0),
              lh=(0.68, -0.12, 1.16), rh=(-0.66, -0.06, 1.13), knee_out=0.65)
 AIR_REACH = P(hips=(0.0, 0.03, 0.94), hips_rot=(14, 0, 0), spine=(16, 0, 10), head=(-22, 0, 55),
-              lf=foot(FRONT_X, 0.0, 0.07, yaw=-20), rf=foot(BACK_X, 0.0, 0.06, yaw=8),
+              lf=foot(FRONT_X, 0.0, 0.07, yaw=15), rf=foot(BACK_X, 0.0, 0.06, yaw=0),
               lh=(0.48, -0.18, 0.98), rh=(-0.46, -0.12, 0.95), knee_out=0.5)
 LAND_CONTACT = P(hips=(0.0, 0.03, 0.84), hips_rot=(16, 0, 0), spine=(18, 0, 11), head=(-18, 0, 55),
                  lh=(0.6, -0.16, 1.06), rh=(-0.6, -0.1, 1.03), knee_out=0.5)
@@ -175,25 +178,25 @@ LAND_RISE = P(hips=(0.0, 0.01, 0.87), hips_rot=(9, 0, 0), spine=(15, 0, 10), lh=
 NOLLIE_CROUCH = P(hips=(0.05, 0.05, 0.74), hips_rot=(24, 0, 0), spine=(20, 0, 14), head=(-22, 0, 60),
                   lh=(0.36, -0.28, 0.72), rh=(-0.32, -0.22, 0.7))
 NOLLIE_DRIVE = P(hips=(0.04, 0.03, 0.86), hips_rot=(16, 0, 0), spine=(14, 0, 12), head=(-20, 0, 58),
-                 lf=foot(FRONT_X + 0.01, 0.0, 0.0, yaw=-20), rf=foot(BACK_X - 0.04, 0.0, 0.05, yaw=8, pitch=-6),
+                 lf=foot(FRONT_X + 0.01, 0.0, 0.0, yaw=15), rf=foot(BACK_X - 0.04, 0.0, 0.05, yaw=0, pitch=-6),
                  lh=(0.5, -0.2, 0.95), rh=(-0.49, -0.14, 0.93), knee_out=0.45)
 NOLLIE_TOP = P(hips=(0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 10), head=(-18, 0, 58),
-               lf=foot(FRONT_X + 0.02, 0.0, 0.0, yaw=-20), rf=foot(BACK_X - 0.1, 0.0, 0.16, yaw=12, pitch=-14),
+               lf=foot(FRONT_X + 0.02, 0.0, 0.0, yaw=15), rf=foot(BACK_X - 0.1, 0.0, 0.16, yaw=4, pitch=-14),
                lh=(0.58, -0.14, 1.07), rh=(-0.56, -0.08, 1.04), knee_out=0.55)
 NOLLIE_SLIDE = P(hips=(0.0, 0.02, 0.95), hips_rot=(12, 0, 0), spine=(12, 0, 9), head=(-20, 0, 55),
-                 lf=foot(FRONT_X, 0.0, 0.1, yaw=-20), rf=foot(BACK_X - 0.06, 0.0, 0.17, yaw=10, pitch=-4),
+                 lf=foot(FRONT_X, 0.0, 0.1, yaw=15), rf=foot(BACK_X - 0.06, 0.0, 0.17, yaw=2, pitch=-4),
                  lh=(0.68, -0.1, 1.22), rh=(-0.66, -0.04, 1.19), knee_out=0.6)
 # Hardflip: the legs open front to back (front foot forward and up, back foot up behind) and the board
 # flips upright between them. Tre flip: both feet up high, the back foot scooping round behind.
 FLIP_HARD = P(hips=(0.0, 0.03, 0.9), hips_rot=(16, 0, 0), spine=(15, 0, 8), head=(-28, 0, 50),
-              lf=foot(FRONT_X + 0.18, -0.04, 0.42, yaw=-25, pitch=-20), rf=foot(BACK_X - 0.1, 0.02, 0.36, yaw=12, pitch=10),
+              lf=foot(FRONT_X + 0.18, -0.04, 0.42, yaw=10, pitch=-20), rf=foot(BACK_X - 0.1, 0.02, 0.36, yaw=4, pitch=10),
               lh=(0.7, -0.08, 1.26), rh=(-0.68, -0.02, 1.23), knee_out=0.7)
 FLIP_TRE = P(hips=(0.0, 0.04, 0.89), hips_rot=(16, 0, 0), spine=(15, 0, 6), head=(-26, 0, 50),
-             lf=foot(FRONT_X + 0.06, -0.06, 0.38, yaw=-30, pitch=-10), rf=foot(BACK_X - 0.06, 0.1, 0.4, yaw=25),
+             lf=foot(FRONT_X + 0.06, -0.06, 0.38, yaw=5, pitch=-10), rf=foot(BACK_X - 0.06, 0.1, 0.4, yaw=25),
              lh=(0.68, -0.08, 1.3), rh=(-0.66, -0.02, 1.28), knee_out=0.7)
 # 5-0: on the back truck, weight back over the tail, the front leg long, arms out for balance.
 GRIND_50 = P(hips=(-0.1, 0.02, 0.76), hips_rot=(6, 0, 0), spine=(12, 0, 12), head=(-14, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.0, yaw=-20), rf=foot(BACK_X, 0.0, 0.0, yaw=8),
+             lf=foot(FRONT_X, 0.0, 0.0, yaw=15), rf=foot(BACK_X, 0.0, 0.0, yaw=0),
              lh=(0.6, -0.06, 1.1), rh=(-0.62, -0.06, 1.06), knee_out=0.4)
 
 
@@ -285,7 +288,7 @@ PUSH_STEP_ON = P(hips=(0.03, -0.04, 0.84), hips_rot=(9, 0, 45), spine=(10, 0, 12
                  lf=foot(FRONT_X - 0.02, 0.0, 0.0, yaw=80), rf=foot(BACK_X, 0.0, 0.0, yaw=30),
                  lh=(0.14, 0.12, 0.76), rh=(-0.06, -0.3, 0.76), knee_out=0.45)
 PUSH_TURN = P(hips=(0.01, -0.01, 0.84), hips_rot=(10, 0, 12), spine=(15, 0, 10), head=(-9, 0, 48),
-              lf=foot(FRONT_X, 0.0, 0.0, yaw=0), rf=foot(BACK_X, 0.0, 0.0, yaw=12),
+              lf=foot(FRONT_X, 0.0, 0.0, yaw=40), rf=foot(BACK_X, 0.0, 0.0, yaw=4),
               lh=(0.28, -0.08, 0.84), rh=(-0.28, -0.12, 0.84))
 
 # Mongo: the back foot stays on the board and the front foot pushes. The back foot slides up onto
@@ -327,16 +330,16 @@ MONGO_STEP_ON = P(hips=(-0.05, 0.02, 0.84), hips_rot=(9, 0, 42), spine=(10, 0, 1
 # The bail: the back foot steps off and the body pitches forward over the toe side (stumble), the
 # hands go out to catch the fall, the body lands on them and the knees, then sinks and settles.
 BAIL_STUMBLE = P(hips=(0.05, -0.2, 0.74), hips_rot=(34, 8, 15), spine=(30, 0, 4), head=(-10, 0, 20),
-                 lf=foot(FRONT_X, -0.05, 0.0, yaw=-20), rf=foot(BACK_X + 0.1, -0.35, DECK_TOP_TO_GROUND + 0.08, yaw=8),
+                 lf=foot(FRONT_X, -0.05, 0.0, yaw=15), rf=foot(BACK_X + 0.1, -0.35, DECK_TOP_TO_GROUND + 0.08, yaw=0),
                  lh=(0.35, -0.55, 0.8), rh=(-0.2, -0.55, 0.82), knee_out=0.5)
 BAIL_REACH = P(hips=(0.05, -0.42, 0.5), hips_rot=(58, 10, 15), spine=(46, 0, 0), head=(4, 0, 5),
-               lf=foot(FRONT_X - 0.05, -0.2, DECK_TOP_TO_GROUND + 0.05, yaw=-20), rf=foot(BACK_X, -0.4, DECK_TOP_TO_GROUND, yaw=8),
+               lf=foot(FRONT_X - 0.05, -0.2, DECK_TOP_TO_GROUND + 0.05, yaw=15), rf=foot(BACK_X, -0.4, DECK_TOP_TO_GROUND, yaw=0),
                lh=(0.3, -0.95, 0.1), rh=(-0.2, -0.95, 0.12), knee_out=0.6)
 BAIL_DOWN = P(hips=(0.0, -0.5, 0.3), hips_rot=(66, 10, 15), spine=(40, 0, 0), head=(-30, 0, 0),
-              lf=foot(FRONT_X - 0.05, -0.22, DECK_TOP_TO_GROUND, yaw=-20), rf=foot(BACK_X, -0.18, DECK_TOP_TO_GROUND + 0.04, yaw=8),
+              lf=foot(FRONT_X - 0.05, -0.22, DECK_TOP_TO_GROUND, yaw=15), rf=foot(BACK_X, -0.18, DECK_TOP_TO_GROUND + 0.04, yaw=0),
               lh=(0.28, -1.0, -0.06), rh=(-0.22, -1.0, -0.05), knee_out=0.7)
 BAIL_REST = P(hips=(0.0, -0.5, 0.28), hips_rot=(64, 12, 15), spine=(36, 0, 0), head=(-34, 0, 8),
-              lf=foot(FRONT_X - 0.05, -0.22, DECK_TOP_TO_GROUND, yaw=-20), rf=foot(BACK_X, -0.18, DECK_TOP_TO_GROUND + 0.02, yaw=8),
+              lf=foot(FRONT_X - 0.05, -0.22, DECK_TOP_TO_GROUND, yaw=15), rf=foot(BACK_X, -0.18, DECK_TOP_TO_GROUND + 0.02, yaw=0),
               lh=(0.3, -0.95, -0.07), rh=(-0.24, -0.95, -0.07), knee_out=0.7)
 
 

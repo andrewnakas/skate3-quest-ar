@@ -57,8 +57,9 @@ const sk8_param kTable[ParamCount] = {
 	{"grind_drag", "Rail drag, m/s^2", kGrinds, 0.0f, 10.0f, 0.47f, 0.01f},
 	{"grind_balance", "Rail balance (0 off)", kGrinds, 0.0f, 3.0f, 0.0f, 0.05f},
 
-	{"manual_wobble", "Manual wobble", kManuals, 0.0f, 5.0f, 0.72f, 0.02f},
+	{"manual_wobble", "Manual wobble", kManuals, 0.0f, 5.0f, 0.38f, 0.02f},
 	{"manual_correct", "Manual correction", kManuals, 0.0f, 10.0f, 2.45f, 0.05f},
+	{"manual_hold", "Right stick part-way, s to manual", kManuals, 0.0f, 1.0f, 0.18f, 0.01f},
 
 	{"score_scale", "Score multiplier", kScore, 0.0f, 100.0f, 1.0f, 0.1f},
 	{"bank_wait", "Roll-away to bank, s", kScore, 0.0f, 5.0f, 0.95f, 0.05f},

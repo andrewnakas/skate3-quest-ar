@@ -307,11 +307,12 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
         0 if xr => vec![
             pair("Left stick", "steer; in the air, spin"),
             pair("Right stick", "hold down to crouch, flick to pop"),
+            pair("Right stick half down/up", "manual / nose manual (depth balances)"),
             pair("A (hold)", "push"),
             pair("B (hold)", "mongo push"),
             pair("Y", "brake"),
             pair("X + steer", "powerslide"),
-            pair("Right grip", "manual (stick up/down balances)"),
+            pair("Right grip", "manual (left stick up/down balances)"),
             pair("Left grip", "nose manual"),
             pair("Triggers (in the air)", "grab"),
             pair("Left grip + trigger", "aim, let go to put the skater there"),
@@ -330,6 +331,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("Q / E (in the air)", "grab"),
             pair("Esc / Tab", "this menu / SK8 menu"),
             info_row("A gamepad works too: sticks, A push, B mongo push, Y brake."),
+            info_row("Manual: right stick part-way down (nose: part-way up), hold it there."),
         ],
         1 => {
             let mut rows = vec![info_row("Hold the right stick down to crouch, then:")];

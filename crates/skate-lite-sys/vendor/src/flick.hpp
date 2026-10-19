@@ -27,7 +27,9 @@ const std::vector<TrickDef> &trick_table();
 int find_trick(const char *name);
 
 // Rim / centre thresholds on stick radius.
-constexpr float kRimIn = 0.55f;
+// The rim sits far out so a part-way tilt is left for manuals (between kManualIn and the rim).
+constexpr float kRimIn = 0.88f;
+constexpr float kManualIn = 0.3f;
 constexpr float kCentreIn = 0.30f;
 
 int sector_of(float x, float y);

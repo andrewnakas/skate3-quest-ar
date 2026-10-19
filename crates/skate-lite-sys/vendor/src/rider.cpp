@@ -163,6 +163,19 @@ void Rider::step(World &w, const sk8_input &in)
 	if (grind_cooldown_ > 0)
 		grind_cooldown_ -= kDt;
 
+	since_land_ += kDt;
+	// Manuals from the right stick: tilted part-way down (manual) or up (nose manual) and held there.
+	{
+		float x = in.flick[0], y = in.flick[1], r = std::sqrt(x * x + y * y);
+		int zone = r >= kManualIn && std::fabs(y) > std::fabs(x) * 0.8f ? (y < 0 ? 1 : -1) : 0;
+		// pushing on to the rim from a manual is crouching to pop out of it, still the same manual
+		if (zone != 0 && r >= kRimIn && mode_ != SK8_MODE_MANUAL)
+			zone = 0;
+		stick_manual_time_ = zone != 0 && zone == stick_manual_ ? stick_manual_time_ + kDt : 0;
+		stick_manual_ = zone;
+		stick_manual_depth_ = clampf((r - kManualIn) / (kRimIn - kManualIn), 0, 1);
+	}
+
 	// a stroke cut short (a pop, a grind, a bail) is over: it doesn't pick up again on landing
 	if (mode_ != SK8_MODE_RIDE && push_time_ >= 0) {
 		push_time_ = -1;
@@ -210,19 +223,31 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	float steer = clampf(in.steer[0], -1, 1);
 
 	// manual: hold to balance on two wheels
-	bool want_manual = in.buttons & (SK8_MANUAL | SK8_NOSE_MANUAL);
+	// (buttons, or the right stick part-way: held a moment so a flick passing through doesn't count;
+	// landing with it held goes straight in)
+	int stick = stick_manual_ != 0 &&
+			(stick_manual_time_ >= p[ManualHold] || (mode_ == SK8_MODE_MANUAL && stick_manual_ == manual_dir_) ||
+				since_land_ < 0.1f)
+		? stick_manual_ : 0;
+	bool want_manual = (in.buttons & (SK8_MANUAL | SK8_NOSE_MANUAL)) || stick != 0;
 	if (!want_manual)
 		manual_lock_ = false;
 	if (mode_ == SK8_MODE_RIDE && want_manual && !manual_lock_ && speed > 0.6f) {
 		mode_ = SK8_MODE_MANUAL;
-		manual_dir_ = (in.buttons & SK8_MANUAL) ? 1 : -1;
+		manual_dir_ = stick != 0 ? stick : (in.buttons & SK8_MANUAL) ? 1 : -1;
 		manual_time_ = 0;
 		balance_ = 0;
 	}
 	if (mode_ == SK8_MODE_MANUAL) {
 		manual_time_ += kDt;
-		float drift = noise() * p[ManualWobble] + balance_ * 0.9f;
-		balance_ += (drift - in.steer[1] * p[ManualCorrect] * float(manual_dir_)) * kDt;
+		// A held manual settles back toward level (the stick held steady keeps it up); the wobble
+		// and the stick push it off. Balance with the left stick, or with how far the right stick
+		// is tilted: half way is level, right out at the rim tips it over.
+		float drift = noise() * p[ManualWobble] - balance_ * 0.6f;
+		float lean = in.steer[1];
+		if (stick == manual_dir_)
+			lean += (0.5f - stick_manual_depth_) * 0.65f;
+		balance_ += (drift - lean * p[ManualCorrect] * float(manual_dir_)) * kDt;
 		trick_ = manual_dir_ > 0 ? "Manual" : "Nose Manual";
 		if (!want_manual || std::fabs(balance_) > 1.0f || speed < 0.3f) {
 			float share = std::fabs(balance_) > 1.0f ? 0.5f : 1.0f;
@@ -488,6 +513,7 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 
 void Rider::land(const Hit &h)
 {
+	since_land_ = 0;
 	V3 n = h.normal;
 	float tilt = angle_between(up_, n);
 	bool flip_done = flip_ < 0 || flip_time_ / flip_duration_ >= p[FlipLenience];

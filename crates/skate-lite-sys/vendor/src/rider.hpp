@@ -102,6 +102,9 @@ private:
 	unsigned step_count_ = 0;
 	float slide_amount_ = 0;
 	bool manual_lock_ = false;
+	// the right stick tilted part-way (1 down = manual, -1 up = nose manual), for how long, how deep 0..1
+	int stick_manual_ = 0;
+	float stick_manual_time_ = 0, stick_manual_depth_ = 0, since_land_ = 9;
 };
 
 } // namespace sk8
