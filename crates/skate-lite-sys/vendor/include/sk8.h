@@ -76,6 +76,7 @@ typedef enum sk8_mode
 	SK8_MODE_AIR,
 	SK8_MODE_GRIND,
 	SK8_MODE_BAIL,
+	SK8_MODE_WALLRIDE,  /* rolling along a wall (up = the wall's normal) */
 } sk8_mode;
 
 typedef enum sk8_event_kind

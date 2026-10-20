@@ -34,6 +34,9 @@ private:
 	void air(World &w, const sk8_input &in, const Flick::Result &f);
 	void grind(World &w, const sk8_input &in, const Flick::Result &f);
 	void bailed(World &w);
+	bool try_wallride(const Hit &h);
+	void wallride(World &w, const sk8_input &in, const Flick::Result &f);
+	void leave_wall(bool popped);
 
 	void pop(const TrickDef &def, float share);
 	void start_flip(int trick);
@@ -69,7 +72,10 @@ private:
 	unsigned last_buttons_ = 0;
 	// revert: landed holding the slide button, the board spins a half turn on its wheels
 	float revert_time_ = -1;
-	float revert_dir_ = 1; // off a slide: the board turns back to the line of travel in the air
+	float revert_dir_ = 1;
+	// wallride: the wall's outward normal (level), time on it
+	V3 wall_n_;
+	float wall_time_ = 0, since_wall_ = 9; // off a slide: the board turns back to the line of travel in the air
 	int grab_ = 0, grab_style_ = 0;
 	float grab_time_ = 0;
 	bool grab_scored_ = false;

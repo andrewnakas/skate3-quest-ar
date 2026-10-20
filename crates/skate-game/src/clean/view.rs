@@ -42,7 +42,7 @@ pub(crate) fn three_views() -> bool {
 }
 
 /// (kind, size, position, turn) of the desktop test park, metres.
-const PARK: [(PieceKind, f32, [f32; 3], f32); 7] = [
+const PARK: [(PieceKind, f32, [f32; 3], f32); 8] = [
     (PieceKind::Kicker, 1.0, [-4.0, 0.0, 12.0], 0.0),
     (PieceKind::Rail, 1.2, [3.0, 0.0, 14.0], 0.0),
     (PieceKind::FunBox, 1.0, [0.0, 0.0, 26.0], 0.0),
@@ -50,6 +50,8 @@ const PARK: [(PieceKind, f32, [f32; 3], f32); 7] = [
     (PieceKind::QuarterPipe, 1.2, [0.0, 0.0, 40.0], 0.0),
     (PieceKind::Bank, 1.0, [8.0, 0.0, 30.0], -0.6),
     (PieceKind::Stairs, 1.0, [-12.0, 0.0, 34.0], 0.0),
+    // along the run-in, to ride
+    (PieceKind::Wall, 2.0, [16.0, 0.0, 14.0], std::f32::consts::FRAC_PI_2),
 ];
 const FLOOR_HALF: f32 = 120.0;
 

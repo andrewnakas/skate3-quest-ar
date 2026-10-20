@@ -284,6 +284,24 @@ fn demo_revert(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=wallride`: beside the desktop park's wall, heading a little into it, an ollie onto it;
+/// every other slot flicks again on the wall to pop off it (a wallie).
+const WALL_EACH: f32 = 3.5;
+fn demo_wallride(t: f32, s: &skate_lite_sys::State) -> Input {
+    let d = t % WALL_EACH;
+    let pop_off = (t / WALL_EACH) as usize % 2 == 1;
+    let mut i = Input::default();
+    if (0.1..0.35).contains(&d) {
+        i.flick = [0.0, -1.0];
+    } else if (0.35..0.45).contains(&d) {
+        i.flick = [0.0, 1.0];
+    }
+    if pop_off && s.mode == skate_lite_sys::Mode::Wallride {
+        i.flick = if d < 0.9 { [0.0, -1.0] } else { [0.0, 1.0] };
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -349,6 +367,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("oldschool") => Some((t / OLD_EACH) as usize),
         Ok("grinds") => Some((t / GRIND_EACH) as usize),
         Ok("revert") => Some((t / REVERT_EACH) as usize),
+        Ok("wallride") => Some((t / WALL_EACH) as usize),
         _ => None,
     }
 }
@@ -380,7 +399,10 @@ pub(crate) fn read_desktop(
         if slot.is_some() && slot != *demo_at {
             *demo_at = slot;
             let demo_kind = std::env::var("SK8_DEMO").unwrap_or_default();
-            if demo_kind == "grinds" {
+            if demo_kind == "wallride" {
+                // the desktop park's wall runs along z at x = 16 (z 8..20)
+                sim.place_rolling(Vec3::new(15.05, 0.0, 6.0), 0.16, 7.5);
+            } else if demo_kind == "grinds" {
                 let (slide, ..) = GRIND_SLOTS[slot.unwrap_or(0) % GRIND_SLOTS.len()];
                 sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, if slide { 7.5 } else { 6.0 });
                 let s = sim.current;
@@ -408,6 +430,7 @@ pub(crate) fn read_desktop(
             Ok("oldschool") => demo_oldschool(*t),
             Ok("grinds") => demo_grinds(*t, &sim.current, sim.demo_rail),
             Ok("revert") => demo_revert(*t),
+            Ok("wallride") => demo_wallride(*t, &sim.current),
             _ => demo_input(*t),
         };
         return;

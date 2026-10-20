@@ -286,6 +286,12 @@ SLIDE_BLUNT = P(hips=(-0.18, 0.04, 0.72), hips_rot=(2, 0, 26), spine=(8, 0, 26),
                 lh=(0.6, -0.08, 1.08), rh=(-0.56, 0.06, 1.0), knee_out=0.55)
 
 
+# Wallride: low and compact on the wheels, the board flat on the wall below the feet (the runtime
+# leans the body out from the wall only part way), arms out for balance, eyes along the wall.
+WALLRIDE = P(hips=(0.0, 0.04, 0.72), hips_rot=(16, 0, 4), spine=(20, 0, 12), head=(-12, 0, 62),
+             lh=(0.58, -0.12, 1.04), rh=(-0.56, -0.04, 1.06), knee_out=0.55)
+
+
 def flip_part(open_pose, k):
     """Part-way from the pop's extension into the flip's open pose."""
     return mix(POP_TOP, open_pose, k)
@@ -467,6 +473,7 @@ CLIPS = {
     "pop_nollie": (False, [(0.0, NOLLIE_CROUCH), (0.05, NOLLIE_DRIVE), (0.1, NOLLIE_TOP), (0.18, NOLLIE_SLIDE),
                            (0.3, AIR_TUCK)]),
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
+    "wallride": (True, loop(lambda t: idle(WALLRIDE, t, 0.01, 0.05), IDLE_LEN)),
     **{name: (True, loop(lambda t, pose=pose: idle(pose, t, 0.012, 0.06), IDLE_LEN)) for name, pose in (
         ("grind_nose", GRIND_NOSE), ("grind_crooked", GRIND_CROOKED), ("grind_overcrook", GRIND_OVERCROOK),
         ("grind_smith", GRIND_SMITH), ("grind_feeble", GRIND_FEEBLE), ("slide_nose", SLIDE_NOSE),

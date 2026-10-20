@@ -21,10 +21,12 @@ pub(crate) enum PieceKind {
     Bank,
     Stairs,
     Spine,
+    /// A tall flat wall to ride (wallrides, wallies); no grind edges.
+    Wall,
 }
 
 impl PieceKind {
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 11] = [
         Self::Kicker,
         Self::QuarterPipe,
         Self::HalfPipe,
@@ -35,6 +37,7 @@ impl PieceKind {
         Self::Bank,
         Self::Stairs,
         Self::Spine,
+        Self::Wall,
     ];
 
     pub(crate) fn color(self) -> Color {
@@ -48,6 +51,7 @@ impl PieceKind {
             Self::Bank => Color::srgb(0.8, 0.65, 0.35),
             Self::Stairs => Color::srgb(0.7, 0.7, 0.68),
             Self::Spine => Color::srgb(0.3, 0.5, 0.85),
+            Self::Wall => Color::srgb(0.75, 0.72, 0.66),
         }
     }
 }
@@ -134,6 +138,7 @@ impl Piece {
             PieceKind::Ledge => grind_box(&mut g, Vec3::new(5.0 * s, 0.5, 0.8), [true, false, true, false]),
             PieceKind::FunBox => grind_box(&mut g, Vec3::new(3.0 * s, 0.5, 2.0), [true; 4]),
             PieceKind::Platform => grind_box(&mut g, Vec3::new(4.0 * s, 1.2, 4.0), [true; 4]),
+            PieceKind::Wall => grind_box(&mut g, Vec3::new(6.0 * s, 2.6, 0.4), [false; 4]),
             PieceKind::Bank => {
                 // A flat slope up to a short deck, run in from +z like a kicker.
                 let (length, height, deck, width) = (4.0 * s, 1.0 * s, 1.0, 3.0);

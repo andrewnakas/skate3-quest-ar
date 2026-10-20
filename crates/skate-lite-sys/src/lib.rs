@@ -49,6 +49,8 @@ pub enum Mode {
     Air,
     Grind,
     Bail,
+    /// Rolling along a wall.
+    Wallride,
 }
 
 impl Mode {
@@ -59,6 +61,7 @@ impl Mode {
             3 => Mode::Air,
             4 => Mode::Grind,
             5 => Mode::Bail,
+            6 => Mode::Wallride,
             _ => Mode::Ride,
         }
     }

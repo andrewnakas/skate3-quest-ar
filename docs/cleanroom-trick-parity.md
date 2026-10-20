@@ -17,12 +17,14 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   overcrook, smith, feeble; slides (across it): boardslide, noseslide, tailslide, lipslide,
   noseblunt, bluntslide; the board turns back to the line of travel coming off a slide
 - Powerslide; revert (X held into a landing, rolling away fakie)
+- Wallride (an ollie glancing into a wall rolls along it) and wallie (flick on the wall to pop
+  off it); a Wall piece in the park builder and the desktop park
 - Old school on the foot-off button (left stick click / F) + a flick: no comply (ollie), boneless
   (nollie), no comply 180 both ways (shove-its); the front foot steps down while crouching;
   hippie jump (crouch with the button held, let go with no flick: the board rolls on underneath)
 
 ## Next (in order)
-1. Wallrides + wallies; salad, suski, willy grinds
+1. Salad, suski, willy grinds
 4. Footplants (on a wall / ledge / coping in the air), handplants
 5. Darkslide, primo, casper, impossible, 360 flip variants, body varials
 6. Off-board: walk, caveman (jump on), get off / on

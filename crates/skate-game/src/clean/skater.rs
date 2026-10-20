@@ -83,9 +83,10 @@ enum Clip {
     SlideLip,
     SlideNoseblunt,
     SlideBlunt,
+    Wallride,
 }
 
-const CLIPS: usize = 51;
+const CLIPS: usize = 52;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -95,10 +96,11 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_pop_nollie", "sk8_flip_hard", "sk8_flip_tre", "sk8_grind_5_0", "sk8_push_start", "sk8_push_mongo",
     "sk8_push_start_mongo", "sk8_push_end_mongo", "sk8_grab_christ", "sk8_grab_method", "sk8_grab_rocket",
     "sk8_pop_no_comply", "sk8_pop_boneless",
-    "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt",
+    "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt", "sk8_wallride",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
-const LOOPED: [Clip; 20] = [
+const LOOPED: [Clip; 21] = [
+    Clip::Wallride,
     Clip::GrindNose,
     Clip::GrindCrooked,
     Clip::GrindOvercrook,
@@ -286,7 +288,7 @@ fn blend_time(clip: Clip) -> f32 {
         Clip::PopNoComply | Clip::PopBoneless => 0.06,
         Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv | Clip::FlipHard | Clip::FlipTre => 0.05,
         Clip::Land | Clip::Bail => 0.06,
-        Clip::Air | Clip::Grind | Clip::Grind50 | Clip::Boardslide => 0.1,
+        Clip::Air | Clip::Grind | Clip::Grind50 | Clip::Boardslide | Clip::Wallride => 0.1,
         Clip::GrindNose | Clip::GrindCrooked | Clip::GrindOvercrook | Clip::GrindSmith | Clip::GrindFeeble | Clip::SlideNose | Clip::SlideTail | Clip::SlideLip | Clip::SlideNoseblunt | Clip::SlideBlunt => 0.1,
         Clip::GrabIndy
         | Clip::GrabCrail
@@ -326,6 +328,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
     let pop_len = len[Clip::Pop as usize];
     match s.mode {
         Mode::Bail => set(Clip::Bail, 1.0, s.bail_time.unwrap_or(0.0)),
+        Mode::Wallride => set(Clip::Wallride, 1.0, c.idle),
         Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, c.idle),
         Mode::Grind if s.grind_kind == 4 => set(Clip::Grind50, 1.0, c.idle),
         // sk8_grind_kind 5..14, in order
@@ -511,7 +514,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::GrabJudo, Clip::GrabDouble, Clip::GrabSuperman, Clip::GrabNoFoot, Clip::GrabStiffy, Clip::PopNollie,
     Clip::FlipHard, Clip::FlipTre, Clip::Grind50, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo,
     Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket, Clip::PopNoComply, Clip::PopBoneless,
-    Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt,
+    Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

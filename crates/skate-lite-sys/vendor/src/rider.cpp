@@ -212,6 +212,7 @@ void Rider::step(World &w, const sk8_input &in)
 		grind_cooldown_ -= kDt;
 
 	since_land_ += kDt;
+	since_wall_ += kDt;
 	last_buttons_ = in.buttons;
 	last_steer_[0] = in.steer[0];
 	last_steer_[1] = in.steer[1];
@@ -241,6 +242,7 @@ void Rider::step(World &w, const sk8_input &in)
 	case SK8_MODE_AIR: air(w, in, f); break;
 	case SK8_MODE_GRIND: grind(w, in, f); break;
 	case SK8_MODE_BAIL: bailed(w); break;
+	case SK8_MODE_WALLRIDE: wallride(w, in, f); break;
 	}
 	float target = mode_ == SK8_MODE_SLIDE ? 1.0f : 0.0f;
 	slide_amount_ = approach(slide_amount_, target, 6 * kDt);
@@ -603,7 +605,8 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	float L = len(delta);
 	Hit h;
 	if (L > 1e-6f && w.cast(pos_ + up_ * 0.1f, delta + delta * (0.1f / L), h)) {
-		land(h);
+		if (!try_wallride(h))
+			land(h);
 		return;
 	}
 	pos_ += delta;
@@ -676,6 +679,98 @@ void Rider::land(const Hit &h)
 	grab_style_ = 0;
 	mode_ = SK8_MODE_RIDE;
 	trick_.clear();
+}
+
+// ---------------------------------------------------------------- wallride
+
+namespace {
+constexpr float kWallGravity = 0.68f; // share of gravity pulling the rider down the wall
+constexpr float kWallMax = 1.5f;      // longest ride, s
+} // namespace
+
+bool Rider::try_wallride(const Hit &h)
+{
+	if (std::fabs(h.normal.y) > 0.4f)
+		return false;
+	V3 n = unit(V3{h.normal.x, 0, h.normal.z}, V3{0, 0, 1});
+	if (dot(n, vel_) > 0)
+		n = -n;
+	V3 along = flatten(vel_, n);
+	float into = -dot(vel_, n);
+	bool flip_done = flip_ < 0 || flip_time_ / flip_duration_ >= p[FlipLenience];
+	// a glancing hit at speed rolls on along it; head-on is a slam
+	if (len(along) < 3.0f || into > len(along) * 1.1f || !flip_done || grab_)
+		return false;
+	commit_pending();
+	mode_ = SK8_MODE_WALLRIDE;
+	wall_n_ = n;
+	wall_time_ = 0;
+	pos_ = h.point + n * 0.01f;
+	vel_ = along;
+	up_ = n;
+	fwd_ = unit(flatten(fwd_, n), unit(along, fwd_));
+	if (dot(fwd_, along) < 0 && !fakie_)
+		fwd_ = -fwd_;
+	flip_ = -1;
+	spin_speed_ = 0;
+	trick_ = "Wallride";
+	emit(SK8_EV_GRIND, "Wallride", 0, 0, h.surface);
+	return true;
+}
+
+void Rider::leave_wall(bool popped)
+{
+	add_trick("Wallride", 120 + unsigned(wall_time_ * p[GrindRate]));
+	emit(SK8_EV_GRIND_END, "Wallride");
+	mode_ = SK8_MODE_AIR;
+	since_wall_ = 0;
+	vel_ += wall_n_ * (popped ? 0.0f : 1.2f);
+	up_ = kUp;
+	fwd_ = unit(flatten(fwd_, kUp), fwd_);
+	air_time_ = 0;
+	spin_total_ = 0;
+	trick_.clear();
+	grind_cooldown_ = 0.3f;
+}
+
+void Rider::wallride(World &w, const sk8_input &in, const Flick::Result &f)
+{
+	wall_time_ += kDt;
+	if (f.trick >= 0) {
+		// pop off the wall: away from it and up
+		const TrickDef &def = trick_table()[size_t(f.trick)];
+		leave_wall(true);
+		up_ = unit(kUp + wall_n_ * 0.8f, kUp);
+		pop(def, 0.8f);
+		up_ = kUp;
+		if (!def.flat)
+			start_flip(f.trick);
+		else
+			pending_.push_back({"Wallie", 140});
+		return;
+	}
+	vel_ += V3{0, -p[Gravity] * kWallGravity, 0} * kDt;
+	float sp = len(vel_);
+	if (sp > 0)
+		vel_ *= std::max(0.0f, 1 - (p[RollDrag] + 0.35f) * kDt / std::max(sp, 0.5f));
+	if (len(vel_) > 0.3f)
+		fwd_ = unit(flatten(vel_, up_), fwd_) * (fakie_ ? -1.0f : 1.0f);
+	V3 next = pos_ + vel_ * kDt;
+	// still a wall under the wheels?
+	Hit h;
+	bool on = w.cast(next + wall_n_ * 0.3f, wall_n_ * -0.6f, h) && std::fabs(h.normal.y) < 0.5f;
+	if (!on || wall_time_ > kWallMax || len(vel_) < 1.2f || vel_.y < -4.5f) {
+		pos_ = next;
+		leave_wall(false);
+		return;
+	}
+	pos_ = h.point + wall_n_ * 0.01f;
+	// the floor under a wallride that comes down to it
+	Hit g;
+	if (vel_.y < 0 && w.cast(pos_ + V3{0, 0.3f, 0}, V3{0, -0.35f, 0}, g) && g.normal.y > 0.7f) {
+		leave_wall(false);
+		land(g);
+	}
 }
 
 // ---------------------------------------------------------------- grind
@@ -857,12 +952,24 @@ void Rider::state(sk8_state &s) const
 	vel_.store(s.velocity);
 	up_.store(s.up);
 	s.speed = len(vel_);
-	V3 right = unit(cross(up_, fwd_), V3{1, 0, 0});
-	V3 fwd = unit(cross(right, up_), fwd_);
-	Q stance = from_basis(right, up_, fwd);
+	// onto and off a wall the board turns between level and the wall over a moment, not in a step
+	V3 up = up_;
+	if (mode_ == SK8_MODE_WALLRIDE)
+		up = unit(kUp + (wall_n_ - kUp) * smooth01(wall_time_ / 0.1f), up_);
+	else if (since_wall_ < 0.14f)
+		up = unit(wall_n_ + (kUp - wall_n_) * smooth01(since_wall_ / 0.14f), up_);
+	V3 right = unit(cross(up, fwd_), V3{1, 0, 0});
+	V3 fwd = unit(cross(right, up), fwd_);
+	Q stance = from_basis(right, up, fwd);
+	Q board = stance;
+	if (mode_ == SK8_MODE_WALLRIDE || since_wall_ < 0.14f) {
+		// the board flat on the wall; the rider leans out from it only part way
+		V3 lean_up = unit(kUp + up * 0.75f, up);
+		V3 r2 = unit(cross(lean_up, fwd_), right);
+		stance = from_basis(r2, lean_up, unit(cross(r2, lean_up), fwd));
+	}
 	stance.store(s.rider_rot);
 
-	Q board = stance;
 	if (flip_ >= 0) {
 		const TrickDef &def = trick_table()[size_t(flip_)];
 		float e = smooth01(flip_time_ / flip_duration_);
