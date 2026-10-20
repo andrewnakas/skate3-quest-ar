@@ -185,10 +185,20 @@ fn demo_manual(t: f32) -> Input {
 const OLD_EACH: f32 = 3.0;
 fn demo_oldschool(t: f32) -> Input {
     let d = t % OLD_EACH;
-    let n = (t / OLD_EACH) as usize % 4;
+    let n = (t / OLD_EACH) as usize % 5;
     let mut i = Input::default();
     if d > 2.3 {
         i.buttons |= buttons::PUSH;
+    }
+    // the fifth: a hippie jump (crouch with the button held, let go, no flick)
+    if n == 4 {
+        if (0.1..0.5).contains(&d) {
+            i.flick = [0.0, -1.0];
+        }
+        if d < 1.5 {
+            i.buttons |= buttons::FOOT_OFF;
+        }
+        return i;
     }
     let base = ["Ollie", "Nollie", "Pop Shove-it", "Frontside Shove-it"][n];
     let names = skate_lite_sys::trick_names();

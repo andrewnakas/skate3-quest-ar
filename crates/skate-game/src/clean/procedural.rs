@@ -100,6 +100,8 @@ pub(crate) struct Motion {
     planted: bool,
     /// 0..1: how much the board is held in the hands (grabs where both feet leave it).
     held: f32,
+    /// Where the ground was when a hippie jump left it (the board rolls on along it).
+    hippie_ground: Option<f32>,
     /// 0..1: how far a tilted grab (method, rocket) has turned the deck, and which one.
     tilt: f32,
     tilt_style: u32,
@@ -398,6 +400,17 @@ pub(crate) fn layer(
             at = at.lerp(grip, motion.held);
         }
     }
+    // Hippie jump: the board stays down on the ground under the jump, rolling on (the feet are off it)
+    let hippie = s.mode == Mode::Air && clock.hippie;
+    if sim.events.iter().any(|e| e.kind == EventKind::Pop) {
+        motion.hippie_ground = Some(pos.dot(up));
+    }
+    if hippie {
+        if let Some(g) = motion.hippie_ground {
+            // under the rider, back on the ground: none of the air's lift to the feet
+            at = pos + up * skater::DECK_CENTRE - up * (pos.dot(up) - g).max(0.0);
+        }
+    }
     let mut deck = board_rot;
     if carving {
         deck = Quat::from_axis_angle(fwd, -lean * BOARD_ROLL) * deck;
@@ -471,7 +484,7 @@ pub(crate) fn layer(
         let wanted = match s.mode {
             Mode::Bail => false,
             // The board is in the hands: the feet are off it.
-            Mode::Air if motion.held > 0.5 => false,
+            Mode::Air if motion.held > 0.5 || hippie => false,
             Mode::Air => !flipping,
             // The pushing foot is on the ground (the back foot, or the front one pushing mongo), and
             // lets go of the deck as it steps off.

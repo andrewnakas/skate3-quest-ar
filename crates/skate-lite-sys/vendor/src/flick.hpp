@@ -45,6 +45,7 @@ public:
 	{
 		int trick = -1;     // index into trick_table(), -1 = nothing yet
 		bool fallback = false;
+		bool crouch_let_go = false; // held down (the crouch), let go to the centre and no flick followed
 	};
 
 	// Feed one stick sample. Returns a trick the moment one completes.

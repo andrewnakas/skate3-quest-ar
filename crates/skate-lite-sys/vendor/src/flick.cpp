@@ -34,6 +34,7 @@ const std::vector<TrickDef> kTricks = {
 	{"Boneless", {}, 200, 0, 0, false, true},
 	{"No Comply 180", {}, 260, 0, 0.5f, false, false},
 	{"Frontside No Comply 180", {}, 280, 0, -0.5f, false, false},
+	{"Hippie Jump", {}, 150, 0, 0, false, true},
 };
 
 // base gesture trick -> old-school variant with the foot-off button held
@@ -177,9 +178,12 @@ Flick::Result Flick::feed(float x, float y)
 			last_sector_ = -1;
 			out = resolve(false);
 			if (out.trick < 0 && ++centre_steps_ > 12) {
+				bool lone = tokens_.size() == 2 && tokens_[0] == TDown && tokens_[1] == TCentre;
 				out = resolve(true);
-				if (out.trick < 0)
+				if (out.trick < 0) {
+					out.crouch_let_go = lone;
 					reset();
+				}
 			}
 		}
 	}

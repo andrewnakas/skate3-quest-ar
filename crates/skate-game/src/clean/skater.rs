@@ -231,6 +231,8 @@ pub(crate) struct Clock {
     pub(crate) nollie: bool,
     /// The last pop was old school (no comply / boneless): its own pop clip, played through.
     old_school: Option<Clip>,
+    /// The last pop was a hippie jump: the board stays on the ground, rolling on underneath.
+    pub(crate) hippie: bool,
     /// Drives the idle loops (ride sway, manual and grind balance).
     idle: f32,
 }
@@ -238,7 +240,7 @@ pub(crate) struct Clock {
 impl Default for Clock {
     fn default() -> Self {
         // Long ago, so nothing plays its "just happened" clip at spawn.
-        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, idle: 0.0 }
+        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, hippie: false, idle: 0.0 }
     }
 }
 
@@ -424,6 +426,7 @@ pub(crate) fn animate(
                 clock.since_pop = 0.0;
                 clock.nollie = is_nollie(&e.name);
                 clock.old_school = old_school_clip(&e.name);
+                clock.hippie = e.name.to_ascii_lowercase().contains("hippie");
             }
             EventKind::Land => clock.since_land = 0.0,
             _ => {}

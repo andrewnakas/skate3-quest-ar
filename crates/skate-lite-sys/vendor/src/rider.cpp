@@ -274,6 +274,16 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		return;
 	}
 
+	// Hippie jump: the foot-off button held through a crouch let go with no flick: the skater jumps
+	// and the board rolls on underneath (the host keeps it on the ground)
+	if (f.crouch_let_go && (in.buttons & SK8_FOOT_OFF) && mode_ == SK8_MODE_RIDE) {
+		const TrickDef &def = trick_table()[size_t(find_trick("Hippie Jump"))];
+		crouch_ = 0.6f;
+		pop(def, 0.85f);
+		pending_.push_back({def.name, def.points});
+		return;
+	}
+
 	float speed = len(vel_);
 	float along = dot(vel_, fwd_);
 	if (along < -0.3f)
