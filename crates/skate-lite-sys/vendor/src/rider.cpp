@@ -28,6 +28,50 @@ const GrabDef &grab_def(int style)
 	return kGrabs[(style > 0 && style < int(sizeof kGrabs / sizeof kGrabs[0])) ? style : 0];
 }
 
+struct GrindDef
+{
+	const char *name;
+	unsigned points;  // on landing it
+	float along;      // where on the board the rail is (m from the centre, + toward the nose)
+	float pitch, yaw, roll; // the board on the rail (degrees: nose up, nose to the left, heel edge up)
+};
+
+// Indexed by sk8_grind_kind.
+const GrindDef kGrindDefs[] = {
+	{"", 0, 0, 0, 0, 0},
+	{"50-50", 40, 0, 0, 0, 0},
+	{"Boardslide", 50, 0, 0, 0, 0},
+	{"", 0, 0, 0, 0, 0},
+	{"5-0", 60, -0.2f, 9, 0, 0},
+	{"Nosegrind", 70, 0.2f, -9, 0, 0},
+	{"Crooked Grind", 90, 0.2f, -10, 17, 6},
+	{"Overcrook", 100, 0.2f, -10, -17, -6},
+	{"Smith Grind", 100, -0.2f, -14, 8, 18},
+	{"Feeble Grind", 90, -0.2f, -6, -16, -12},
+	{"Noseslide", 70, 0.33f, -6, 0, 0},
+	{"Tailslide", 70, -0.33f, 6, 0, 0},
+	{"Lipslide", 80, 0, 0, 0, 0},
+	{"Noseblunt", 120, 0.38f, -28, 0, 0},
+	{"Bluntslide", 110, -0.38f, 28, 0, 0},
+};
+
+int grind_kind_for(bool slide, float x, float y, bool crouched)
+{
+	bool side = std::fabs(x) > 0.45f, up = y > 0.45f, down = y < -0.45f;
+	if (slide) {
+		if (up)
+			return side ? SK8_GRIND_NOSEBLUNT : SK8_GRIND_NOSESLIDE;
+		if (down)
+			return side ? SK8_GRIND_BLUNTSLIDE : SK8_GRIND_TAILSLIDE;
+		return side ? SK8_GRIND_LIPSLIDE : SK8_GRIND_BOARDSLIDE;
+	}
+	if (up)
+		return side ? (x < 0 ? SK8_GRIND_CROOKED : SK8_GRIND_OVERCROOK) : SK8_GRIND_NOSEGRIND;
+	if (down)
+		return side ? (x < 0 ? SK8_GRIND_SMITH : SK8_GRIND_FEEBLE) : SK8_GRIND_5_0;
+	return crouched ? SK8_GRIND_5_0 : SK8_GRIND_50_50;
+}
+
 // hands: 1 front (left trigger), 2 back (right trigger), 3 both. Stick y up is toward the nose.
 int grab_style_for(int hands, float x, float y)
 {
@@ -168,6 +212,8 @@ void Rider::step(World &w, const sk8_input &in)
 		grind_cooldown_ -= kDt;
 
 	since_land_ += kDt;
+	last_steer_[0] = in.steer[0];
+	last_steer_[1] = in.steer[1];
 	foot_off_ = (in.buttons & SK8_FOOT_OFF) && mode_ == SK8_MODE_RIDE;
 	// Manuals from the right stick: tilted part-way down (manual) or up (nose manual) and held there.
 	{
@@ -470,6 +516,22 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	spin_speed_ = approach(spin_speed_, target, p[SpinEase] * p[SpinRate] * kDt);
 	float a = spin_speed_ * kDt;
 	fwd_ = unit(rotate(fwd_, up_, a), fwd_);
+	// Off a slide the board is still across the way it's going: turn it back (to whichever end is
+	// nearer) so it comes down rolling.
+	if (unslide_) {
+		V3 travel = flatten(vel_, up_);
+		if (len(travel) > 0.5f) {
+			travel = unit(travel, fwd_);
+			if (dot(travel, fwd_) < 0)
+				travel = -travel;
+			float off = angle_between(fwd_, travel);
+			float step = std::min(off, 9.0f * kDt);
+			float sign = dot(cross(fwd_, travel), up_) >= 0 ? 1.0f : -1.0f;
+			fwd_ = unit(rotate(fwd_, up_, sign * step), fwd_);
+			if (off < 2 * kDeg)
+				unslide_ = false;
+		}
+	}
 	spin_total_ += a;
 
 	// level out gently unless this is a vert air
@@ -614,11 +676,10 @@ bool Rider::try_grind(World &w)
 	bool backwards = a > kPi / 2;
 	if (backwards)
 		a = kPi - a;
-	grind_kind_ = a > 55 * kDeg ? 2 : 1;
-	if (grind_kind_ == 1 && crouch_ > 0.5f)
-		grind_kind_ = 4;
-	grind_name_ = grind_kind_ == 2 ? "Boardslide" : grind_kind_ == 4 ? "5-0" : "50-50";
-	fakie_ = backwards && grind_kind_ != 2;
+	bool slide = a > 55 * kDeg;
+	grind_kind_ = grind_kind_for(slide, last_steer_[0], last_steer_[1], crouch_ > 0.5f);
+	grind_name_ = kGrindDefs[grind_kind_].name;
+	fakie_ = backwards && !slide;
 	grind_time_ = 0;
 	balance_ = 0;
 	flip_ = -1;
@@ -631,7 +692,8 @@ bool Rider::try_grind(World &w)
 
 void Rider::leave_grind(V3 velocity, bool popped)
 {
-	add_trick(grind_name_, 40 + unsigned(grind_time_ * p[GrindRate]));
+	add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
+	unslide_ = grind_kind_ == SK8_GRIND_BOARDSLIDE || grind_kind_ >= SK8_GRIND_NOSESLIDE;
 	emit(SK8_EV_GRIND_END, grind_name_.c_str());
 	mode_ = SK8_MODE_AIR;
 	vel_ = velocity;
@@ -780,6 +842,14 @@ void Rider::state(sk8_state &s) const
 		board = board * Q::axis_angle({0, 1, 0}, (lean_ >= 0 ? -1.0f : 1.0f) * slide_amount_ * 1.4f);
 	if (mode_ == SK8_MODE_MANUAL)
 		board = board * Q::axis_angle({1, 0, 0}, -0.21f * float(manual_dir_));
+	if (mode_ == SK8_MODE_GRIND && grind_kind_ > 0) {
+		// the board sits on the rail the way this grind holds it, the rail under the part it
+		// rides on (local x right = heel edge, y up, z the nose)
+		const GrindDef &g = kGrindDefs[grind_kind_];
+		board = board * Q::axis_angle({0, 1, 0}, -g.yaw * kDeg) * Q::axis_angle({1, 0, 0}, -g.pitch * kDeg) *
+			Q::axis_angle({0, 0, 1}, g.roll * kDeg);
+		(pos_ - fwd * g.along).store(s.position);
+	}
 	board.store(s.board_rot);
 
 	s.mode = mode_;

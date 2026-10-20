@@ -28,6 +28,8 @@ pub(crate) struct CleanSkate {
     accum: f32,
     pub previous: State,
     pub current: State,
+    /// The scripted demo's own rail (drawn as a line; it has no mesh).
+    pub demo_rail: Option<[Vec3; 2]>,
     /// Every event of the steps run this frame.
     pub events: Vec<Event>,
     /// Where the rider was last put down (for "reset").
@@ -50,6 +52,7 @@ impl CleanSkate {
             accum: 0.0,
             previous: state,
             current: state,
+            demo_rail: None,
             events: Vec::new(),
             spawn: ([0.0; 3], 0.0),
             collision_triangles: 0,

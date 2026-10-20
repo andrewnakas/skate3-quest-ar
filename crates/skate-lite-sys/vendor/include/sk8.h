@@ -119,7 +119,7 @@ typedef struct sk8_state
 	float balance;       /* -1..1 manual / grind balance */
 	float air_time;
 	float bail_time;     /* seconds since the bail started, -1 when riding */
-	int grind_kind;      /* 0 none, 1 axle, 2 board slide, 3 nose, 4 tail */
+	int grind_kind;      /* sk8_grind_kind while grinding, 0 otherwise */
 	unsigned combo_points;
 	unsigned combo_count;
 	unsigned long long score;
@@ -136,6 +136,28 @@ typedef struct sk8_state
  * between the two, while the foot drives. */
 #define SK8_PUSH_PLANT 0.18f
 #define SK8_PUSH_RELEASE 0.62f
+
+/* Grinds and slides: the board's angle to the rail when it lands on it picks a grind (along it) or
+ * a slide (across it); the left stick then picks which (centre, toward the nose = up, toward the
+ * tail = down, sideways, and the diagonals). */
+typedef enum sk8_grind_kind
+{
+	SK8_GRIND_NONE = 0,
+	SK8_GRIND_50_50,       /* both trucks (centre) */
+	SK8_GRIND_BOARDSLIDE,  /* across the rail, middle of the deck (centre) */
+	SK8_GRIND_UNUSED,
+	SK8_GRIND_5_0,         /* back truck (down, or crouched) */
+	SK8_GRIND_NOSEGRIND,   /* front truck (up) */
+	SK8_GRIND_CROOKED,     /* front truck, nose turned over the near side (up + left) */
+	SK8_GRIND_OVERCROOK,   /* front truck, nose turned over the far side (up + right) */
+	SK8_GRIND_SMITH,       /* back truck, front dipped below the near side (down + left) */
+	SK8_GRIND_FEEBLE,      /* back truck, front truck over the far side (down + right) */
+	SK8_GRIND_NOSESLIDE,   /* across, on the nose (up) */
+	SK8_GRIND_TAILSLIDE,   /* across, on the tail (down) */
+	SK8_GRIND_LIPSLIDE,    /* across, middle, the board turned the other way over the rail (sideways) */
+	SK8_GRIND_NOSEBLUNT,   /* across, nose pressed down over the rail (up + sideways) */
+	SK8_GRIND_BLUNTSLIDE,  /* across, tail pressed down over the rail (down + sideways) */
+} sk8_grind_kind;
 
 /* Grab styles: the trigger(s) held pick the hand, the left stick's direction when the grab starts
  * picks the style (centre, toward the nose, toward the tail, sideways right, sideways left). */

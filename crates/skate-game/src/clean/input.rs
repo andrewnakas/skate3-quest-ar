@@ -202,6 +202,54 @@ fn demo_oldschool(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=grinds`: one rail per slot (along the path for grinds, across it at 70 degrees for
+/// slides), an ollie onto it with the left stick set as the board comes down: every grind kind.
+const GRIND_EACH: f32 = 4.5;
+/// (slide, stick x, stick y) per slot, in sk8_grind_kind order.
+const GRIND_SLOTS: [(bool, f32, f32); 13] = [
+    (false, 0.0, 0.0), (false, 0.0, -1.0), (false, 0.0, 1.0), (false, -0.8, 0.8), (false, 0.8, 0.8),
+    (false, -0.8, -0.8), (false, 0.8, -0.8), (true, 0.0, 0.0), (true, 0.0, 1.0), (true, 0.0, -1.0),
+    (true, 1.0, 0.0), (true, 0.8, 0.8), (true, 0.8, -0.8),
+];
+fn demo_grinds(t: f32, s: &skate_lite_sys::State) -> Input {
+    let d = t % GRIND_EACH;
+    let (_, x, y) = GRIND_SLOTS[(t / GRIND_EACH) as usize % GRIND_SLOTS.len()];
+    let mut i = Input::default();
+    if (0.15..0.5).contains(&d) {
+        i.flick = [0.0, -1.0];
+    } else if (0.5..0.6).contains(&d) {
+        i.flick = [0.0, 1.0];
+    }
+    // the stick set as the board comes down to the rail (held longer, sideways would spin it)
+    if s.mode == skate_lite_sys::Mode::Air && s.position[1] < 1.1 && d > 0.6 {
+        i.steer = [x, y];
+    }
+    i
+}
+
+/// The demo's rail for slot `n`, from the spawn (straight ahead along `fwd`).
+fn demo_rail(n: usize, at: Vec3, fwd: Vec3) -> [Vec3; 2] {
+    let (slide, ..) = GRIND_SLOTS[n % GRIND_SLOTS.len()];
+    let up = Vec3::Y * 0.45;
+    if slide {
+        let across = Quat::from_rotation_y(70f32.to_radians()) * fwd;
+        let c = at + fwd * 8.4 + up;
+        [c - across * 3.0, c + across * 3.0]
+    } else {
+        [at + fwd * 1.5 + up, at + fwd * 17.0 + up]
+    }
+}
+
+/// Draws the scripted demo's rail (it has no mesh).
+pub(crate) fn demo_rail_gizmo(sim: Res<CleanSkate>, mut gizmos: Gizmos) {
+    if let Some([a, b]) = sim.demo_rail {
+        for k in 0..3 {
+            let o = Vec3::Y * (k as f32 * 0.01 - 0.01);
+            gizmos.line(a + o, b + o, Color::srgb(0.85, 0.85, 0.9));
+        }
+    }
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -265,6 +313,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("push") => Some((t / PUSH_EACH) as usize),
         Ok("manual") => Some((t / MANUAL_EACH) as usize),
         Ok("oldschool") => Some((t / OLD_EACH) as usize),
+        Ok("grinds") => Some((t / GRIND_EACH) as usize),
         _ => None,
     }
 }
@@ -295,7 +344,17 @@ pub(crate) fn read_desktop(
         let slot = demo_slot(*t);
         if slot.is_some() && slot != *demo_at {
             *demo_at = slot;
-            if std::env::var("SK8_DEMO").as_deref() == Ok("push") {
+            let demo_kind = std::env::var("SK8_DEMO").unwrap_or_default();
+            if demo_kind == "grinds" {
+                let (slide, ..) = GRIND_SLOTS[slot.unwrap_or(0) % GRIND_SLOTS.len()];
+                sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, if slide { 7.5 } else { 6.0 });
+                let s = sim.current;
+                let fwd = Quat::from_array(s.rider_rot) * Vec3::Z;
+                let rail = demo_rail(slot.unwrap_or(0), Vec3::from_array(s.position), fwd);
+                sim.world.clear_rails();
+                sim.world.add_rail(&[rail[0].to_array(), rail[1].to_array()]);
+                sim.demo_rail = Some(rail);
+            } else if demo_kind == "push" {
                 // From a standstill, mongo every other slot.
                 sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 0.0);
                 if let Some(p) = skate_lite_sys::params().iter().find(|p| p.key == "push_mongo") {
@@ -312,6 +371,7 @@ pub(crate) fn read_desktop(
             Ok("push") => demo_push(*t),
             Ok("manual") => demo_manual(*t),
             Ok("oldschool") => demo_oldschool(*t),
+            Ok("grinds") => demo_grinds(*t, &sim.current),
             _ => demo_input(*t),
         };
         return;

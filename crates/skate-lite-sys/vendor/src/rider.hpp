@@ -64,6 +64,8 @@ private:
 	float push_cooldown_ = 0, push_time_ = -1, push_lead_ = 0, since_stroke_ = 9;
 	bool push_mongo_ = false;
 	bool foot_off_ = false;
+	float last_steer_[2] = {0, 0};
+	bool unslide_ = false; // off a slide: the board turns back to the line of travel in the air
 	int grab_ = 0, grab_style_ = 0;
 	float grab_time_ = 0;
 	bool grab_scored_ = false;

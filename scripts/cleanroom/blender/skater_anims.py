@@ -257,6 +257,35 @@ GRIND_50 = P(hips=(-0.1, 0.02, 0.76), hips_rot=(6, 0, 0), spine=(12, 0, 12), hea
              lh=(0.6, -0.06, 1.1), rh=(-0.62, -0.06, 1.06), knee_out=0.4)
 
 
+# More grinds and slides (the runtime holds the board on the rail per kind; the feet ride the
+# turned deck). Truck grinds lean the weight over the truck on the rail; slides keep the body
+# across the rail like the boardslide, shifted toward the end that's on it.
+GRIND_NOSE = P(hips=(0.1, 0.02, 0.76), hips_rot=(16, 0, 0), spine=(22, 0, 14), head=(-18, 0, 60),
+               lh=(0.6, -0.1, 1.06), rh=(-0.58, -0.06, 1.08), knee_out=0.45)
+GRIND_CROOKED = P(hips=(0.1, 0.0, 0.75), hips_rot=(18, 0, 14), spine=(22, 0, 22), head=(-18, 0, 64),
+                  rf=foot(BACK_X, 0.0, 0.03, yaw=BACK_YAW), lh=(0.58, -0.16, 1.04), rh=(-0.56, 0.02, 1.1),
+                  knee_out=0.5)
+GRIND_OVERCROOK = P(hips=(0.1, 0.06, 0.75), hips_rot=(16, -6, -12), spine=(20, 0, 2), head=(-16, 0, 50),
+                    rf=foot(BACK_X, 0.0, 0.03, yaw=BACK_YAW), lh=(0.6, 0.0, 1.08), rh=(-0.56, -0.14, 1.04),
+                    knee_out=0.4)
+GRIND_SMITH = P(hips=(-0.1, -0.03, 0.74), hips_rot=(8, 8, 6), spine=(14, 0, 14), head=(-16, 0, 58),
+                lf=foot(FRONT_X, -0.03, -0.04, yaw=FRONT_YAW), lh=(0.6, -0.14, 1.04), rh=(-0.62, -0.02, 1.08),
+                knee_out=0.45)
+GRIND_FEEBLE = P(hips=(-0.1, 0.05, 0.74), hips_rot=(8, -8, -4), spine=(14, 0, 8), head=(-14, 0, 52),
+                 lf=foot(FRONT_X, 0.04, 0.0, yaw=FRONT_YAW), lh=(0.62, -0.02, 1.08), rh=(-0.6, -0.12, 1.04),
+                 knee_out=0.4)
+SLIDE_NOSE = P(hips=(0.12, 0.03, 0.75), hips_rot=(14, 0, 26), spine=(18, 0, 28), head=(-10, 0, 72),
+               lh=(0.62, -0.14, 1.04), rh=(-0.5, 0.1, 1.06))
+SLIDE_TAIL = P(hips=(-0.12, 0.03, 0.75), hips_rot=(10, 0, 32), spine=(14, 0, 32), head=(-6, 0, 76),
+               lh=(0.56, -0.14, 1.06), rh=(-0.6, 0.08, 1.04))
+SLIDE_LIP = P(hips=(0.0, -0.02, 0.74), hips_rot=(12, 0, -28), spine=(16, 0, -26), head=(-8, 0, 30),
+              lh=(0.56, 0.1, 1.06), rh=(-0.6, -0.16, 1.04))
+SLIDE_NOSEBLUNT = P(hips=(0.18, -0.02, 0.7), hips_rot=(26, 0, 18), spine=(28, 0, 22), head=(-20, 0, 66),
+                    lh=(0.6, -0.2, 0.98), rh=(-0.5, 0.0, 1.08), knee_out=0.55)
+SLIDE_BLUNT = P(hips=(-0.18, 0.04, 0.72), hips_rot=(2, 0, 26), spine=(8, 0, 26), head=(-4, 0, 70),
+                lh=(0.6, -0.08, 1.08), rh=(-0.56, 0.06, 1.0), knee_out=0.55)
+
+
 def flip_part(open_pose, k):
     """Part-way from the pop's extension into the flip's open pose."""
     return mix(POP_TOP, open_pose, k)
@@ -438,6 +467,11 @@ CLIPS = {
     "pop_nollie": (False, [(0.0, NOLLIE_CROUCH), (0.05, NOLLIE_DRIVE), (0.1, NOLLIE_TOP), (0.18, NOLLIE_SLIDE),
                            (0.3, AIR_TUCK)]),
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
+    **{name: (True, loop(lambda t, pose=pose: idle(pose, t, 0.012, 0.06), IDLE_LEN)) for name, pose in (
+        ("grind_nose", GRIND_NOSE), ("grind_crooked", GRIND_CROOKED), ("grind_overcrook", GRIND_OVERCROOK),
+        ("grind_smith", GRIND_SMITH), ("grind_feeble", GRIND_FEEBLE), ("slide_nose", SLIDE_NOSE),
+        ("slide_tail", SLIDE_TAIL), ("slide_lip", SLIDE_LIP), ("slide_noseblunt", SLIDE_NOSEBLUNT),
+        ("slide_blunt", SLIDE_BLUNT))},
     "air": (False, [(0.0, AIR_TUCK), (0.18, AIR_PEAK), (0.6, AIR_HOLD)]),
     # Absorb deep, then rise slowly: in gameplay footage the recovery takes about half a second.
     "land": (False, [(0.0, LAND_CONTACT), (0.07, LAND_DEEP), (0.18, LAND_DEEP), (0.42, LAND_RISE), (0.6, STANCE)]),
