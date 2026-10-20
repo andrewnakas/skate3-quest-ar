@@ -212,6 +212,7 @@ void Rider::step(World &w, const sk8_input &in)
 		grind_cooldown_ -= kDt;
 
 	since_land_ += kDt;
+	last_buttons_ = in.buttons;
 	last_steer_[0] = in.steer[0];
 	last_steer_[1] = in.steer[1];
 	foot_off_ = (in.buttons & SK8_FOOT_OFF) && mode_ == SK8_MODE_RIDE;
@@ -376,10 +377,24 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		dec += p[SlideDrag] * kDt;
 	vel_ = speed > dec ? vel_ * ((speed - dec) / speed) : V3{};
 
+	// a revert turns the board half way round in kRevertTime, easing in and out; the motion carries
+	// on (the wheels slide round, they don't steer it)
+	bool reverting = revert_time_ >= 0 && mode_ == SK8_MODE_RIDE;
+	if (reverting) {
+		constexpr float kRevertTime = 0.34f;
+		float t0 = revert_time_ / kRevertTime, t1 = (revert_time_ + kDt) / kRevertTime;
+		fwd_ = unit(rotate(fwd_, up_, revert_dir_ * kPi * (smooth01(t1) - smooth01(t0))), fwd_);
+		revert_time_ += kDt;
+		if (revert_time_ >= kRevertTime)
+			revert_time_ = -1;
+	} else {
+		revert_time_ = -1;
+	}
+
 	// wheels resist sideways motion
 	V3 side = unit(cross(up_, fwd_), V3{1, 0, 0});
 	float lateral = dot(vel_, side);
-	float grip = 1 - std::exp(-p[Grip] * kDt * (mode_ == SK8_MODE_SLIDE ? 0.08f : 1.0f));
+	float grip = 1 - std::exp(-p[Grip] * kDt * (mode_ == SK8_MODE_SLIDE || reverting ? 0.08f : 1.0f));
 	vel_ -= side * (lateral * grip);
 	vel_ = flatten(vel_, up_);
 
@@ -633,6 +648,12 @@ void Rider::land(const Hit &h)
 		std::snprintf(name, sizeof name, "%d Spin", halves * 180);
 		pending_.push_back({name, unsigned(halves * 110)});
 	}
+	// the slide button held into the landing: a revert (the board spun round on its wheels)
+	if (last_buttons_ & SK8_SLIDE) {
+		revert_time_ = 0;
+		revert_dir_ = lean_ < -0.1f ? -1.0f : 1.0f;
+		pending_.push_back({"Revert", 90});
+	}
 	commit_pending();
 	if (!clean)
 		emit(SK8_EV_LAND, "sketchy", 0, 1, h.surface);
@@ -860,6 +881,7 @@ void Rider::state(sk8_state &s) const
 	s.push_start = push_time_ >= 0 && push_time_ < push_lead_ ? push_time_ / push_lead_ : -1;
 	s.push_mongo = push_mongo_;
 	s.foot_off = foot_off_;
+	s.revert = revert_time_ >= 0 ? clampf(revert_time_ / 0.34f, 0, 1) : -1;
 	s.grab = grab_;
 	s.grab_style = grab_style_;
 	s.flip_progress = flip_ >= 0 ? clampf(flip_time_ / flip_duration_, 0, 1) : -1;

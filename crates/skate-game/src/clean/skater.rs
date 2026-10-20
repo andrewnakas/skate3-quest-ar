@@ -367,6 +367,8 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
                 set(Clip::Air, 1.0, c.since_pop - pop_len);
             }
         }
+        // a revert: weight back over the wheels as the board slides round (the powerslide's lean)
+        Mode::Ride if s.revert.is_some() => set(Clip::Powerslide, 1.0, c.idle),
         Mode::Ride => {
             if c.since_land < len[Clip::Land as usize] {
                 set(Clip::Land, 1.0, c.since_land);

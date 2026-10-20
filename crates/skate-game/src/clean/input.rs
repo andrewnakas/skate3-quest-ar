@@ -6,6 +6,7 @@
 //!   up and held: manual / nose manual (how far balances it)
 //! - A: push (hold to keep pushing), B: mongo push, Y: brake
 //! - left stick click held while flicking: old school (no comply, boneless, no comply 180)
+//! - X held into a landing: revert (the board spins round, rolling away fakie)
 //! - X held while steering: powerslide
 //! - triggers in the air: grab (left / right hand)
 //! - right grip: manual, left grip: nose manual
@@ -211,7 +212,7 @@ const GRIND_SLOTS: [(bool, f32, f32); 13] = [
     (false, -0.8, -0.8), (false, 0.8, -0.8), (true, 0.0, 0.0), (true, 0.0, 1.0), (true, 0.0, -1.0),
     (true, 1.0, 0.0), (true, 0.8, 0.8), (true, 0.8, -0.8),
 ];
-fn demo_grinds(t: f32, s: &skate_lite_sys::State) -> Input {
+fn demo_grinds(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> Input {
     let d = t % GRIND_EACH;
     let (_, x, y) = GRIND_SLOTS[(t / GRIND_EACH) as usize % GRIND_SLOTS.len()];
     let mut i = Input::default();
@@ -221,7 +222,14 @@ fn demo_grinds(t: f32, s: &skate_lite_sys::State) -> Input {
         i.flick = [0.0, 1.0];
     }
     // the stick set as the board comes down to the rail (held longer, sideways would spin it)
-    if s.mode == skate_lite_sys::Mode::Air && s.position[1] < 1.1 && d > 0.6 {
+    // (only right at the rail: held sideways any longer it spins the board round)
+    let near = rail.is_some_and(|[a, b]| {
+        let p = Vec3::from_array(s.position);
+        let ab = b - a;
+        let k = ((p - a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
+        (a + ab * k).distance(p) < 0.9
+    });
+    if s.mode == skate_lite_sys::Mode::Air && near && d > 0.6 {
         i.steer = [x, y];
     }
     i
@@ -248,6 +256,22 @@ pub(crate) fn demo_rail_gizmo(sim: Res<CleanSkate>, mut gizmos: Gizmos) {
             gizmos.line(a + o, b + o, Color::srgb(0.85, 0.85, 0.9));
         }
     }
+}
+
+/// `SK8_DEMO=revert`: an ollie with X held into the landing, rolling away fakie.
+const REVERT_EACH: f32 = 3.0;
+fn demo_revert(t: f32) -> Input {
+    let d = t % REVERT_EACH;
+    let mut i = Input::default();
+    if (0.15..0.5).contains(&d) {
+        i.flick = [0.0, -1.0];
+    } else if (0.5..0.6).contains(&d) {
+        i.flick = [0.0, 1.0];
+    }
+    if (0.7..1.9).contains(&d) {
+        i.buttons |= buttons::SLIDE;
+    }
+    i
 }
 
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
@@ -314,6 +338,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("manual") => Some((t / MANUAL_EACH) as usize),
         Ok("oldschool") => Some((t / OLD_EACH) as usize),
         Ok("grinds") => Some((t / GRIND_EACH) as usize),
+        Ok("revert") => Some((t / REVERT_EACH) as usize),
         _ => None,
     }
 }
@@ -371,7 +396,8 @@ pub(crate) fn read_desktop(
             Ok("push") => demo_push(*t),
             Ok("manual") => demo_manual(*t),
             Ok("oldschool") => demo_oldschool(*t),
-            Ok("grinds") => demo_grinds(*t, &sim.current),
+            Ok("grinds") => demo_grinds(*t, &sim.current, sim.demo_rail),
+            Ok("revert") => demo_revert(*t),
             _ => demo_input(*t),
         };
         return;

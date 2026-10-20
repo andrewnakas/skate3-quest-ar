@@ -96,6 +96,7 @@ struct RawState {
     push_start: f32,
     push_mongo: c_int,
     foot_off: c_int,
+    revert: f32,
 }
 
 /// Where in a stroke the pushing foot plants and lifts (`SK8_PUSH_PLANT`, `SK8_PUSH_RELEASE`).
@@ -126,6 +127,8 @@ pub struct State {
     pub push_mongo: bool,
     /// The foot-off button is held on the ground (front foot stepped down for an old-school pop).
     pub foot_off: bool,
+    /// 0..1 through a revert (the board spun round on landing).
+    pub revert: Option<f32>,
     /// Bit 1 left hand, bit 2 right hand.
     pub grab: u32,
     pub flip_progress: Option<f32>,
@@ -161,6 +164,7 @@ impl From<RawState> for State {
             push_start: (r.push_start >= 0.0).then_some(r.push_start),
             push_mongo: r.push_mongo != 0,
             foot_off: r.foot_off != 0,
+            revert: (r.revert >= 0.0).then_some(r.revert),
             grab: r.grab as u32,
             flip_progress: (r.flip_progress >= 0.0).then_some(r.flip_progress),
             balance: r.balance,
