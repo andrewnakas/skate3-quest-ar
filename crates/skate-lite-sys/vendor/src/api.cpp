@@ -105,7 +105,7 @@ void sk8_rider_set_param(sk8_rider *rider, int index, float value)
 }
 
 const char *sk8_flick_classify(const float *xy, int count) { return sk8::classify_path(xy, count); }
-int sk8_trick_count(void) { return int(sk8::trick_table().size()); }
+int sk8_trick_count(void) { return sk8::gesture_trick_count(); }
 
 const char *sk8_trick_name(int index)
 {

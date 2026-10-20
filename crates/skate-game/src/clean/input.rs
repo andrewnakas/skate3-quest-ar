@@ -5,6 +5,7 @@
 //! - right stick: hold down to crouch, flick to pop and flip (see How to play); part-way down /
 //!   up and held: manual / nose manual (how far balances it)
 //! - A: push (hold to keep pushing), B: mongo push, Y: brake
+//! - left stick click held while flicking: old school (no comply, boneless, no comply 180)
 //! - X held while steering: powerslide
 //! - triggers in the air: grab (left / right hand)
 //! - right grip: manual, left grip: nose manual
@@ -33,6 +34,9 @@ pub(crate) fn from_touch(touch: &crate::xr::touch::TouchState) -> Input {
     }
     if touch.y {
         b |= buttons::BRAKE;
+    }
+    if touch.left_stick_click {
+        b |= buttons::FOOT_OFF;
     }
     if touch.x {
         b |= buttons::SLIDE;
@@ -175,6 +179,29 @@ fn demo_manual(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=oldschool`: the foot-off button held through each plain gesture in turn (ollie,
+/// nollie, pop shove-it, frontside shove-it): no comply, boneless and the two no comply 180s.
+const OLD_EACH: f32 = 3.0;
+fn demo_oldschool(t: f32) -> Input {
+    let d = t % OLD_EACH;
+    let n = (t / OLD_EACH) as usize % 4;
+    let mut i = Input::default();
+    if d > 2.3 {
+        i.buttons |= buttons::PUSH;
+    }
+    let base = ["Ollie", "Nollie", "Pop Shove-it", "Frontside Shove-it"][n];
+    let names = skate_lite_sys::trick_names();
+    let Some(k) = names.iter().position(|x| *x == base) else { return i };
+    let path = skate_lite_sys::trick_demo_path(k);
+    let f = (d * 60.0) as usize;
+    let f = if f < 4 { f } else if f < 24 { 4 } else { f - 19 };
+    if let Some(p) = path.get(f) {
+        i.flick = *p;
+        i.buttons |= buttons::FOOT_OFF;
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -237,6 +264,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("grabs") if t >= 3.0 => Some(((t - 3.0) / 2.6) as usize),
         Ok("push") => Some((t / PUSH_EACH) as usize),
         Ok("manual") => Some((t / MANUAL_EACH) as usize),
+        Ok("oldschool") => Some((t / OLD_EACH) as usize),
         _ => None,
     }
 }
@@ -283,6 +311,7 @@ pub(crate) fn read_desktop(
             Ok("flips") => demo_flips(*t),
             Ok("push") => demo_push(*t),
             Ok("manual") => demo_manual(*t),
+            Ok("oldschool") => demo_oldschool(*t),
             _ => demo_input(*t),
         };
         return;
@@ -302,6 +331,7 @@ pub(crate) fn read_desktop(
     for (k, bit) in [
         (KeyCode::Space, buttons::PUSH),
         (KeyCode::AltLeft, buttons::PUSH_MONGO),
+        (KeyCode::KeyF, buttons::FOOT_OFF),
         (KeyCode::ShiftLeft, buttons::BRAKE),
         (KeyCode::KeyQ, buttons::GRAB_LEFT),
         (KeyCode::KeyE, buttons::GRAB_RIGHT),
@@ -331,6 +361,7 @@ pub(crate) fn read_desktop(
             (GamepadButton::South, buttons::PUSH),
             (GamepadButton::East, buttons::PUSH_MONGO),
             (GamepadButton::North, buttons::BRAKE),
+            (GamepadButton::LeftThumb, buttons::FOOT_OFF),
             (GamepadButton::West, buttons::SLIDE),
             (GamepadButton::LeftTrigger2, buttons::GRAB_LEFT),
             (GamepadButton::RightTrigger2, buttons::GRAB_RIGHT),

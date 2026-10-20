@@ -308,6 +308,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("Left stick", "steer; in the air, spin"),
             pair("Right stick", "hold down to crouch, flick to pop"),
             pair("Right stick half down/up", "manual / nose manual (depth balances)"),
+            pair("Left stick click + flick", "old school: no comply, boneless, 180s"),
             pair("A (hold)", "push"),
             pair("B (hold)", "mongo push"),
             pair("Y", "brake"),
@@ -332,6 +333,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("Esc / Tab", "this menu / SK8 menu"),
             info_row("A gamepad works too: sticks, A push, B mongo push, Y brake."),
             info_row("Manual: right stick part-way down (nose: part-way up), hold it there."),
+            info_row("Old school: hold F (pad: left stick click) and flick: no comply, boneless..."),
         ],
         1 => {
             let mut rows = vec![info_row("Hold the right stick down to crouch, then:")];

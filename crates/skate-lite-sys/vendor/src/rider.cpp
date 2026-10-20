@@ -168,6 +168,7 @@ void Rider::step(World &w, const sk8_input &in)
 		grind_cooldown_ -= kDt;
 
 	since_land_ += kDt;
+	foot_off_ = (in.buttons & SK8_FOOT_OFF) && mode_ == SK8_MODE_RIDE;
 	// Manuals from the right stick: tilted part-way down (manual) or up (nose manual) and held there.
 	{
 		float x = in.flick[0], y = in.flick[1], r = std::sqrt(x * x + y * y);
@@ -208,10 +209,19 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 				50 + unsigned(manual_time_ * p[ManualRate]));
 			manual_dir_ = 0;
 		}
-		const TrickDef &def = trick_table()[size_t(f.trick)];
-		pop(def, def.nollie ? p[NolliePop] : 1.0f);
+		int trick = f.trick;
+		float share = trick_table()[size_t(trick)].nollie ? p[NolliePop] : 1.0f;
+		// the foot-off button: the front foot steps down off the board first (old school)
+		float old_pop = 1;
+		int old = (in.buttons & SK8_FOOT_OFF) && mode_ == SK8_MODE_RIDE ? foot_off_variant(trick, &old_pop) : -1;
+		if (old >= 0) {
+			trick = old;
+			share = old_pop;
+		}
+		const TrickDef &def = trick_table()[size_t(trick)];
+		pop(def, share);
 		if (flip_ < 0 && !def.flat)
-			start_flip(f.trick);
+			start_flip(trick);
 		else if (def.flat)
 			pending_.push_back({def.name, def.points});
 		return;
@@ -779,6 +789,7 @@ void Rider::state(sk8_state &s) const
 	s.push_phase = push_time_ >= push_lead_ ? clampf((push_time_ - push_lead_) / std::max(p[PushPeriod], 0.01f), 0, 1) : -1;
 	s.push_start = push_time_ >= 0 && push_time_ < push_lead_ ? push_time_ / push_lead_ : -1;
 	s.push_mongo = push_mongo_;
+	s.foot_off = foot_off_;
 	s.grab = grab_;
 	s.grab_style = grab_style_;
 	s.flip_progress = flip_ >= 0 ? clampf(flip_time_ / flip_duration_, 0, 1) : -1;

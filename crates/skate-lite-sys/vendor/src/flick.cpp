@@ -28,6 +28,24 @@ const std::vector<TrickDef> kTricks = {
 	{"Nollie Heelflip", {TUp, TCentre, TDownRight}, 320, -1, 0, true, false},
 	{"Nollie Shove-it", {TUp, TUpLeft, TLeft, TCentre}, 220, 0, 0.5f, true, false},
 	{"Nollie Frontside Shove-it", {TUp, TUpRight, TRight, TCentre}, 240, 0, -0.5f, true, false},
+	// Old school: no gesture of their own, the foot-off button turns a flick into one (see
+	// foot_off_variant). Kept after the gestures; sk8_trick_count() covers only those.
+	{"No Comply", {}, 160, 0, 0, false, true},
+	{"Boneless", {}, 200, 0, 0, false, true},
+	{"No Comply 180", {}, 260, 0, 0.5f, false, false},
+	{"Frontside No Comply 180", {}, 280, 0, -0.5f, false, false},
+};
+
+// base gesture trick -> old-school variant with the foot-off button held
+const struct
+{
+	const char *base, *variant;
+	float pop; // share of an ollie's pop
+} kFootOff[] = {
+	{"Ollie", "No Comply", 0.8f},
+	{"Nollie", "Boneless", 0.88f},
+	{"Pop Shove-it", "No Comply 180", 0.82f},
+	{"Frontside Shove-it", "Frontside No Comply 180", 0.82f},
 };
 
 bool is_prefix(const std::vector<unsigned char> &a, const std::vector<unsigned char> &b)
@@ -46,6 +64,27 @@ int ring_distance(int a, int b)
 } // namespace
 
 const std::vector<TrickDef> &trick_table() { return kTricks; }
+
+int gesture_trick_count()
+{
+	int n = 0;
+	while (n < int(kTricks.size()) && !kTricks[size_t(n)].tokens.empty())
+		n++;
+	return n;
+}
+
+int foot_off_variant(int trick, float *pop)
+{
+	if (trick < 0)
+		return -1;
+	for (const auto &f : kFootOff)
+		if (std::strcmp(kTricks[size_t(trick)].name, f.base) == 0) {
+			if (pop)
+				*pop = f.pop;
+			return find_trick(f.variant);
+		}
+	return -1;
+}
 
 int find_trick(const char *name)
 {

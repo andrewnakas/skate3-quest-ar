@@ -24,6 +24,10 @@ struct TrickDef
 };
 
 const std::vector<TrickDef> &trick_table();
+// tricks with a gesture of their own (the front of trick_table)
+int gesture_trick_count();
+// the old-school trick a gesture trick becomes with the foot-off button held (-1 none); its pop share
+int foot_off_variant(int trick, float *pop);
 int find_trick(const char *name);
 
 // Rim / centre thresholds on stick radius.

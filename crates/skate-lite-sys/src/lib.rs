@@ -20,6 +20,8 @@ pub mod buttons {
     pub const SLIDE: u32 = 1 << 6;
     /// Push with the front foot (mongo).
     pub const PUSH_MONGO: u32 = 1 << 7;
+    /// Held while flicking: old school (no comply, boneless, no comply 180).
+    pub const FOOT_OFF: u32 = 1 << 8;
 }
 
 pub mod flags {
@@ -93,6 +95,7 @@ struct RawState {
     grab_style: c_int,
     push_start: f32,
     push_mongo: c_int,
+    foot_off: c_int,
 }
 
 /// Where in a stroke the pushing foot plants and lifts (`SK8_PUSH_PLANT`, `SK8_PUSH_RELEASE`).
@@ -121,6 +124,8 @@ pub struct State {
     pub push_start: Option<f32>,
     /// The front foot pushes (mongo).
     pub push_mongo: bool,
+    /// The foot-off button is held on the ground (front foot stepped down for an old-school pop).
+    pub foot_off: bool,
     /// Bit 1 left hand, bit 2 right hand.
     pub grab: u32,
     pub flip_progress: Option<f32>,
@@ -155,6 +160,7 @@ impl From<RawState> for State {
             push_phase: (r.push_phase >= 0.0).then_some(r.push_phase),
             push_start: (r.push_start >= 0.0).then_some(r.push_start),
             push_mongo: r.push_mongo != 0,
+            foot_off: r.foot_off != 0,
             grab: r.grab as u32,
             flip_progress: (r.flip_progress >= 0.0).then_some(r.flip_progress),
             balance: r.balance,

@@ -71,9 +71,11 @@ enum Clip {
     GrabChrist,
     GrabMethod,
     GrabRocket,
+    PopNoComply,
+    PopBoneless,
 }
 
-const CLIPS: usize = 39;
+const CLIPS: usize = 41;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -82,6 +84,7 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_grab_tuck_knee", "sk8_grab_judo", "sk8_grab_double", "sk8_grab_superman", "sk8_grab_no_foot", "sk8_grab_stiffy",
     "sk8_pop_nollie", "sk8_flip_hard", "sk8_flip_tre", "sk8_grind_5_0", "sk8_push_start", "sk8_push_mongo",
     "sk8_push_start_mongo", "sk8_push_end_mongo", "sk8_grab_christ", "sk8_grab_method", "sk8_grab_rocket",
+    "sk8_pop_no_comply", "sk8_pop_boneless",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
 const LOOPED: [Clip; 10] = [
@@ -204,6 +207,8 @@ pub(crate) struct Clock {
     since_push: f32,
     /// The last pop was off the nose (from the pop event's trick name).
     pub(crate) nollie: bool,
+    /// The last pop was old school (no comply / boneless): its own pop clip, played through.
+    old_school: Option<Clip>,
     /// Drives the idle loops (ride sway, manual and grind balance).
     idle: f32,
 }
@@ -211,7 +216,7 @@ pub(crate) struct Clock {
 impl Default for Clock {
     fn default() -> Self {
         // Long ago, so nothing plays its "just happened" clip at spawn.
-        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, idle: 0.0 }
+        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, idle: 0.0 }
     }
 }
 
@@ -231,6 +236,18 @@ fn flip_clip(trick: &str) -> Clip {
     }
 }
 
+/// The old-school pops play their own clip.
+fn old_school_clip(trick: &str) -> Option<Clip> {
+    let t = trick.to_ascii_lowercase();
+    if t.contains("no comply") {
+        Some(Clip::PopNoComply)
+    } else if t.contains("boneless") {
+        Some(Clip::PopBoneless)
+    } else {
+        None
+    }
+}
+
 /// Nollies pop off the nose.
 pub(crate) fn is_nollie(trick: &str) -> bool {
     trick.to_ascii_lowercase().starts_with("nollie")
@@ -241,6 +258,8 @@ pub(crate) fn is_nollie(trick: &str) -> bool {
 fn blend_time(clip: Clip) -> f32 {
     match clip {
         Clip::Pop | Clip::PopNollie => 0.035,
+        // the front foot steps down off the board: a little time to get there
+        Clip::PopNoComply | Clip::PopBoneless => 0.06,
         Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv | Clip::FlipHard | Clip::FlipTre => 0.05,
         Clip::Land | Clip::Bail => 0.06,
         Clip::Air | Clip::Grind | Clip::Grind50 | Clip::Boardslide => 0.1,
@@ -292,7 +311,10 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             // A flip or a grab takes over from the pop at full extension (a grab's reach then plays
             // from its start instead of the pose snapping to a grab already half done).
             let pop_until = if s.flip_progress.is_some() || s.grab != 0 { POP_TOP_AT } else { pop_len };
-            if c.since_pop < pop_until {
+            if let Some(old) = c.old_school.filter(|clip| c.since_pop < len[*clip as usize] && s.grab == 0) {
+                // the foot steps off and back on over the whole clip, a 180 turning the board under it
+                set(old, 1.0, c.since_pop);
+            } else if c.since_pop < pop_until {
                 set(if c.nollie { Clip::PopNollie } else { Clip::Pop }, 1.0, c.since_pop);
             } else if let Some(p) = s.flip_progress {
                 let clip = flip_clip(trick);
@@ -329,6 +351,12 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             } else if c.since_push < len[Clip::StepOn as usize] {
                 let clip = if s.push_mongo { Clip::StepOnMongo } else { Clip::StepOn };
                 set(clip, 1.0, c.since_push);
+            } else if s.foot_off {
+                // old school: the front foot steps down off the board onto the ground as the
+                // crouch loads (the no comply's first pose), ready to spring off it at the pop
+                let k = s.crouch.max(0.5);
+                set(Clip::Ride, 1.0 - k, c.idle);
+                set(Clip::PopNoComply, k, 0.0);
             } else {
                 set(Clip::Ride, 1.0 - s.crouch, c.idle);
                 set(Clip::Crouch, s.crouch, c.idle);
@@ -365,6 +393,7 @@ pub(crate) fn animate(
             EventKind::Pop => {
                 clock.since_pop = 0.0;
                 clock.nollie = is_nollie(&e.name);
+                clock.old_school = old_school_clip(&e.name);
             }
             EventKind::Land => clock.since_land = 0.0,
             _ => {}
@@ -448,7 +477,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::GrabIndy, Clip::GrabCrail, Clip::GrabTail, Clip::GrabStalefish, Clip::GrabMelon, Clip::GrabNose, Clip::GrabTuckKnee,
     Clip::GrabJudo, Clip::GrabDouble, Clip::GrabSuperman, Clip::GrabNoFoot, Clip::GrabStiffy, Clip::PopNollie,
     Clip::FlipHard, Clip::FlipTre, Clip::Grind50, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo,
-    Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket,
+    Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket, Clip::PopNoComply, Clip::PopBoneless,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

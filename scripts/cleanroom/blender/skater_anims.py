@@ -217,6 +217,32 @@ NOLLIE_TOP = P(hips=(0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 10), 
 NOLLIE_SLIDE = P(hips=(0.0, 0.02, 0.95), hips_rot=(12, 0, 0), spine=(12, 0, 9), head=(-20, 0, 55),
                  lf=foot(FRONT_X, 0.0, 0.1, yaw=15), rf=foot(BACK_X - 0.06, 0.0, 0.17, yaw=2, pitch=-4),
                  lh=(0.68, -0.1, 1.22), rh=(-0.66, -0.04, 1.19), knee_out=0.6)
+# Old school. No comply: the front foot steps down off the toe edge onto the ground, the back foot
+# snaps the tail and the board pops up off it, the front leg springs off the ground and both feet
+# come back over the deck into the tuck. Boneless: the same step down, but the back hand reaches
+# down to the toe edge by the back foot and lifts the board up with the jump, letting go in the air.
+NC_STEP = P(hips=(0.03, -0.04, 0.76), hips_rot=(20, 0, 8), spine=(20, 0, 14), head=(-20, 0, 50),
+            lf=foot(FRONT_X - 0.04, -0.27, DECK_TOP_TO_GROUND, yaw=30), rf=foot(BACK_X, 0.0, 0.0, yaw=BACK_YAW),
+            lh=(0.36, -0.26, 0.82), rh=(-0.32, -0.2, 0.8), knee_out=0.45)
+NC_POP = P(hips=(0.01, -0.03, 0.9), hips_rot=(14, 0, 6), spine=(14, 0, 12), head=(-18, 0, 52),
+           lf=foot(FRONT_X - 0.02, -0.25, DECK_TOP_TO_GROUND + 0.04, yaw=28, pitch=-14),
+           rf=foot(BACK_X - 0.02, 0.0, 0.1, yaw=BACK_YAW), lh=(0.5, -0.16, 1.0), rh=(-0.48, -0.12, 0.98),
+           knee_out=0.5)
+NC_BACK_ON = P(hips=(0.0, 0.0, 0.94), hips_rot=(14, 0, 2), spine=(15, 0, 10), head=(-20, 0, 55),
+               lf=foot(FRONT_X + 0.02, -0.12, 0.22, yaw=20), rf=foot(BACK_X, 0.0, 0.2, yaw=BACK_YAW),
+               lh=(0.6, -0.12, 1.12), rh=(-0.58, -0.06, 1.1), knee_out=0.55)
+BL_REACH = P(hips=(0.02, -0.06, 0.66), hips_rot=(30, 0, 10), spine=(34, 0, 16), head=(-24, 0, 45),
+             lf=foot(FRONT_X - 0.05, -0.28, DECK_TOP_TO_GROUND, yaw=30), rf=foot(BACK_X, 0.0, 0.0, yaw=BACK_YAW),
+             lh=(0.42, -0.3, 0.84), rh=(BACK_X + 0.16, -0.12, 0.02), knee_out=0.5)
+BL_JUMP = P(hips=(0.0, -0.03, 0.92), hips_rot=(16, 0, 6), spine=(18, 0, 12), head=(-18, 0, 50),
+            lf=foot(FRONT_X - 0.03, -0.24, DECK_TOP_TO_GROUND + 0.06, yaw=28, pitch=-16),
+            rf=foot(BACK_X, 0.0, 0.14, yaw=BACK_YAW), lh=(0.56, -0.18, 1.06), rh=(BACK_X + 0.16, -0.12, 0.16),
+            knee_out=0.5)
+BL_HOLD = P(hips=(0.0, 0.0, 0.9), hips_rot=(18, 0, 2), spine=(20, 0, 10), head=(-20, 0, 52),
+            lf=foot(FRONT_X, -0.1, 0.24, yaw=20), rf=foot(BACK_X, 0.0, 0.22, yaw=BACK_YAW),
+            lh=(0.6, -0.14, 1.1), rh=(BACK_X + 0.18, -0.12, 0.24), knee_out=0.55)
+
+
 # Hardflip: the legs open front to back (front foot forward and up, back foot up behind) and the board
 # flips upright between them. Tre flip: both feet up high, the back foot scooping round behind.
 FLIP_HARD = P(hips=(0.0, 0.03, 0.9), hips_rot=(16, 0, 0), spine=(15, 0, 8), head=(-28, 0, 50),
@@ -407,6 +433,8 @@ CLIPS = {
     "ride": (True, loop(ride_frame, IDLE_LEN)),
     "crouch": (True, loop(lambda t: idle(CROUCH, t, 0.008, 0.02), IDLE_LEN)),
     "pop": (False, [(0.0, CROUCH), (0.05, POP_DRIVE), (0.1, POP_TOP), (0.18, POP_SLIDE), (0.3, AIR_TUCK)]),
+    "pop_no_comply": (False, [(0.0, NC_STEP), (0.08, NC_POP), (0.2, NC_BACK_ON), (0.34, AIR_TUCK)]),
+    "pop_boneless": (False, [(0.0, BL_REACH), (0.1, BL_JUMP), (0.24, BL_HOLD), (0.4, BL_HOLD), (0.52, AIR_TUCK)]),
     "pop_nollie": (False, [(0.0, NOLLIE_CROUCH), (0.05, NOLLIE_DRIVE), (0.1, NOLLIE_TOP), (0.18, NOLLIE_SLIDE),
                            (0.3, AIR_TUCK)]),
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
@@ -514,7 +542,7 @@ ARM_REACH_MAX = 0.41
 # The bail's hands reach for the ground and are left alone; in a grab only the free hand (above the
 # board) relaxes.
 REACHING = ("bail",)
-GRABBING = "grab_"
+GRABBING = ("grab_", "pop_boneless")
 
 
 def shoulder(pose, side):
