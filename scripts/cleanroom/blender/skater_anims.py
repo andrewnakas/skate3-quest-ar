@@ -140,6 +140,37 @@ GRAB_POSES = {
                         lf=foot(FRONT_X + 0.04, 0.0, 0.2, yaw=15), rf=foot(BACK_X - 0.04, 0.0, 0.19, yaw=0),
                         lh=(0.12, -0.12, 0.19), rh=(-0.12, -0.12, 0.19), knee_out=0.2),  # legs near straight
 }
+# Tilted grabs: the runtime turns the deck by these (skater.rs METHOD_ROLL / ROCKET_PITCH, degrees)
+# about its centre at GRAB_DECK, and the feet are authored on the turned deck.
+METHOD_ROLL, ROCKET_PITCH = 38.0, 42.0
+
+
+def on_deck(x, y=0.0, roll=0.0, pitch=0.0, yaw=0.0, foot_pitch=0.0):
+    """A foot standing at (x, y) on a grab-height deck rolled heel edge up by `roll` and pitched
+    nose up by `pitch` (degrees)."""
+    r, q = math.radians(roll), math.radians(pitch)
+    z = y * math.sin(r) + x * math.sin(q)
+    return foot(x * math.cos(q), y * math.cos(r) - FOOT_Y * (1 - math.cos(r)), GRAB_DECK + z, yaw=yaw, pitch=foot_pitch)
+
+
+# Christ air: both feet off, legs together hanging long, the board held out in the back hand and
+# both arms spread wide (the runtime hangs the board from that hand). Method: the front hand on the
+# heel edge, knees bent and the board pulled up behind (rolled heel edge up), the chest arched and
+# the back arm up and out. Rocket: both hands on the nose, the board pitched up in front, the feet
+# on the tail, the body sitting back behind it.
+GRAB_POSES["christ"] = P(hips=(0.0, 0.05, 0.92), hips_rot=(4, 0, 0), spine=(2, 0, 4), head=(-14, 0, 35),
+                         lf=foot(0.05, 0.04, 0.2, yaw=10, pitch=35), rf=foot(-0.07, 0.04, 0.19, yaw=0, pitch=35),
+                         lh=(0.66, 0.0, 1.22), rh=(-0.66, 0.02, 1.2), knee_out=0.15)
+GRAB_POSES["method"] = P(hips=(0.0, -0.04, 0.66), hips_rot=(18, 0, -6), spine=(4, 0, -14), head=(-22, 0, 70),
+                         lf=on_deck(FRONT_X - 0.02, 0.0, roll=METHOD_ROLL, yaw=15),
+                         rf=on_deck(BACK_X + 0.04, 0.0, roll=METHOD_ROLL, yaw=0),
+                         lh=(0.04, 0.17, GRAB_DECK + 0.08), rh=(-0.5, -0.24, 1.16), knee_out=0.7)
+GRAB_POSES["rocket"] = P(hips=(-0.18, 0.02, 0.62), hips_rot=(30, 0, 0), spine=(36, 0, 4), head=(-20, 0, 30),
+                         lf=on_deck(FRONT_X - 0.04, pitch=ROCKET_PITCH, yaw=15),
+                         rf=on_deck(BACK_X + 0.06, pitch=ROCKET_PITCH, yaw=0),
+                         lh=(0.38 * math.cos(math.radians(ROCKET_PITCH)), -0.05, GRAB_DECK + 0.38 * math.sin(math.radians(ROCKET_PITCH))),
+                         rh=(0.38 * math.cos(math.radians(ROCKET_PITCH)), 0.05, GRAB_DECK + 0.38 * math.sin(math.radians(ROCKET_PITCH))),
+                         knee_out=0.6)
 # The old names, kept for the poses other code refers to.
 GRAB_TOE = GRAB_POSES["indy"]
 GRAB_HEEL = GRAB_POSES["melon"]
@@ -486,6 +517,17 @@ REACHING = ("bail",)
 GRABBING = "grab_"
 
 
+def shoulder(pose, side):
+    """Where the shoulder is (rider frame), estimated from the hips and the trunk's bend and turn;
+    side +1 the front (left) shoulder, -1 the back one."""
+    hx, hy, hz = pose["hips"]
+    pitch = math.radians(pose["hips_rot"][0] + pose["spine"][0] * 0.8)
+    yaw = math.radians(pose["hips_rot"][2])
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    up = (SHOULDER_UP * math.sin(pitch) * sy, -SHOULDER_UP * math.sin(pitch) * cy, SHOULDER_UP * math.cos(pitch))
+    return (hx + up[0] + side * SHOULDER_HALF * cy, hy + up[1] + side * SHOULDER_HALF * sy, hz + up[2])
+
+
 def relaxed(pose, above=-9.0):
     """The arms never quite straight: each hand is pulled in toward its shoulder in proportion to
     how far it reaches, so the elbows always keep some bend and the arms read loose."""
@@ -497,7 +539,10 @@ def relaxed(pose, above=-9.0):
     up = (SHOULDER_UP * math.sin(pitch) * sy, -SHOULDER_UP * math.sin(pitch) * cy, SHOULDER_UP * math.cos(pitch))
     out = dict(pose)
     for key, side in (("lh", 1.0), ("rh", -1.0)):
-        if pose[key][2] < above:
+        # fades out below `above` (a grabbing hand going down to the board), never a step: a
+        # hand target that jumped there flipped the elbow mid-reach
+        weight = min(1.0, max(0.0, (pose[key][2] - above) / 0.2))
+        if weight <= 0.0:
             continue
         sh = (hx + up[0] + side * SHOULDER_HALF * cy, hy + up[1] + side * SHOULDER_HALF * sy, hz + up[2])
         d = [a - b for a, b in zip(pose[key], sh)]
@@ -519,13 +564,14 @@ def relaxed(pose, above=-9.0):
             new = (sh[0] + d[0] * k, sh[1] + d[1] * k, sh[2] + d[2] * k)
         # Raised arms come down toward chest height: out for balance, not held up stiff.
         lift = max(0.0, new[2] - (hz + 0.18))
-        out[key] = (new[0] + fwd[0], new[1] + fwd[1], new[2] - 0.45 * lift)
+        new = (new[0] + fwd[0], new[1] + fwd[1], new[2] - 0.45 * lift)
+        out[key] = tuple(o + (n - o) * weight for o, n in zip(pose[key], new))
     return out
 
 
 # One clip per grab style: reach for the board over a quarter second, then hold with a slight sway.
 for _name, _pose in GRAB_POSES.items():
-    CLIPS[f"grab_{_name}"] = (False, [(0.0, AIR_TUCK), (0.26, _pose), (0.6, idle(_pose, 0.25, 0.01, 0.0))])
+    CLIPS[f"grab_{_name}"] = (False, [(0.0, AIR_TUCK), (0.3, _pose), (0.62, idle(_pose, 0.25, 0.01, 0.0))])
 for _name, _open in (("flip_kick", FLIP_KICK), ("flip_heel", FLIP_HEEL), ("flip_shuv", FLIP_SHUV),
                      ("flip_hard", FLIP_HARD), ("flip_tre", FLIP_TRE)):
     # The arms take most of a fifth of a second to go up into the V.
@@ -612,7 +658,8 @@ def apply_pose(rig, c, pose, rest_ankle):
         b = pb[name]
         b.rotation_mode = "XYZ"
         b.rotation_euler = (math.radians(nod * share), math.radians(turn * share), math.radians(tilt * share))
-    for side, key, hand in (("l", "lf", "lh"), ("r", "rf", "rh")):
+    for side_name, key, hand in (("l", "lf", "lh"), ("r", "rf", "rh")):
+        side = side_name
         f = pose[key]
         c[f"foot_{side}"].location = f["at"]
         pitch, _, yaw = f["rot"]
@@ -629,22 +676,35 @@ def apply_pose(rig, c, pose, rest_ankle):
         kx, ky = kx * math.cos(kyaw) - ky * math.sin(kyaw), kx * math.sin(kyaw) + ky * math.cos(kyaw)
         c[f"kpole_{side}"].location = (f["at"][0] + kx, ky, 0.5)
         c[f"hand_{side}"].location = pose[hand]
-        # Elbows bend out to the side and back, aimed from behind the shoulder line at a height between
-        # shoulder and hand: the pole then moves smoothly with the hand and never crosses the arm
-        # (a pole hung just below the hand flipped the elbow on low reaches like grabs and the bail).
-        # The offset turns with the hips, so a body facing down the board (pushing) still bends its
-        # elbows out and back from itself.
+        # Elbows bend out, back and down from the body (turned with the hips, so a body facing down
+        # the board to push bends them back from itself). The pole is that preferred direction with
+        # its part along the shoulder-to-hand line removed, put beside the arm's middle: it can never
+        # lie along the arm, which is what flipped elbows whenever a hand reached the way a fixed
+        # pole pointed (grabs, a hand passing in front of the shoulder).
+        sh = shoulder(pose, hx)
         yaw = math.radians(pose["hips_rot"][2])
-        # Hanging arms bend their elbows back (aimed out to the side they read as hands on hips);
-        # raised arms flare them out.
-        raised = min(1.0, max(0.0, (pose[hand][2] - pose["hips"][2] - 0.05) / 0.3))
-        dx, dy = hx * (0.12 + 0.33 * raised), 0.55
-        dx, dy = dx * math.cos(yaw) - dy * math.sin(yaw), dx * math.sin(yaw) + dy * math.cos(yaw)
-        # A raised arm's elbow sags below the shoulder-to-hand line (loose, seen bent from any side)
-        # instead of bending straight back, which from the front looked like a straight arm.
-        ez = 0.5 * (1.38 + pose[hand][2])
-        ez += (pose[hand][2] - 0.55 - ez) * raised
-        c[f"epole_{side}"].location = (pose[hand][0] + dx, pose[hand][1] + dy * (1 - 0.8 * raised), ez)
+        cy, sy = math.cos(yaw), math.sin(yaw)
+        want = (hx * 0.45, 0.55, -0.45)
+        want = (want[0] * cy - want[1] * sy, want[0] * sy + want[1] * cy, want[2])
+        arm = [h - q for h, q in zip(pose[hand], sh)]
+        n = math.sqrt(sum(a * a for a in arm)) or 1.0
+        arm = [a / n for a in arm]
+
+        def perp(v):
+            d = sum(a * b for a, b in zip(v, arm))
+            return [a - d * b for a, b in zip(v, arm)]
+
+        side = perp(want)
+        size = math.sqrt(sum(a * a for a in side))
+        if size < 0.35:  # the arm points nearly that way: lean on "down", then "back"
+            for extra in ((0.0, 0.0, -1.0), (-sy, cy, 0.0)):
+                e = perp(extra)
+                k = (0.35 - size) / 0.35
+                side = [a + b * k for a, b in zip(side, e)]
+                size = math.sqrt(sum(a * a for a in side))
+        side = [a / (size or 1.0) for a in side]
+        mid = [(h + q) * 0.5 for h, q in zip(pose[hand], sh)]
+        c[f"epole_{side_name}"].location = tuple(m + 0.5 * d for m, d in zip(mid, side))
 
 
 def _fcurves(action):

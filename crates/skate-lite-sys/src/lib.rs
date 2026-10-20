@@ -186,6 +186,9 @@ pub mod grab_style {
     pub const SUPERMAN: u32 = 10;
     pub const NO_FOOT: u32 = 11;
     pub const STIFFY: u32 = 12;
+    pub const CHRIST: u32 = 13;
+    pub const METHOD: u32 = 14;
+    pub const ROCKET: u32 = 15;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

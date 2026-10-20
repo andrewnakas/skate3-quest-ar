@@ -13,6 +13,9 @@ use std::f32::consts::FRAC_PI_2;
 
 pub(crate) use super::board::{DECK_CENTRE, DECK_TOP};
 use super::board::{TRUCK_Z, WHEEL_R};
+/// Grabs that turn the deck (skater_anims.py METHOD_ROLL / ROCKET_PITCH, degrees).
+pub(crate) const METHOD_ROLL: f32 = 38.0;
+pub(crate) const ROCKET_PITCH: f32 = 42.0;
 /// Ankle height above the sole in the authored clips.
 pub(crate) const ANKLE: f32 = 0.075;
 /// Where the pop clip reaches its full extension (the flip clips start from that pose).
@@ -65,9 +68,12 @@ enum Clip {
     PushMongo,
     StepOffMongo,
     StepOnMongo,
+    GrabChrist,
+    GrabMethod,
+    GrabRocket,
 }
 
-const CLIPS: usize = 36;
+const CLIPS: usize = 39;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -75,7 +81,7 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_grab_indy", "sk8_grab_crail", "sk8_grab_tail", "sk8_grab_stalefish", "sk8_grab_melon", "sk8_grab_nose",
     "sk8_grab_tuck_knee", "sk8_grab_judo", "sk8_grab_double", "sk8_grab_superman", "sk8_grab_no_foot", "sk8_grab_stiffy",
     "sk8_pop_nollie", "sk8_flip_hard", "sk8_flip_tre", "sk8_grind_5_0", "sk8_push_start", "sk8_push_mongo",
-    "sk8_push_start_mongo", "sk8_push_end_mongo",
+    "sk8_push_start_mongo", "sk8_push_end_mongo", "sk8_grab_christ", "sk8_grab_method", "sk8_grab_rocket",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
 const LOOPED: [Clip; 10] = [
@@ -250,8 +256,13 @@ fn blend_time(clip: Clip) -> f32 {
         | Clip::GrabSuperman
         | Clip::GrabNoFoot
         | Clip::GrabStiffy
+        | Clip::GrabChrist
+        | Clip::GrabMethod
+
         | Clip::Manual | Clip::ManualNose | Clip::Powerslide => 0.13,
         Clip::Ride | Clip::Crouch => 0.16,
+        // both arms cross to the nose: given time, so the back arm doesn't whip round
+        Clip::GrabRocket => 0.18,
         // The step-off clips do the turn to face down the board themselves.
         Clip::StepOff | Clip::StepOffMongo => 0.06,
         // Into a stroke from anything else (a landing, a powerslide): the body turns, not in a snap.
@@ -278,8 +289,9 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
         Mode::Manual => set(Clip::Manual, 1.0, c.idle),
         Mode::Slide => set(Clip::Powerslide, 1.0, c.idle),
         Mode::Air => {
-            // A flip takes over from the pop at full extension, where its clip starts.
-            let pop_until = if s.flip_progress.is_some() { POP_TOP_AT } else { pop_len };
+            // A flip or a grab takes over from the pop at full extension (a grab's reach then plays
+            // from its start instead of the pose snapping to a grab already half done).
+            let pop_until = if s.flip_progress.is_some() || s.grab != 0 { POP_TOP_AT } else { pop_len };
             if c.since_pop < pop_until {
                 set(if c.nollie { Clip::PopNollie } else { Clip::Pop }, 1.0, c.since_pop);
             } else if let Some(p) = s.flip_progress {
@@ -288,12 +300,18 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             } else if s.grab != 0 {
                 // The engine's grab style picks the clip; an unknown one falls back by hand.
                 let style = match s.grab_style as usize {
-                    n @ 1..=12 => n,
+                    n @ 1..=15 => n,
                     _ if s.grab == 3 => 9,
                     _ if s.grab & 1 != 0 => 5,
                     _ => 1,
                 };
-                set(CLIP_ORDER[GRAB_FIRST + style - 1], 1.0, c.since_grab);
+                let clip = match style {
+                    13 => Clip::GrabChrist,
+                    14 => Clip::GrabMethod,
+                    15 => Clip::GrabRocket,
+                    n => CLIP_ORDER[GRAB_FIRST + n - 1],
+                };
+                set(clip, 1.0, c.since_grab);
             } else {
                 // Tuck, hold, then reach the legs down for the landing.
                 set(Clip::Air, 1.0, c.since_pop - pop_len);
@@ -430,6 +448,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::GrabIndy, Clip::GrabCrail, Clip::GrabTail, Clip::GrabStalefish, Clip::GrabMelon, Clip::GrabNose, Clip::GrabTuckKnee,
     Clip::GrabJudo, Clip::GrabDouble, Clip::GrabSuperman, Clip::GrabNoFoot, Clip::GrabStiffy, Clip::PopNollie,
     Clip::FlipHard, Clip::FlipTre, Clip::Grind50, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo,
+    Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

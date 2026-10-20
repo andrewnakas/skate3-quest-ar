@@ -135,22 +135,25 @@ typedef struct sk8_state
 #define SK8_PUSH_RELEASE 0.62f
 
 /* Grab styles: the trigger(s) held pick the hand, the left stick's direction when the grab starts
- * picks the style (centre, toward the nose, toward the tail, sideways). */
+ * picks the style (centre, toward the nose, toward the tail, sideways right, sideways left). */
 typedef enum sk8_grab_style
 {
 	SK8_GRAB_NONE = 0,
 	SK8_GRAB_INDY,        /* back hand, centre */
 	SK8_GRAB_CRAIL,       /* back hand, nose */
 	SK8_GRAB_TAIL,        /* back hand, tail */
-	SK8_GRAB_STALEFISH,   /* back hand, sideways */
+	SK8_GRAB_STALEFISH,   /* back hand, sideways right */
 	SK8_GRAB_MELON,       /* front hand, centre */
 	SK8_GRAB_NOSE,        /* front hand, nose */
 	SK8_GRAB_TUCK_KNEE,   /* front hand, tail */
-	SK8_GRAB_JUDO,        /* front hand, sideways */
+	SK8_GRAB_JUDO,        /* front hand, sideways right */
 	SK8_GRAB_DOUBLE,      /* both, centre */
 	SK8_GRAB_SUPERMAN,    /* both, nose */
 	SK8_GRAB_NO_FOOT,     /* both, tail */
-	SK8_GRAB_STIFFY,      /* both, sideways */
+	SK8_GRAB_STIFFY,      /* both, sideways right */
+	SK8_GRAB_CHRIST,      /* back hand, sideways left: board held out, arms spread */
+	SK8_GRAB_METHOD,      /* front hand, sideways left: heel edge, board arched up behind */
+	SK8_GRAB_ROCKET,      /* both, sideways left: both hands on the nose, feet on the tail */
 } sk8_grab_style;
 
 sk8_rider *sk8_rider_new(void);

@@ -77,7 +77,7 @@ pub(crate) fn read_touch(
     };
 }
 
-/// `SK8_DEMO=grabs`: push, then an ollie into each of the twelve grab styles in turn (trigger(s)
+/// `SK8_DEMO=grabs`: push, then an ollie into each of the fifteen grab styles in turn (trigger(s)
 /// plus the left stick's direction at the start of the grab).
 fn demo_grabs(t: f32) -> Input {
     const START: f32 = 3.0;
@@ -87,7 +87,7 @@ fn demo_grabs(t: f32) -> Input {
         i.buttons |= buttons::PUSH;
         return i;
     }
-    let n = ((t - START) / EACH) as usize % 12;
+    let n = ((t - START) / EACH) as usize % 15;
     let d = (t - START) % EACH;
     // A short push between airs keeps the speed up.
     if d > 2.0 {
@@ -100,11 +100,12 @@ fn demo_grabs(t: f32) -> Input {
     } else if d < 0.5 {
         i.flick = [0.0, 1.0];
     }
-    let (hand, dir) = (n / 4, n % 4);
+    // twelve hand x direction styles, then the stick-left ones (Christ air, method, rocket)
+    let (hand, dir) = if n < 12 { (n / 4, n % 4) } else { (n - 12, 4) };
     if (0.55..1.15).contains(&d) {
         i.buttons |= [buttons::GRAB_RIGHT, buttons::GRAB_LEFT, buttons::GRAB_LEFT | buttons::GRAB_RIGHT][hand];
         if d < 0.58 {
-            i.steer = [[0.0, 0.0], [0.0, 1.0], [0.0, -1.0], [1.0, 0.0]][dir];
+            i.steer = [[0.0, 0.0], [0.0, 1.0], [0.0, -1.0], [1.0, 0.0], [-1.0, 0.0]][dir];
         }
     }
     i
@@ -254,7 +255,8 @@ pub(crate) fn read_desktop(
         return;
     }
     if demo.is_none() && std::env::var_os("SK8_DEMO").is_some() {
-        *demo = Some(0.0);
+        // SK8_DEMO_FROM=<s>: start the script part-way through (e.g. at one slot)
+        *demo = Some(std::env::var("SK8_DEMO_FROM").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0));
         // Face away from the test park: open floor, so no run ends in a box.
         sim.place(Vec3::ZERO, std::f32::consts::PI);
     }

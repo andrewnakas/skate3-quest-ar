@@ -20,6 +20,7 @@ const GrabDef kGrabs[] = {
 	{"Indy", 150},      {"Crail", 220},     {"Tail Grab", 180}, {"Stalefish", 240},
 	{"Melon", 150},     {"Nose Grab", 180}, {"Tuck Knee", 200}, {"Judo", 260},
 	{"Double Grab", 200}, {"Superman", 320}, {"No Foot", 300},  {"Stiffy", 260},
+	{"Christ Air", 340},  {"Method", 240},   {"Rocket Air", 300},
 };
 
 const GrabDef &grab_def(int style)
@@ -33,6 +34,9 @@ int grab_style_for(int hands, float x, float y)
 	int dir = 0; // 0 centre, 1 nose, 2 tail, 3 sideways
 	if (x * x + y * y > 0.25f)
 		dir = std::fabs(y) >= std::fabs(x) ? (y > 0 ? 1 : 2) : 3;
+	// sideways the other way (stick left): one more style per hand
+	if (dir == 3 && x < 0)
+		return hands == 2 ? SK8_GRAB_CHRIST : hands == 1 ? SK8_GRAB_METHOD : SK8_GRAB_ROCKET;
 	int base = hands == 2 ? SK8_GRAB_INDY : hands == 1 ? SK8_GRAB_MELON : SK8_GRAB_DOUBLE;
 	return base + dir;
 }

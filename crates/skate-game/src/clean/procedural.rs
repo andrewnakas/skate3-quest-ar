@@ -100,6 +100,9 @@ pub(crate) struct Motion {
     planted: bool,
     /// 0..1: how much the board is held in the hands (grabs where both feet leave it).
     held: f32,
+    /// 0..1: how far a tilted grab (method, rocket) has turned the deck, and which one.
+    tilt: f32,
+    tilt_style: u32,
     /// How far the board rides up under the feet in the air (m), and its rate.
     lift: f32,
     lift_vel: f32,
@@ -347,8 +350,22 @@ pub(crate) fn layer(
     let rest_inv = Transform::from_translation(at).with_rotation(rider_rot).compute_affine().inverse();
     // In the air the board rides up under the feet (a tuck brings it with them); while it flips it
     // keeps a little room to turn. The height springs, so a flip starting or ending never snaps it.
+    use skate_lite_sys::grab_style as gs;
+    let tilting = s.mode == Mode::Air && matches!(s.grab_style, gs::METHOD | gs::ROCKET);
+    if tilting {
+        motion.tilt_style = s.grab_style;
+    }
+    if dt > 0.0 {
+        // turned over the grab's reach; flat again at once on the ground (no landing on a tilted deck)
+        let k = 1.0 - (-dt / if s.mode == Mode::Air { 0.09 } else { 0.02 }).exp();
+        motion.tilt += ((tilting as u8 as f32) - motion.tilt) * k;
+    }
     let lift_goal = if s.mode == Mode::Air {
-        let lowest = ankles.iter().map(|p| (*p - rider_at).dot(up)).fold(f32::MAX, f32::min);
+        // a tilted deck turns about its centre, which sits between the feet, not under the lower one
+        let heights: Vec<f32> = ankles.iter().map(|p| (*p - rider_at).dot(up)).collect();
+        let mean = heights.iter().sum::<f32>() / heights.len().max(1) as f32;
+        let low = heights.iter().copied().fold(f32::MAX, f32::min);
+        let lowest = low + (mean - low) * motion.tilt;
         let room = if s.flip_progress.is_some_and(|p| p < 0.85) { FLIP_ROOM } else { 0.0 };
         if lowest < 1.0 { (lowest - skater::ANKLE - room).max(0.0) } else { 0.0 }
     } else {
@@ -367,8 +384,9 @@ pub(crate) fn layer(
         motion.lift_vel = 0.0;
     }
     // No Foot and Superman: both feet leave the board, which hangs from the hands on its edges.
-    let hand_held = s.mode == Mode::Air
-        && matches!(s.grab_style, skate_lite_sys::grab_style::NO_FOOT | skate_lite_sys::grab_style::SUPERMAN);
+    let hand_held = s.mode == Mode::Air && matches!(s.grab_style, gs::NO_FOOT | gs::SUPERMAN | gs::CHRIST);
+    // which hands hold it: both, or the back hand alone (Christ air, board held out to the side)
+    let one_hand = s.grab_style == gs::CHRIST;
     if dt > 0.0 {
         let k = 1.0 - (-dt / 0.08).exp();
         motion.held += ((hand_held as u8 as f32) - motion.held) * k;
@@ -376,13 +394,22 @@ pub(crate) fn layer(
     if motion.held > 1e-3 {
         let wrists: Vec<Vec3> = set.wrists.iter().filter_map(|e| in_space(*e, rider, &bones)).map(|m| m.translation.into()).collect();
         if wrists.len() == 2 {
-            let grip = (wrists[0] + wrists[1]) * 0.5 - up * 0.04;
+            let grip = if one_hand { wrists[1] - up * 0.06 } else { (wrists[0] + wrists[1]) * 0.5 - up * 0.04 };
             at = at.lerp(grip, motion.held);
         }
     }
     let mut deck = board_rot;
     if carving {
         deck = Quat::from_axis_angle(fwd, -lean * BOARD_ROLL) * deck;
+    }
+    if motion.tilt > 1e-3 {
+        // method: heel edge up behind (about the deck's length); rocket: nose up into the hands
+        let turn = if motion.tilt_style == gs::METHOD {
+            Quat::from_rotation_z(skater::METHOD_ROLL.to_radians() * motion.tilt)
+        } else {
+            Quat::from_rotation_x(-skater::ROCKET_PITCH.to_radians() * motion.tilt)
+        };
+        deck = deck * turn;
     }
     if s.mode == Mode::Air {
         let (shift, pitched) = skater::pop_snap(deck, clock.since_pop, clock.nollie);
