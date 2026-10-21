@@ -48,8 +48,8 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)
 - Landing a held flip before its clip ends: ankles ~54 deg/frame (was 100)
-- Handplant entry: the planting arm's elbow whips round as the body inverts (~82 deg/frame)
-- Landing while still holding a grab blends grab + air + land; the back arm's blended rotation can
-  jump for a frame (stalefish, ~118 deg/frame once)
+- Handplant: the legs twist as they swing up overhead (~88 deg/frame, mostly twist along a near
+  straight leg); the arm is fixed (hand plants first, then the body tips over it)
+- Grabs now <= 27 deg/frame (were 118-163)
 - Plant at ~8 m/s is a fast leg sweep (real motion)
 - audit `bytes`: glTF JSON keys + PNG IHDR headers match retail files (boilerplate)

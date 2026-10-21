@@ -321,6 +321,12 @@ JUMP_FOOT = dict(STAND, hips=(0.0, 0.0, 0.86), hips_rot=(10, 0, 90), lf=foot(0.0
 FOOTPLANT = P(hips=(-0.02, 0.03, 0.72), hips_rot=(14, 0, 4), spine=(18, 0, 10), head=(-16, 0, 50),
               lf=foot(0.04, 0.0, -0.1, yaw=FRONT_YAW), rf=foot(-0.26, 0.06, 0.3, yaw=BACK_YAW, pitch=20),
               lh=(0.42, -0.24, 0.96), rh=(-0.2, -0.06, 0.42), knee_out=0.5)
+HANDPLANT_REACH = P(hips=(0.02, 0.04, 0.66), hips_rot=(40, 0, 6), spine=(30, 0, 8), head=(-20, 0, 40),
+                    lf=foot(FRONT_X - 0.02, 0.0, 0.22, yaw=FRONT_YAW), rf=foot(BACK_X + 0.04, 0.0, 0.22, yaw=BACK_YAW),
+                    lh=(0.06, -0.06, -0.08), rh=(-0.12, -0.04, 0.6), knee_out=0.5)
+HANDPLANT_TIP = P(hips=(0.02, 0.05, 0.8), hips_rot=(100, 0, 6), spine=(22, 0, 6), head=(5, 0, 25),
+                  lf=foot(0.1, 0.06, 0.9, yaw=FRONT_YAW, pitch=-40), rf=foot(-0.14, 0.08, 0.86, yaw=BACK_YAW, pitch=-40),
+                  lh=(0.06, -0.06, -0.08), rh=(-0.1, 0.06, 0.7), knee_out=0.3)
 HANDPLANT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
               lf=foot(0.12, 0.08, 1.48, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.16, 0.1, 1.42, yaw=BACK_YAW, pitch=-70),
               lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.2)
@@ -519,7 +525,9 @@ CLIPS = {
                            (0.3, AIR_TUCK)]),
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
     "footplant": (False, [(0.0, AIR_TUCK), (0.14, FOOTPLANT), (0.7, idle(FOOTPLANT, 0.25, 0.01, 0.0))]),
-    "handplant": (False, [(0.0, AIR_TUCK), (0.32, HANDPLANT), (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
+    # the hand goes down to the edge first, still upright, then the body tips over it
+    "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT_REACH), (0.36, HANDPLANT_TIP), (0.52, HANDPLANT),
+                          (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
     "primo": (True, loop(lambda t: idle(PRIMO, t, 0.016, 0.05), IDLE_LEN)),
     "casper": (True, loop(lambda t: idle(CASPER, t, 0.012, 0.04), IDLE_LEN)),
     "jump_foot": (False, [(0.0, STAND), (0.12, JUMP_FOOT), (0.5, JUMP_FOOT)]),
@@ -827,7 +835,17 @@ def apply_pose(rig, c, pose, rest_ankle):
         kyaw = math.radians(pose["hips_rot"][2])
         kx, ky = 0.15 * hx * 0.3, -1.0 * pose["knee_out"] - 0.4
         kx, ky = kx * math.cos(kyaw) - ky * math.sin(kyaw), kx * math.sin(kyaw) + ky * math.cos(kyaw)
-        c[f"kpole_{side}"].location = (f["at"][0] + kx, ky, 0.5)
+        kp = (f["at"][0] + kx, ky, 0.5)
+        # tipped well over (an invert) the knees still bend toward where the chest faces: the
+        # pole goes out in front of the chest in the hips' own frame
+        kpitch = math.radians(pose["hips_rot"][0])
+        w = min(1.0, max(0.0, (pose["hips_rot"][0] - 80) / 40))
+        if w > 0:
+            hx_, hy_, hz_ = pose["hips"]
+            front = (0.0, -math.cos(kpitch), -math.sin(kpitch))
+            fp = (f["at"][0] + kx, hy_ + front[1] * 1.0, hz_ + front[2] * 1.0)
+            kp = tuple(a + (b - a) * w for a, b in zip(kp, fp))
+        c[f"kpole_{side}"].location = kp
         c[f"hand_{side}"].location = pose[hand]
         # Elbows bend out, back and down from the body (turned with the hips, so a body facing down
         # the board to push bends them back from itself). The pole is that preferred direction with
@@ -838,6 +856,9 @@ def apply_pose(rig, c, pose, rest_ankle):
         yaw = math.radians(pose["hips_rot"][2])
         cy, sy = math.cos(yaw), math.sin(yaw)
         want = (hx * 0.2, 0.3, -1.0)  # down: elbows low and in
+        # as the body leans (an invert turns it right over), "down" goes with the trunk
+        pt = math.radians(pose["hips_rot"][0])
+        want = (want[0], want[1] * math.cos(pt) - want[2] * math.sin(pt), want[1] * math.sin(pt) + want[2] * math.cos(pt))
         want = (want[0] * cy - want[1] * sy, want[0] * sy + want[1] * cy, want[2])
         arm = [h - q for h, q in zip(pose[hand], sh)]
         n = math.sqrt(sum(a * a for a in arm)) or 1.0
