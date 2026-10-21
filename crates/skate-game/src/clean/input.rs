@@ -342,8 +342,8 @@ fn demo_walk(t: f32) -> Input {
     } else if (4.0..5.6).contains(&d) {
         i.steer = [0.25, 1.0];
     }
-    if d > 6.3 {
-        i.buttons |= buttons::PUSH;
+    if d > 6.3 || (3.0..3.05).contains(&d) {
+        i.buttons |= buttons::PUSH; // (on foot: a jump)
     }
     i
 }

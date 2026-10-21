@@ -387,7 +387,7 @@ pub(crate) fn layer(
     }
     // No Foot and Superman: both feet leave the board, which hangs from the hands on its edges.
     // on foot, or planted on an edge: the board is in the back hand
-    let walking = s.mode == Mode::Walk || (s.mode == Mode::Grind && s.grind_kind >= 15);
+    let walking = s.on_foot || (s.mode == Mode::Grind && s.grind_kind >= 15 && s.grind_kind != 17);
     let hand_held =
         walking || (s.mode == Mode::Air && matches!(s.grab_style, gs::NO_FOOT | gs::SUPERMAN | gs::CHRIST));
     // which hands hold it: both, or the back hand alone (Christ air out to the side, carried on foot)
@@ -501,7 +501,7 @@ pub(crate) fn layer(
             // primo / casper: on the board's edge or underside, not its grip
             Mode::Manual if s.manual_style != 0 => false,
             // The board is in the hands: the feet are off it.
-            Mode::Air if motion.held > 0.5 || hippie => false,
+            Mode::Air if motion.held > 0.5 || hippie || s.on_foot => false,
             // the board turned under the body (a body varial): the feet are off it
             Mode::Air => !flipping && !deck_turned,
             // The pushing foot is on the ground (the back foot, or the front one pushing mongo), and

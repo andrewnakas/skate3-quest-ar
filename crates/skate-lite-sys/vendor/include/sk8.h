@@ -135,6 +135,7 @@ typedef struct sk8_state
 	                      * for an old-school pop) */
 	float revert;        /* 0..1 through a revert (the board spinning round on landing), -1 otherwise */
 	int manual_style;    /* in a manual: 0 manual, 1 primo (board on its side), 2 casper (upside down) */
+	int on_foot;         /* off the board (walking, or a jump on foot) */
 } sk8_state;
 
 /* Where in a stroke (push_phase) the pushing foot is on the ground; the push's speed is added

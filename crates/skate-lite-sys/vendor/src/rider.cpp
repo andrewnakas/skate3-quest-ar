@@ -224,6 +224,7 @@ void Rider::step(World &w, const sk8_input &in)
 	since_wall_ += kDt;
 	// off the board / back on: a press of the button
 	bool off_press = (in.buttons & SK8_OFF_BOARD) && !(last_buttons_ & SK8_OFF_BOARD);
+	prev_buttons_ = last_buttons_;
 	last_buttons_ = in.buttons;
 	if (off_press && mode_ == SK8_MODE_RIDE && takeoff_trick_ < 0) {
 		commit_pending();
@@ -712,7 +713,7 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	}
 
 	// flick a trick late
-	if (f.trick >= 0 && flip_ < 0 && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat)
+	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat)
 		start_flip(f.trick);
 	if (flip_ >= 0) {
 		flip_time_ += kDt;
@@ -752,14 +753,14 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		grab_style_ = 0;
 	}
 
-	if (try_grind(w))
+	if (!foot_air_ && try_grind(w))
 		return;
 
 	V3 delta = vel_ * kDt;
 	float L = len(delta);
 	Hit h;
 	if (L > 1e-6f && w.cast(pos_ + up_ * 0.1f, delta + delta * (0.1f / L), h)) {
-		if (!try_wallride(h))
+		if (foot_air_ || !try_wallride(h))
 			land(h);
 		return;
 	}
@@ -772,6 +773,14 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 void Rider::land(const Hit &h)
 {
 	since_land_ = 0;
+	if (foot_air_) { // back on its feet
+		foot_air_ = false;
+		pos_ = h.point;
+		up_ = kUp;
+		vel_ = flatten(vel_, kUp);
+		mode_ = SK8_MODE_WALK;
+		return;
+	}
 	V3 n = h.normal;
 	float tilt = angle_between(up_, n);
 	bool flip_done = flip_ < 0 || flip_frac() >= p[FlipLenience];
@@ -860,6 +869,16 @@ constexpr float kWalkSpeed = 1.437f, kRunSpeed = 3.7f, kWalkTurn = 2.6f; // m/s,
 void Rider::walk(World &w, const sk8_input &in)
 {
 	float x = clampf(in.steer[0], -1, 1), y = clampf(in.steer[1], -1, 1);
+	// A: a jump on foot
+	if ((in.buttons & SK8_PUSH) && !(prev_buttons_ & SK8_PUSH)) {
+		mode_ = SK8_MODE_AIR;
+		foot_air_ = true;
+		air_time_ = 0;
+		pop_y_ = pos_.y;
+		vel_ += kUp * 3.6f;
+		pos_ += kUp * 0.02f;
+		return;
+	}
 	fwd_ = unit(flatten(rotate(fwd_, up_, -x * kWalkTurn * kDt), up_), fwd_);
 	float want = std::fabs(y) > 0.8f ? kRunSpeed : kWalkSpeed * std::fabs(y) / 0.8f;
 	V3 target = fwd_ * (want * (y < 0 ? -0.5f : 1.0f));
@@ -1246,6 +1265,7 @@ void Rider::state(sk8_state &s) const
 	s.score = score_;
 	s.manual_dir = mode_ == SK8_MODE_MANUAL ? manual_dir_ : 0;
 	s.manual_style = mode_ == SK8_MODE_MANUAL ? manual_style_ : 0;
+	s.on_foot = mode_ == SK8_MODE_WALK || foot_air_;
 }
 
 } // namespace sk8

@@ -91,9 +91,10 @@ enum Clip {
     Handplant,
     Primo,
     Casper,
+    JumpFoot,
 }
 
-const CLIPS: usize = 59;
+const CLIPS: usize = 60;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -104,7 +105,7 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_push_start_mongo", "sk8_push_end_mongo", "sk8_grab_christ", "sk8_grab_method", "sk8_grab_rocket",
     "sk8_pop_no_comply", "sk8_pop_boneless",
     "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt", "sk8_wallride",
-    "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant", "sk8_primo", "sk8_casper",
+    "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant", "sk8_primo", "sk8_casper", "sk8_jump_foot",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
 const LOOPED: [Clip; 26] = [
@@ -313,6 +314,7 @@ fn blend_time(clip: Clip) -> f32 {
         Clip::Stand | Clip::Walk | Clip::Run => 0.18,
         Clip::Footplant | Clip::Handplant => 0.08,
         Clip::Primo | Clip::Casper => 0.12,
+        Clip::JumpFoot => 0.08,
         Clip::GrindNose | Clip::GrindCrooked | Clip::GrindOvercrook | Clip::GrindSmith | Clip::GrindFeeble | Clip::SlideNose | Clip::SlideTail | Clip::SlideLip | Clip::SlideNoseblunt | Clip::SlideBlunt => 0.1,
         Clip::GrabIndy
         | Clip::GrabCrail
@@ -380,6 +382,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
         Mode::Manual if s.manual_dir < 0 => set(Clip::ManualNose, 1.0, c.idle),
         Mode::Manual => set(Clip::Manual, 1.0, c.idle),
         Mode::Slide => set(Clip::Powerslide, 1.0, c.idle),
+        Mode::Air if s.on_foot => set(Clip::JumpFoot, 1.0, (s.air_time).min(0.5)),
         Mode::Air => {
             // A flip or a grab takes over from the pop at full extension (a grab's reach then plays
             // from its start instead of the pose snapping to a grab already half done).
@@ -574,7 +577,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::FlipHard, Clip::FlipTre, Clip::Grind50, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo,
     Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket, Clip::PopNoComply, Clip::PopBoneless,
     Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
-    Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper,
+    Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper, Clip::JumpFoot,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

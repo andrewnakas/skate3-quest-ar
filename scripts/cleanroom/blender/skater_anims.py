@@ -309,6 +309,9 @@ def walk_frame(t, stride, lift, lean, arm):
 
 
 STAND = walk_frame(0.25, 0.0, 0.0, 2.0, 0.0)
+# A jump on foot: knees tucked up, the board still in the back hand.
+JUMP_FOOT = dict(STAND, hips=(0.0, 0.0, 0.86), hips_rot=(10, 0, 90), lf=foot(0.08, 0.1 - FOOT_Y, 0.16, yaw=90, pitch=-10),
+                 rf=foot(-0.1, -0.1 - FOOT_Y, 0.12, yaw=90, pitch=-10), lh=(0.12, 0.26, 0.86), knee_out=0.25)
 
 
 # Plants on an edge (the rider sits at the edge; the runtime puts the board in the back hand).
@@ -519,6 +522,7 @@ CLIPS = {
     "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT), (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
     "primo": (True, loop(lambda t: idle(PRIMO, t, 0.016, 0.05), IDLE_LEN)),
     "casper": (True, loop(lambda t: idle(CASPER, t, 0.012, 0.04), IDLE_LEN)),
+    "jump_foot": (False, [(0.0, STAND), (0.12, JUMP_FOOT), (0.5, JUMP_FOOT)]),
     "stand": (True, loop(lambda t: idle(STAND, t, 0.006, 0.02), IDLE_LEN)),
     "walk": (True, [(i / 16 * 1.05, walk_frame(i / 16, 0.26, 0.09, 4.0, 0.16)) for i in range(17)]),
     "run": (True, [(i / 16 * 0.7, walk_frame(i / 16, 0.42, 0.17, 12.0, 0.26)) for i in range(17)]),

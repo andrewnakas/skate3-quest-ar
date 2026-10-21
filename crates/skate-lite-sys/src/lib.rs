@@ -106,6 +106,7 @@ struct RawState {
     foot_off: c_int,
     revert: f32,
     manual_style: c_int,
+    on_foot: c_int,
 }
 
 /// Where in a stroke the pushing foot plants and lifts (`SK8_PUSH_PLANT`, `SK8_PUSH_RELEASE`).
@@ -140,6 +141,8 @@ pub struct State {
     pub revert: Option<f32>,
     /// In a manual: 0 manual, 1 primo (board on its side), 2 casper (board upside down).
     pub manual_style: u32,
+    /// Off the board: walking, or a jump on foot.
+    pub on_foot: bool,
     /// Bit 1 left hand, bit 2 right hand.
     pub grab: u32,
     pub flip_progress: Option<f32>,
@@ -177,6 +180,7 @@ impl From<RawState> for State {
             foot_off: r.foot_off != 0,
             revert: (r.revert >= 0.0).then_some(r.revert),
             manual_style: r.manual_style.max(0) as u32,
+            on_foot: r.on_foot != 0,
             grab: r.grab as u32,
             flip_progress: (r.flip_progress >= 0.0).then_some(r.flip_progress),
             balance: r.balance,

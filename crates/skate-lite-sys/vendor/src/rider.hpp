@@ -71,7 +71,7 @@ private:
 	float last_steer_[2] = {0, 0};
 	bool unslide_ = false;
 	V3 plant_in_; // the way it was going when it planted (a foot/handplant pops back off that way)
-	unsigned last_buttons_ = 0;
+	unsigned last_buttons_ = 0, prev_buttons_ = 0;
 	// revert: landed holding the slide button, the board spins a half turn on its wheels
 	float revert_time_ = -1;
 	float revert_dir_ = 1;
@@ -96,7 +96,8 @@ private:
 	float flip_mult_ = 1, flip_dir_[2] = {0, 0}, last_flick_[2] = {0, 0};
 	int flip_extra_ = 0;
 	float pop_y_ = 0; // height the last pop left from
-	float varial_ = 0; // body varial: how far the body has turned on its own, the board staying
+	float varial_ = 0;
+	bool foot_air_ = false; // jumped on foot: lands back on its feet, the board in hand // body varial: how far the body has turned on its own, the board staying
 	std::string flip_name_;
 	void extend_flip();
 	float spin_speed_ = 0, spin_total_ = 0;

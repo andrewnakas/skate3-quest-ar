@@ -314,7 +314,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("A (hold)", "push"),
             pair("X (hold)", "mongo push"),
             pair("B", "brake"),
-            pair("Y", "get off / back on the board"),
+            pair("Y", "get off / back on the board (on foot: A jumps)"),
             pair("Right grip + steer", "powerslide"),
             pair("Right grip as you land", "revert"),
             pair("Left grip", "nose manual"),
