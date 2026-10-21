@@ -9,6 +9,7 @@ mod board;
 mod collide;
 mod input;
 mod menu;
+mod mirror;
 pub(crate) mod sim;
 mod procedural;
 mod skater;
@@ -223,7 +224,8 @@ fn build(options: Options) -> App {
         .add_systems(Update, (feed_sounds, skater::bind, skater::animate, menu::draw).chain())
         .add_systems(
             PostUpdate,
-            procedural::layer
+            (mirror::apply, procedural::layer)
+                .chain()
                 .after(bevy::app::AnimationSystems)
                 .before(bevy::transform::TransformSystems::Propagate),
         );

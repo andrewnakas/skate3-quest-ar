@@ -486,6 +486,23 @@ BAIL_REST = P(hips=(0.0, -0.5, 0.28), hips_rot=(64, 12, 15), spine=(36, 0, 0), h
               lh=(0.3, -0.95, -0.07), rh=(-0.24, -0.95, -0.07), knee_out=0.7)
 
 
+# Fakie into switch: the feet walk round on the deck to a stance the same both ways (feet the same
+# distance either side of the middle, toes square, chest and head straight over the toe edge), the
+# back foot first. The runtime plays this, then the same clip backwards on the mirrored body (the
+# other foot forward), so the shuffle carries on out to the switch stance without a seam.
+SWITCH_X = 0.25
+SWITCH_SYM = P(hips=(0.0, 0.01, 0.84), hips_rot=(10, 0, 0), spine=(18, 0, 0), head=(-10, 0, 0),
+               lf=foot(SWITCH_X, 0.0, 0.0, yaw=6), rf=foot(-SWITCH_X, 0.0, 0.0, yaw=-6),
+               lh=(0.3, -0.1, 0.79), rh=(-0.3, -0.1, 0.79), knee_out=0.35)
+# the back foot steps up toward the middle first, the weight over the front foot, the head coming round
+SWITCH_STEP = P(hips=(0.03, 0.01, 0.86), hips_rot=(9, 0, 0), spine=(18, 1, 5), head=(-8, 1, 30),
+                lf=foot(FRONT_X + 0.02, 0.0, 0.0, yaw=12), rf=foot((BACK_X - SWITCH_X) / 2, 0.0, 0.035, yaw=-3),
+                lh=(0.29, -0.11, 0.8), rh=(-0.29, -0.09, 0.79), knee_out=0.35)
+# then the front foot slides out to its spot
+SWITCH_SLIDE = P(hips=(0.0, 0.01, 0.85), hips_rot=(10, 0, 0), spine=(18, 0, 2), head=(-9, 0, 12),
+                 lf=foot((FRONT_X + SWITCH_X) / 2 + 0.01, 0.0, 0.02, yaw=8), rf=foot(-SWITCH_X, 0.0, 0.0, yaw=-6),
+                 lh=(0.3, -0.1, 0.79), rh=(-0.3, -0.1, 0.79), knee_out=0.35)
+
 def ride_frame(t):
     """Rolling along, loose: a knee bounce twice a loop, the weight rocking between the feet, the
     arms swinging a little out of time with it and the head easy."""
@@ -531,6 +548,8 @@ CLIPS = {
     "primo": (True, loop(lambda t: idle(PRIMO, t, 0.016, 0.05), IDLE_LEN)),
     "casper": (True, loop(lambda t: idle(CASPER, t, 0.012, 0.04), IDLE_LEN)),
     "jump_foot": (False, [(0.0, STAND), (0.12, JUMP_FOOT), (0.5, JUMP_FOOT)]),
+    # half of the shuffle into switch (0.35 s; the mirrored half plays it backwards)
+    "switch": (False, [(0.0, STANCE), (0.13, SWITCH_STEP), (0.25, SWITCH_SLIDE), (0.35, SWITCH_SYM)]),
     "stand": (True, loop(lambda t: idle(STAND, t, 0.006, 0.02), IDLE_LEN)),
     "walk": (True, [(i / 16 * 1.05, walk_frame(i / 16, 0.26, 0.09, 4.0, 0.16)) for i in range(17)]),
     "run": (True, [(i / 16 * 0.7, walk_frame(i / 16, 0.42, 0.17, 12.0, 0.26)) for i in range(17)]),

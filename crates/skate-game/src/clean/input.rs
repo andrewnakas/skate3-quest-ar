@@ -290,6 +290,46 @@ fn demo_revert(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=switch`: a revert to roll away fakie, then per slot: left alone it shuffles round to
+/// switch and pops a switch ollie; held crouched it stays fakie for a fakie ollie; a push from fakie
+/// switches at once, then a switch kickflip.
+const SWITCH_EACH: f32 = 6.0;
+fn demo_switch(t: f32) -> Input {
+    let slot = (t / SWITCH_EACH) as usize % 3;
+    let mut i = demo_revert(t.min((t / SWITCH_EACH).floor() * SWITCH_EACH + 2.0));
+    let d = t % SWITCH_EACH;
+    if d < 2.0 {
+        return i;
+    }
+    i = Input::default();
+    let pop = |at: f32, end: [f32; 2], i: &mut Input| {
+        if (at..at + 0.35).contains(&d) {
+            i.flick = [0.0, -1.0];
+        } else if (at + 0.35..at + 0.4).contains(&d) {
+            i.flick = [0.0, 0.0];
+        } else if (at + 0.4..at + 0.55).contains(&d) {
+            i.flick = end;
+        }
+    };
+    match slot {
+        0 => pop(4.0, [0.0, 1.0], &mut i),
+        1 => {
+            if (2.0..3.6).contains(&d) {
+                i.flick = [0.0, -1.0];
+            } else if (3.6..3.75).contains(&d) {
+                i.flick = [0.0, 1.0];
+            }
+        }
+        _ => {
+            if (2.0..2.1).contains(&d) {
+                i.buttons |= buttons::PUSH;
+            }
+            pop(4.3, [0.7, 0.7], &mut i);
+        }
+    }
+    i
+}
+
 /// `SK8_DEMO=wallride`: beside the desktop park's wall, heading a little into it, an ollie onto it;
 /// every other slot flicks again on the wall to pop off it (a wallie).
 const WALL_EACH: f32 = 3.5;
@@ -471,6 +511,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("oldschool") => Some((t / OLD_EACH) as usize),
         Ok("grinds") => Some((t / GRIND_EACH) as usize),
         Ok("revert") => Some((t / REVERT_EACH) as usize),
+        Ok("switch") => Some((t / SWITCH_EACH) as usize),
         Ok("wallride") => Some((t / WALL_EACH) as usize),
         Ok("held") => Some((t / HELD_EACH) as usize),
         Ok("walk") => Some((t / WALK_EACH) as usize),
@@ -548,6 +589,7 @@ pub(crate) fn read_desktop(
             Ok("oldschool") => demo_oldschool(*t),
             Ok("grinds") => demo_grinds(*t, &sim.current, sim.demo_rail),
             Ok("revert") => demo_revert(*t),
+            Ok("switch") => demo_switch(*t),
             Ok("wallride") => demo_wallride(*t, &sim.current),
             Ok("held") => demo_held(*t),
             Ok("walk") => demo_walk(*t),

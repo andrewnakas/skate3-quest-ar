@@ -28,7 +28,15 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   noseblunt, bluntslide; the board turns back to the line of travel coming off a slide;
   darkslide (a kickflip-type caught across a rail half way round: upside down on it);
   salad, willy, suski (the crouch held into the catch with a diagonal)
-- Powerslide; revert (X held into a landing, rolling away fakie)
+- Powerslide (left stick back to a diagonal, the port's way; or the slide button + steer); revert
+  (X held into a landing, rolling away fakie)
+- Flick mapping = the port's (measured with s3trace): kickflip finishes up-right, heelflip up-left,
+  pop shove-it sweeps round the right, frontside round the left
+- Fakie and switch like the port: rolling fakie ~0.6 s once settled, the feet shuffle round to
+  switch (0.7 s; the crouch held keeps it fakie; a push from fakie switches at once, quicker);
+  a 180 from switch back to rolling forwards switches back. Tricks are named Fakie / Switch;
+  switch flips and shove-its turn the goofy way. The body is the regular one mirrored (mirror.rs),
+  one clip for the shuffle (to a pose the same both ways, played back mirrored); SK8_DEMO=switch
 - Wallride (an ollie glancing into a wall rolls along it) and wallie (flick on the wall to pop
   off it); a Wall piece in the park builder and the desktop park
 - Old school on the foot-off button (left stick click / F) + a flick: no comply (ollie), boneless

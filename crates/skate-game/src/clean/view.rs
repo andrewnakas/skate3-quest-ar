@@ -192,8 +192,8 @@ pub(crate) fn views(
     if vel.length() > 0.3 {
         *d = d.lerp(vel.normalize(), 0.06).normalize_or(*d);
     }
-    // The chest faces the rider's -X.
-    let chest = (rot * Vec3::NEG_X).with_y(0.0).normalize_or(Vec3::X);
+    // The chest faces the body's -X (switch turns the engine's frame round, not the body).
+    let chest = (super::skater::body_rot(s) * Vec3::NEG_X).with_y(0.0).normalize_or(Vec3::X);
     let mut beside = Vec3::new(-d.z, 0.0, d.x);
     if beside.dot(chest) < 0.0 {
         beside = -beside;

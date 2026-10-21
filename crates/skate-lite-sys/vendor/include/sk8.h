@@ -136,6 +136,10 @@ typedef struct sk8_state
 	float revert;        /* 0..1 through a revert (the board spinning round on landing), -1 otherwise */
 	int manual_style;    /* in a manual: 0 manual, 1 primo (board on its side), 2 casper (upside down) */
 	int on_foot;         /* off the board (walking, or a jump on foot) */
+	int stance;          /* 0 the rider's own stance, 1 switch (the other foot forward; the stance frame
+	                      * turned round with it, so a goofy body mirrored on rider_rot) */
+	float stance_change; /* 0..1 through the feet shuffling round into the new stance (stance already
+	                      * the new one), -1 otherwise */
 } sk8_state;
 
 /* Where in a stroke (push_phase) the pushing foot is on the ground; the push's speed is added

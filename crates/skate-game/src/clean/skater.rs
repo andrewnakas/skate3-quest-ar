@@ -92,9 +92,11 @@ enum Clip {
     Primo,
     Casper,
     JumpFoot,
+    /// The feet shuffling round into switch, to a pose the same both ways (played back mirrored).
+    Switch,
 }
 
-const CLIPS: usize = 60;
+const CLIPS: usize = 61;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -106,6 +108,7 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_pop_no_comply", "sk8_pop_boneless",
     "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt", "sk8_wallride",
     "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant", "sk8_primo", "sk8_casper", "sk8_jump_foot",
+    "sk8_switch",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
 const LOOPED: [Clip; 26] = [
@@ -299,9 +302,29 @@ fn old_school_clip(trick: &str) -> Option<Clip> {
     }
 }
 
-/// Nollies pop off the nose.
+/// Nollies pop off the nose (also fakie / switch ones: "Switch Nollie Heelflip").
 pub(crate) fn is_nollie(trick: &str) -> bool {
-    trick.to_ascii_lowercase().starts_with("nollie")
+    trick.to_ascii_lowercase().contains("nollie")
+}
+
+/// The frame the body is drawn in. Switch turns the engine's stance frame round with the feet; the
+/// body there is the rider's own mirrored (mirror.rs), so it is drawn the other way round on it.
+pub(crate) fn body_rot(s: &State) -> Quat {
+    let r = Quat::from_array(s.rider_rot);
+    if s.switch { r * Quat::from_rotation_y(std::f32::consts::PI) } else { r }
+}
+
+/// The body frame between two engine steps (the half turn at a stance change is not swept).
+pub(crate) fn body_rot_between(a: &State, b: &State, t: f32) -> Quat {
+    let (qa, qb) = (body_rot(a), body_rot(b));
+    let qa = if qa.dot(qb) < 0.0 { -qa } else { qa };
+    qa.slerp(qb, t)
+}
+
+/// The body is drawn mirrored (switch): in the shuffle's first half it is still the old stance,
+/// walking the feet to a pose the same both ways, then the mirror takes over and walks them on.
+pub(crate) fn mirrored(s: &State) -> bool {
+    s.switch != s.stance_change.is_some_and(|p| p < 0.5)
 }
 
 /// How long a blend into this clip takes (smoothing time of a critically damped follow, s):
@@ -319,6 +342,7 @@ fn blend_time(clip: Clip) -> f32 {
         Clip::Footplant | Clip::Handplant => 0.08,
         Clip::Primo | Clip::Casper => 0.12,
         Clip::JumpFoot => 0.08,
+        Clip::Switch => 0.1,
         Clip::GrindNose | Clip::GrindCrooked | Clip::GrindOvercrook | Clip::GrindSmith | Clip::GrindFeeble | Clip::SlideNose | Clip::SlideTail | Clip::SlideLip | Clip::SlideNoseblunt | Clip::SlideBlunt => 0.1,
         Clip::GrabIndy
         | Clip::GrabCrail
@@ -423,6 +447,12 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
         }
         // a revert: weight back over the wheels as the board slides round (the powerslide's lean)
         Mode::Ride if s.revert.is_some() => set(Clip::Powerslide, 1.0, c.idle),
+        Mode::Ride if s.stance_change.is_some() => {
+            // to the pose the same both ways, then (mirrored) back out of it
+            let p = s.stance_change.unwrap_or(0.0);
+            let k = if p < 0.5 { p * 2.0 } else { (1.0 - p) * 2.0 };
+            set(Clip::Switch, 1.0, k * len[Clip::Switch as usize]);
+        }
         Mode::Ride => {
             if c.since_land < len[Clip::Land as usize] {
                 set(Clip::Land, 1.0, c.since_land);
@@ -462,7 +492,7 @@ pub(crate) fn animate(
     let dt = time.delta_secs().min(0.1);
     let (a, b, t) = (&sim.previous, &sim.current, sim.alpha());
     let pos = Vec3::from_array(a.position).lerp(Vec3::from_array(b.position), t);
-    let rider_rot = Quat::from_array(a.rider_rot).slerp(Quat::from_array(b.rider_rot), t);
+    let rider_rot = body_rot_between(a, b, t);
     let up = rider_rot * Vec3::Y;
 
     let game_dt = if sim.paused { 0.0 } else { dt * sim.time_scale };
@@ -581,7 +611,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::FlipHard, Clip::FlipTre, Clip::Grind50, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo,
     Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket, Clip::PopNoComply, Clip::PopBoneless,
     Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
-    Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper, Clip::JumpFoot,
+    Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper, Clip::JumpFoot, Clip::Switch,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

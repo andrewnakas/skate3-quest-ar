@@ -60,6 +60,14 @@ private:
 	V3 fwd_{0, 0, 1}, up_ = kUp;
 	sk8_mode mode_ = SK8_MODE_RIDE;
 	bool fakie_ = false;
+	// switch: the other foot forward (fwd_ turned round with it); rolling fakie a moment turns into
+	// it, the feet shuffling round over switch_len_
+	bool switch_ = false;
+	float fakie_time_ = 0, switching_ = -1, switch_len_ = 1;
+	bool push_queued_ = false;
+	std::string stance_pre_; // "Fakie " / "Switch " in front of a pop's tricks
+	void start_switch(float duration);
+	std::string staged(const char *name) const { return stance_pre_ + name; }
 	int surface_ = 0;
 
 	// controls

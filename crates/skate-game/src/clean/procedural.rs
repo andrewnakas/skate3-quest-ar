@@ -269,7 +269,9 @@ pub(crate) fn layer(
     let (a, b, t) = (&sim.previous, &sim.current, sim.alpha());
     let s: &State = b;
     let pos = Vec3::from_array(a.position).lerp(Vec3::from_array(b.position), t);
-    let rider_rot = Quat::from_array(a.rider_rot).slerp(Quat::from_array(b.rider_rot), t);
+    // the body's frame (switch: the engine's turned round, the body mirrored on it)
+    let rider_rot = skater::body_rot_between(a, b, t);
+    let mirrored = skater::mirrored(s);
     // A board is the same either way round: when the engine snaps a shove-it's half turn back on
     // landing, blend from the equivalent orientation instead of sweeping half a turn in one frame.
     let (qa, qb) = (Quat::from_array(a.board_rot), Quat::from_array(b.board_rot));
@@ -278,6 +280,8 @@ pub(crate) fn layer(
     let lean = a.lean + (b.lean - a.lean) * t;
     let up = rider_rot * Vec3::Y;
     let fwd = rider_rot * Vec3::Z;
+    // the engine's forward, which its lean is measured about (the body faces the other way in switch)
+    let lean_axis = if s.switch { -fwd } else { fwd };
     let vel = Vec3::from_array(a.velocity).lerp(Vec3::from_array(b.velocity), t);
 
     if sim.events.iter().any(|e| e.kind == EventKind::Respawn) {
@@ -328,7 +332,7 @@ pub(crate) fn layer(
         bones.get(set.hips).ok().and_then(|(_, p)| p).and_then(|p| in_space(p.parent(), rider, &bones)),
     ) {
         let pivot = rider_at;
-        let lean_q = Quat::from_axis_angle(fwd, roll);
+        let lean_q = Quat::from_axis_angle(lean_axis, roll);
         let want = Affine3A::from_translation(pivot + up * motion.hips)
             * Affine3A::from_quat(lean_q)
             * Affine3A::from_translation(-pivot)
@@ -399,7 +403,9 @@ pub(crate) fn layer(
     if motion.held > 1e-3 {
         let wrists: Vec<Vec3> = set.wrists.iter().filter_map(|e| in_space(*e, rider, &bones)).map(|m| m.translation.into()).collect();
         if wrists.len() == 2 {
-            let grip = if one_hand { wrists[1] - up * 0.06 } else { (wrists[0] + wrists[1]) * 0.5 - up * 0.04 };
+            // the back hand: the left one when the body is mirrored (switch)
+            let back = if mirrored { 0 } else { 1 };
+            let grip = if one_hand { wrists[back] - up * 0.06 } else { (wrists[0] + wrists[1]) * 0.5 - up * 0.04 };
             at = at.lerp(grip, motion.held);
         }
     }
@@ -420,12 +426,14 @@ pub(crate) fn layer(
         deck = rider_rot * Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
     }
     if carving {
-        deck = Quat::from_axis_angle(fwd, -lean * BOARD_ROLL) * deck;
+        deck = Quat::from_axis_angle(lean_axis, -lean * BOARD_ROLL) * deck;
     }
     if motion.tilt > 1e-3 {
         // method: heel edge up behind (about the deck's length); rocket: nose up into the hands
         let turn = if motion.tilt_style == gs::METHOD {
-            Quat::from_rotation_z(skater::METHOD_ROLL.to_radians() * motion.tilt)
+            // the heel edge is the deck's other side in switch (the engine's frame turned round)
+            let side = if s.switch { -1.0 } else { 1.0 };
+            Quat::from_rotation_z(side * skater::METHOD_ROLL.to_radians() * motion.tilt)
         } else {
             Quat::from_rotation_x(-skater::ROCKET_PITCH.to_radians() * motion.tilt)
         };
@@ -479,7 +487,8 @@ pub(crate) fn layer(
         let rel = if up_side < 0.0 { rel * Quat::from_rotation_z(std::f32::consts::PI) } else { rel };
         Transform::from_translation(at).with_rotation(rider_rot * rel)
     };
-    let pusher = if s.push_mongo { 0 } else { 1 };
+    // the back foot pushes (the front one mongo); mirrored, the left leg is the back one
+    let pusher = if s.push_mongo != mirrored { 0 } else { 1 };
     let deck_turned = s.mode == Mode::Air && {
         let nose = (rider_rot.inverse() * deck) * Vec3::Z;
         nose.z.abs() < 0.95 // more than ~18 degrees off the body's heading, either end

@@ -142,6 +142,10 @@ void Rider::place(V3 position, float facing, float speed)
 	vel_ = fwd_ * speed;
 	mode_ = SK8_MODE_RIDE;
 	fakie_ = false;
+	switch_ = false;
+	switching_ = -1;
+	fakie_time_ = 0;
+	push_queued_ = false;
 	flick_.reset();
 	crouch_ = crouch_time_ = 0;
 	flip_ = -1;
@@ -228,6 +232,13 @@ void Rider::step(World &w, const sk8_input &in)
 	last_buttons_ = in.buttons;
 	if (off_press && mode_ == SK8_MODE_RIDE && takeoff_trick_ < 0) {
 		commit_pending();
+		if (switch_) { // off the board the feet are the rider's own again (the frame turns back with them)
+			fwd_ = fwd_ * -1.0f;
+			fakie_ = !fakie_;
+			switch_ = false;
+		}
+		switching_ = -1;
+		push_queued_ = false;
 		mode_ = SK8_MODE_WALK;
 		push_time_ = -1;
 		vel_ *= 0.55f; // steps off running it out
@@ -309,7 +320,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			if (flip_ < 0 && !def.flat)
 				start_flip(trick);
 			else if (def.flat)
-				pending_.push_back({def.name, def.points});
+				pending_.push_back({staged(def.name), def.points});
 			return;
 		}
 	}
@@ -341,7 +352,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		if (flip_ < 0 && !def.flat)
 			start_flip(trick);
 		else if (def.flat)
-			pending_.push_back({def.name, def.points});
+			pending_.push_back({staged(def.name), def.points});
 		return;
 	}
 
@@ -351,7 +362,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		const TrickDef &def = trick_table()[size_t(find_trick("Hippie Jump"))];
 		crouch_ = 0.6f;
 		pop(def, 0.85f);
-		pending_.push_back({def.name, def.points});
+		pending_.push_back({staged(def.name), def.points});
 		return;
 	}
 
@@ -361,6 +372,22 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		fakie_ = true;
 	else if (along > 0.3f)
 		fakie_ = false;
+	// Rolling fakie a moment with nothing else going on, the feet shuffle round: switch, rolling
+	// forwards on the other foot (the crouch held keeps it fakie, ready for a fakie trick)
+	if (switching_ >= 0) {
+		switching_ += kDt / switch_len_;
+		if (switching_ >= 1 || mode_ != SK8_MODE_RIDE)
+			switching_ = -1;
+	}
+	bool settled = mode_ == SK8_MODE_RIDE && takeoff_trick_ < 0 && crouch_ < 0.2f && !flick_.holding_lead() &&
+		push_time_ < 0 && !foot_off_ && revert_time_ < 0 && since_land_ > 0.6f && speed > 0.3f;
+	if (fakie_ && settled && switching_ < 0 && p[SwitchWait] > 0) {
+		fakie_time_ += kDt;
+		if (fakie_time_ >= p[SwitchWait])
+			start_switch(p[SwitchTime]);
+	} else {
+		fakie_time_ = 0;
+	}
 	V3 travel = fakie_ ? -fwd_ : fwd_;
 	float steer = clampf(in.steer[0], -1, 1);
 
@@ -443,8 +470,17 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	} else {
 		since_stroke_ += kDt;
 	}
-	if ((in.buttons & (SK8_PUSH | SK8_PUSH_MONGO)) && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 &&
+	// pushing while fakie: a quick shuffle round to switch first, then the push
+	bool push_button = (in.buttons & (SK8_PUSH | SK8_PUSH_MONGO)) || push_queued_;
+	if (push_button && fakie_ && mode_ == SK8_MODE_RIDE && switching_ < 0 && push_time_ < 0 && p[SwitchWait] > 0) {
+		start_switch(p[SwitchTime] * 0.5f);
+		push_queued_ = true;
+	}
+	if (mode_ != SK8_MODE_RIDE)
+		push_queued_ = false;
+	if (push_button && switching_ < 0 && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 &&
 		std::fabs(dot(vel_, travel)) < p[PushTop]) {
+		push_queued_ = false;
 		bool mongo = (in.buttons & SK8_PUSH_MONGO) || p[PushMongo] > 0.5f;
 		// straight on from the last stroke (same foot) the foot is already off the board
 		push_lead_ = since_stroke_ < 0.05f && mongo == push_mongo_ ? 0.0f : p[PushLead];
@@ -595,7 +631,20 @@ void Rider::pop(const TrickDef &def, float share)
 	crouch_ = crouch_time_ = 0;
 	grab_scored_ = false;
 	grab_time_ = 0;
-	emit(SK8_EV_POP, def.name, 0, 0, surface_);
+	stance_pre_ = switch_ ? "Switch " : fakie_ ? "Fakie " : "";
+	switching_ = -1; // a pop cuts a shuffle short
+	push_queued_ = false;
+	emit(SK8_EV_POP, staged(def.name).c_str(), 0, 0, surface_);
+}
+
+void Rider::start_switch(float duration)
+{
+	fwd_ = fwd_ * -1.0f;
+	fakie_ = !fakie_;
+	switch_ = !switch_;
+	switching_ = 0;
+	switch_len_ = std::max(duration, 0.05f);
+	fakie_time_ = 0;
 }
 
 void Rider::start_flip(int trick)
@@ -606,11 +655,11 @@ void Rider::start_flip(int trick)
 	float turns = std::max({std::fabs(def.roll), std::fabs(def.shove) * 1.2f, std::fabs(def.wrap) * 1.1f});
 	flip_angle_ = flip_rate_ = 0;
 	flip_turns_ = flip_base_turns_ = std::max(turns, 0.3f);
-	pending_.push_back({def.name, def.points});
-	trick_ = def.name;
+	pending_.push_back({staged(def.name), def.points});
+	trick_ = staged(def.name);
 	flip_mult_ = 1;
 	flip_extra_ = 0;
-	flip_name_ = def.name;
+	flip_name_ = staged(def.name);
 	float r = std::sqrt(last_flick_[0] * last_flick_[0] + last_flick_[1] * last_flick_[1]);
 	flip_dir_[0] = r > 0.3f ? last_flick_[0] / r : 0;
 	flip_dir_[1] = r > 0.3f ? last_flick_[1] / r : 0;
@@ -659,7 +708,7 @@ void Rider::extend_flip()
 	flip_turns_ = turns;
 	flip_mult_ = mult;
 	flip_extra_++;
-	flip_name_ = counted(def.name, halves, now + 1);
+	flip_name_ = stance_pre_ + counted(def.name, halves, now + 1);
 	trick_ = flip_name_;
 	if (!pending_.empty()) {
 		pending_.back().name = flip_name_;
@@ -1223,14 +1272,15 @@ void Rider::state(sk8_state &s) const
 	if (flip_ >= 0) {
 		const TrickDef &def = trick_table()[size_t(flip_)];
 		float e = flip_frac();
-		float m = flip_mult_;
-		board = board * Q::axis_angle({0, 1, 0}, -def.shove * m * 2 * kPi * e) *
-			Q::axis_angle({0, 0, 1}, def.roll * m * 2 * kPi * e) * Q::axis_angle({1, 0, 0}, -def.wrap * m * 2 * kPi * e);
+		// switch is the other stance: the board flips and shoves the other way round
+		float m = flip_mult_, g = switch_ ? -1.0f : 1.0f;
+		board = board * Q::axis_angle({0, 1, 0}, -def.shove * g * m * 2 * kPi * e) *
+			Q::axis_angle({0, 0, 1}, def.roll * g * m * 2 * kPi * e) * Q::axis_angle({1, 0, 0}, -def.wrap * m * 2 * kPi * e);
 	}
 	if (slide_amount_ > 0)
 		board = board * Q::axis_angle({0, 1, 0}, (lean_ >= 0 ? -1.0f : 1.0f) * slide_amount_ * 1.4f);
 	if (mode_ == SK8_MODE_MANUAL && manual_style_ == 1)
-		board = board * Q::axis_angle({0, 0, 1}, kPi / 2); // primo: on its side, heel edge up
+		board = board * Q::axis_angle({0, 0, 1}, (switch_ ? -kPi : kPi) / 2); // primo: on its side, heel edge up
 	else if (mode_ == SK8_MODE_MANUAL && manual_style_ == 2)
 		board = board * Q::axis_angle({0, 0, 1}, kPi) * Q::axis_angle({1, 0, 0}, 0.38f); // casper: upside down, tail up
 	else if (mode_ == SK8_MODE_MANUAL)
@@ -1241,8 +1291,9 @@ void Rider::state(sk8_state &s) const
 		// the board sits on the rail the way this grind holds it, the rail under the part it
 		// rides on (local x right = heel edge, y up, z the nose)
 		const GrindDef &g = kGrindDefs[grind_kind_];
-		board = board * Q::axis_angle({0, 1, 0}, -g.yaw * kDeg) * Q::axis_angle({1, 0, 0}, -g.pitch * kDeg) *
-			Q::axis_angle({0, 0, 1}, g.roll * kDeg);
+		float side = switch_ ? -1.0f : 1.0f; // the heel edge is on the other side in switch
+		board = board * Q::axis_angle({0, 1, 0}, -g.yaw * side * kDeg) * Q::axis_angle({1, 0, 0}, -g.pitch * kDeg) *
+			Q::axis_angle({0, 0, 1}, g.roll * side * kDeg);
 		(pos_ - fwd * g.along).store(s.position);
 	}
 	board.store(s.board_rot);
@@ -1269,6 +1320,8 @@ void Rider::state(sk8_state &s) const
 	s.manual_dir = mode_ == SK8_MODE_MANUAL ? manual_dir_ : 0;
 	s.manual_style = mode_ == SK8_MODE_MANUAL ? manual_style_ : 0;
 	s.on_foot = mode_ == SK8_MODE_WALK || foot_air_;
+	s.stance = switch_ ? 1 : 0;
+	s.stance_change = switching_ >= 0 ? clampf(switching_, 0, 1) : -1;
 }
 
 } // namespace sk8
