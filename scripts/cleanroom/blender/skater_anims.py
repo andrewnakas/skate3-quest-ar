@@ -519,7 +519,7 @@ CLIPS = {
                            (0.3, AIR_TUCK)]),
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
     "footplant": (False, [(0.0, AIR_TUCK), (0.14, FOOTPLANT), (0.7, idle(FOOTPLANT, 0.25, 0.01, 0.0))]),
-    "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT), (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
+    "handplant": (False, [(0.0, AIR_TUCK), (0.32, HANDPLANT), (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
     "primo": (True, loop(lambda t: idle(PRIMO, t, 0.016, 0.05), IDLE_LEN)),
     "casper": (True, loop(lambda t: idle(CASPER, t, 0.012, 0.04), IDLE_LEN)),
     "jump_foot": (False, [(0.0, STAND), (0.12, JUMP_FOOT), (0.5, JUMP_FOOT)]),

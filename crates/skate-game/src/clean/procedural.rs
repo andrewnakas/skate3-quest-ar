@@ -514,6 +514,14 @@ pub(crate) fn layer(
             && height > -0.2;
         let k = 1.0 - (-dt / PIN_BLEND).exp();
         motion.pin[i] += ((wanted as u8 as f32) - motion.pin[i]) * if dt > 0.0 { k } else { 0.0 };
+        // off the board, or the board going into the hands: let go at once (a pin fading out
+        // would drag the feet up with the board as it flies to the hand)
+        if walking {
+            // on foot or planted on an edge (the board leaves the feet that frame)
+            motion.pin[i] = 0.0;
+        } else if motion.held > 0.3 && dt > 0.0 {
+            motion.pin[i] *= (-dt / 0.025).exp(); // quickly, over two or three frames
+        }
         let w = motion.pin[i];
         if w < 1e-3 {
             continue;
