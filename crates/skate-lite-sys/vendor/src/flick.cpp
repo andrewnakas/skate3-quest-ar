@@ -14,24 +14,26 @@ namespace {
 const std::vector<TrickDef> kTricks = {
 	{"Ollie", {TDown, TCentre, TUp}, 80, 0, 0, false, true},
 	{"Nollie", {TUp, TCentre, TDown}, 120, 0, 0, true, true},
-	{"Kickflip", {TDown, TCentre, TUpLeft}, 240, 1, 0, false, false},
-	{"Heelflip", {TDown, TCentre, TUpRight}, 260, -1, 0, false, false},
-	{"Pop Shove-it", {TDown, TDownLeft, TLeft, TCentre}, 180, 0, 0.5f, false, false},
-	{"Frontside Shove-it", {TDown, TDownRight, TRight, TCentre}, 200, 0, -0.5f, false, false},
-	{"Tre Flip", {TDown, TDownLeft, TLeft, TUpLeft}, 520, 1, 1, false, false},
-	{"Laser Flip", {TDown, TDownRight, TRight, TUpRight}, 560, -1, -1, false, false},
-	{"Varial Kickflip", {TDown, TDownLeft, TCentre, TUpRight}, 360, 1, 0.5f, false, false},
-	{"Varial Heelflip", {TDown, TDownRight, TCentre, TUpLeft}, 380, -1, -0.5f, false, false},
-	{"Hardflip", {TDown, TDownRight, TCentre, TUp}, 420, 1, -0.5f, false, false},
-	{"Inward Heelflip", {TDown, TDownLeft, TCentre, TUp}, 440, -1, 0.5f, false, false},
-	{"Nollie Kickflip", {TUp, TCentre, TDownLeft}, 300, 1, 0, true, false},
-	{"Nollie Heelflip", {TUp, TCentre, TDownRight}, 320, -1, 0, true, false},
-	{"Nollie Shove-it", {TUp, TUpLeft, TLeft, TCentre}, 220, 0, 0.5f, true, false},
-	{"Nollie Frontside Shove-it", {TUp, TUpRight, TRight, TCentre}, 240, 0, -0.5f, true, false},
+	// The flicks the port (the faithful rewrite) uses for each trick, measured with s3trace
+	// (regular stance): kickflip finishes up-right, the frontside shove-it sweeps round the left.
+	{"Kickflip", {TDown, TCentre, TUpRight}, 240, 1, 0, false, false},
+	{"Heelflip", {TDown, TCentre, TUpLeft}, 260, -1, 0, false, false},
+	{"Pop Shove-it", {TDown, TDownRight, TRight, TCentre}, 180, 0, 0.5f, false, false},
+	{"Frontside Shove-it", {TDown, TDownLeft, TLeft, TCentre}, 200, 0, -0.5f, false, false},
+	{"Tre Flip", {TDown, TDownRight, TRight, TUpRight}, 520, 1, 1, false, false},
+	{"Laser Flip", {TDown, TDownLeft, TLeft, TUpLeft}, 560, -1, -1, false, false},
+	{"Varial Kickflip", {TDown, TDownRight, TCentre, TUp}, 360, 1, 0.5f, false, false},
+	{"Varial Heelflip", {TDown, TDownLeft, TCentre, TUp}, 380, -1, -0.5f, false, false},
+	{"Hardflip", {TDown, TDownLeft, TCentre, TUpRight}, 420, 1, -0.5f, false, false},
+	{"Inward Heelflip", {TDown, TDownRight, TCentre, TUpLeft}, 440, -1, 0.5f, false, false},
+	{"Nollie Kickflip", {TUp, TCentre, TDownRight}, 300, 1, 0, true, false},
+	{"Nollie Heelflip", {TUp, TCentre, TDownLeft}, 320, -1, 0, true, false},
+	{"Nollie Shove-it", {TUp, TUpRight, TRight, TCentre}, 220, 0, 0.5f, true, false},
+	{"Nollie Frontside Shove-it", {TUp, TUpLeft, TLeft, TCentre}, 240, 0, -0.5f, true, false},
 	// Carry on past a gesture's end (the shorter trick waits a moment to see). Doubles, triples
 	// and quads are the plain flicks held at their end (see Rider::extend_flip).
-	{"360 Shove-it", {TDown, TDownLeft, TLeft, TUpLeft, TUp}, 340, 0, 1, false, false},
-	{"Frontside 360 Shove-it", {TDown, TDownRight, TRight, TUpRight, TUp}, 360, 0, -1, false, false},
+	{"360 Shove-it", {TDown, TDownRight, TRight, TUpRight, TUp}, 340, 0, 1, false, false},
+	{"Frontside 360 Shove-it", {TDown, TDownLeft, TLeft, TUpLeft, TUp}, 360, 0, -1, false, false},
 	{"Impossible", {TDown, TCentre, TDown}, 480, 0, 0, false, false, 1},
 	// Old school: no gesture of their own, the foot-off button turns a flick into one (see
 	// foot_off_variant). Kept after the gestures; sk8_trick_count() covers only those.
@@ -196,8 +198,8 @@ Flick::Result Flick::feed(float x, float y)
 		// as the shove-it, and kept there it turns on (held: 360, 540)
 		if (out.trick < 0 && rim_steps_ >= 9) {
 			static const struct { unsigned char a, b, c; const char *name; } held[] = {
-				{TDown, TDownLeft, TLeft, "Pop Shove-it"}, {TDown, TDownRight, TRight, "Frontside Shove-it"},
-				{TUp, TUpLeft, TLeft, "Nollie Shove-it"}, {TUp, TUpRight, TRight, "Nollie Frontside Shove-it"}};
+				{TDown, TDownRight, TRight, "Pop Shove-it"}, {TDown, TDownLeft, TLeft, "Frontside Shove-it"},
+				{TUp, TUpRight, TRight, "Nollie Shove-it"}, {TUp, TUpLeft, TLeft, "Nollie Frontside Shove-it"}};
 			for (const auto &h : held)
 				if (tokens_.size() == 3 && tokens_[0] == h.a && tokens_[1] == h.b && tokens_[2] == h.c)
 					out.trick = find_trick(h.name);

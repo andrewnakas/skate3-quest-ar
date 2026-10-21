@@ -315,7 +315,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("X (hold)", "mongo push"),
             pair("B", "brake"),
             pair("Y", "get off / back on the board (on foot: A jumps)"),
-            pair("Right grip + steer", "powerslide"),
+            pair("Left stick back + side", "powerslide (or right grip + steer)"),
             pair("Right grip as you land", "revert"),
             pair("Left grip", "nose manual"),
             pair("Triggers (in the air)", "grab"),
@@ -331,12 +331,12 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("Left Alt", "mongo push"),
             pair("Left Shift", "brake"),
             pair("G", "get off / back on the board"),
-            pair("C + steer", "powerslide"),
+            pair("S + A / D", "powerslide (or C + steer)"),
             pair("C held as you land", "revert"),
             pair("Z / X", "manual / nose manual (W/S balance)"),
             pair("Q / E (in the air)", "grab"),
             pair("Esc / Tab", "this menu / SK8 menu"),
-            info_row("A gamepad works too: A push, X mongo, B brake, Y off board, RB powerslide."),
+            info_row("A gamepad works too: A push, X mongo, B brake, Y off board, left stick back-left/right powerslide."),
             info_row("Manual: right stick part-way down (nose: part-way up), hold it there."),
             info_row("Hold the stick at the end of a flick for more turns: double, triple, quad."),
             info_row("Old school: hold F (pad: left stick click) and flick: no comply, boneless..."),
@@ -975,7 +975,7 @@ mod tests {
         assert_eq!(describe_path(&ollie), "down, centre, up");
         let names = skate_lite_sys::trick_names();
         let shove = names.iter().position(|n| *n == "Pop Shove-it").unwrap();
-        assert_eq!(describe_path(&skate_lite_sys::trick_demo_path(shove)), "down, down-left, left, let go");
+        assert_eq!(describe_path(&skate_lite_sys::trick_demo_path(shove)), "down, down-right, right, let go");
     }
 
     #[test]

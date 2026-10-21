@@ -413,7 +413,7 @@ fn demo_input(t: f32) -> Input {
     let t = t % LOOP;
     let mut i = Input::default();
     let (down, centre, up) = ([0.0, -1.0], [0.0, 0.0], [0.0, 1.0]);
-    let (up_left, up_right, down_left, left) = ([-0.7, 0.7], [0.7, 0.7], [-0.7, -0.7], [-1.0, 0.0]);
+    let (up_left, up_right, down_right, right) = ([-0.7, 0.7], [0.7, 0.7], [0.7, -0.7], [1.0, 0.0]);
     // A flick starting at `at`: a crouch, then each token held for three engine steps.
     let flick = |at: f32, crouch: f32, tokens: &[[f32; 2]]| -> Option<[f32; 2]> {
         let d = t - at;
@@ -424,9 +424,9 @@ fn demo_input(t: f32) -> Input {
     };
     let flicks = [
         flick(6.0, 0.35, &[centre, up]),
-        flick(8.5, 0.35, &[centre, up_left]),
-        flick(11.0, 0.35, &[centre, up_right]),
-        flick(13.55, 0.3, &[down_left, left, centre]),
+        flick(8.5, 0.35, &[centre, up_right]),
+        flick(11.0, 0.35, &[centre, up_left]),
+        flick(13.55, 0.3, &[down_right, right, centre]),
         flick(16.5, 0.35, &[centre, up]),
     ];
     if let Some(f) = flicks.into_iter().flatten().next() {

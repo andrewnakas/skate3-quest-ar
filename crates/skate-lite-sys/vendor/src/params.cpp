@@ -35,7 +35,7 @@ const sk8_param kTable[ParamCount] = {
 	{"brake", "Brake, m/s^2", kSpeed, 0.0f, 20.0f, 4.65f, 0.05f},
 	{"carve", "Turning, rad/s", kSpeed, 0.2f, 8.0f, 1.56f, 0.01f},
 	{"grip", "Wheel grip", kSpeed, 0.5f, 40.0f, 8.4f, 0.1f},
-	{"slide_drag", "Powerslide drag, m/s^2", kSpeed, 0.0f, 25.0f, 6.15f, 0.05f},
+	{"slide_drag", "Powerslide drag, m/s^2", kSpeed, 0.0f, 25.0f, 3.85f, 0.05f},
 	{"ground_snap", "Stick to ground, m", kSpeed, 0.02f, 1.0f, 0.27f, 0.01f},
 
 	{"spin_rate", "Air spin, rad/s", kSpin, 0.0f, 25.0f, 7.08f, 0.05f},

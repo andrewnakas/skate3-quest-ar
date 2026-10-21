@@ -404,10 +404,13 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		}
 	}
 
-	// powerslide: hold the slide button and steer
-	if (mode_ == SK8_MODE_RIDE && (in.buttons & SK8_SLIDE) && std::fabs(steer) > 0.4f && speed > 1.8f)
+	// powerslide: the left stick pulled back to a diagonal (the port's way: back-right slides
+	// right), or the slide button held while steering
+	bool stick_slide = in.steer[1] < -0.45f && std::fabs(in.steer[0]) > 0.4f;
+	bool want_slide = stick_slide || ((in.buttons & SK8_SLIDE) && std::fabs(steer) > 0.4f);
+	if (mode_ == SK8_MODE_RIDE && want_slide && speed > 1.8f)
 		mode_ = SK8_MODE_SLIDE;
-	else if (mode_ == SK8_MODE_SLIDE && (!(in.buttons & SK8_SLIDE) || speed < 0.6f))
+	else if (mode_ == SK8_MODE_SLIDE && ((!want_slide && !(in.buttons & SK8_SLIDE)) || speed < 0.6f))
 		mode_ = SK8_MODE_RIDE;
 
 	// carve
