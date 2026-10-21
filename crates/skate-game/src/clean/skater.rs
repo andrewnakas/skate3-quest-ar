@@ -348,7 +348,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             let walk = ((s.speed - 0.2) / 0.6).clamp(0.0, 1.0);
             let run = ((s.speed - 2.2) / 0.9).clamp(0.0, 1.0);
             set(Clip::Stand, 1.0 - walk, c.idle);
-            set(Clip::Walk, walk * (1.0 - run), c.stride / 1.42);
+            set(Clip::Walk, walk * (1.0 - run), c.stride / 1.437);
             set(Clip::Run, walk * run, c.stride / 3.7);
         }
         Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, c.idle),

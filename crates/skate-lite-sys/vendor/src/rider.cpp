@@ -810,7 +810,7 @@ void Rider::land(const Hit &h)
 // ---------------------------------------------------------------- walk
 
 namespace {
-constexpr float kWalkSpeed = 1.42f, kRunSpeed = 3.7f, kWalkTurn = 2.6f; // m/s, m/s, rad/s
+constexpr float kWalkSpeed = 1.437f, kRunSpeed = 3.7f, kWalkTurn = 2.6f; // m/s, m/s, rad/s
 } // namespace
 
 // On foot: the left stick turns (x) and walks or runs (y, past 0.8 a run), the board in the hand.
