@@ -221,9 +221,13 @@ pub(crate) fn bind(
     let (graph, nodes) = AnimationGraph::from_clips(clips);
     // MakeHuman materials arrive alpha-blended, which sorts badly (skin shows through the
     // clothes); cut-out alpha keeps hair and lashes and draws everything else opaque.
-    for handle in &gltf.materials {
+    // Hair, brows and lashes need the cut-out; clothes and skin are solid (cut at 0.5 the shirt's
+    // texture let skin show through a hole at the sleeve).
+    for (name, handle) in &gltf.named_materials {
         if let Some(m) = materials.get_mut(handle) {
-            m.alpha_mode = AlphaMode::Mask(0.5);
+            let n = name.to_ascii_lowercase();
+            let cut = ["hair", "brow", "lash", "short02"].iter().any(|k| n.contains(k));
+            m.alpha_mode = if cut { AlphaMode::Mask(0.5) } else { AlphaMode::Opaque };
         }
     }
     commands.entity(player).insert(AnimationGraphHandle(graphs.add(graph)));
