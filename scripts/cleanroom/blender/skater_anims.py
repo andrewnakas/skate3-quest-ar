@@ -311,6 +311,18 @@ def walk_frame(t, stride, lift, lean, arm):
 STAND = walk_frame(0.25, 0.0, 0.0, 2.0, 0.0)
 
 
+# Plants on an edge (the rider sits at the edge; the runtime puts the board in the back hand).
+# Footplant: the front foot planted on the edge, the back knee pulled up with the board in hand,
+# the front arm out. Handplant: the front hand planted on the edge, the body tipped up over it
+# and the legs tucked up with the board.
+FOOTPLANT = P(hips=(-0.02, 0.03, 0.72), hips_rot=(14, 0, 4), spine=(18, 0, 10), head=(-16, 0, 50),
+              lf=foot(0.04, 0.0, -0.1, yaw=FRONT_YAW), rf=foot(-0.26, 0.06, 0.3, yaw=BACK_YAW, pitch=20),
+              lh=(0.42, -0.24, 0.96), rh=(-0.2, -0.06, 0.42), knee_out=0.5)
+HANDPLANT = P(hips=(-0.04, 0.12, 1.02), hips_rot=(62, 0, 6), spine=(30, 0, 8), head=(10, 0, 20),
+              lf=foot(0.08, 0.1, 0.92, yaw=FRONT_YAW, pitch=-30), rf=foot(-0.2, 0.12, 0.98, yaw=BACK_YAW, pitch=-30),
+              lh=(0.1, -0.06, -0.04), rh=(-0.12, 0.02, 0.92), knee_out=0.35)
+
+
 def flip_part(open_pose, k):
     """Part-way from the pop's extension into the flip's open pose."""
     return mix(POP_TOP, open_pose, k)
@@ -492,6 +504,8 @@ CLIPS = {
     "pop_nollie": (False, [(0.0, NOLLIE_CROUCH), (0.05, NOLLIE_DRIVE), (0.1, NOLLIE_TOP), (0.18, NOLLIE_SLIDE),
                            (0.3, AIR_TUCK)]),
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
+    "footplant": (False, [(0.0, AIR_TUCK), (0.14, FOOTPLANT), (0.7, idle(FOOTPLANT, 0.25, 0.01, 0.0))]),
+    "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT), (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
     "stand": (True, loop(lambda t: idle(STAND, t, 0.006, 0.02), IDLE_LEN)),
     "walk": (True, [(i / 16 * 1.05, walk_frame(i / 16, 0.26, 0.09, 4.0, 0.16)) for i in range(17)]),
     "run": (True, [(i / 16 * 0.7, walk_frame(i / 16, 0.42, 0.17, 12.0, 0.26)) for i in range(17)]),
@@ -605,7 +619,7 @@ ARM_REACH_MAX = 0.41
 # The bail's hands reach for the ground and are left alone; in a grab only the free hand (above the
 # board) relaxes.
 REACHING = ("bail",)
-GRABBING = ("grab_", "pop_boneless")
+GRABBING = ("grab_", "pop_boneless", "footplant", "handplant")
 
 
 def shoulder(pose, side):
@@ -655,8 +669,15 @@ def relaxed(pose, above=-9.0):
             new = (sh[0] + d[0] * k, sh[1] + d[1] * k, sh[2] + d[2] * k)
         # Raised arms come down toward chest height: out for balance, never held up high (the
         # elbows and shoulders stay down).
-        lift = max(0.0, new[2] - (hz + 0.05))
-        new = (new[0] + fwd[0], new[1] + fwd[1], new[2] - 0.85 * lift)
+        lift = max(0.0, new[2] - hz)
+        new = (new[0] + fwd[0], new[1] + fwd[1], new[2] - 0.9 * lift)
+        # and kept in near the body: reach out to the side past ~28 cm from the middle is cut
+        # by more than half (arms held out wide read stiff)
+        rel = (new[0] - hx, new[1] - hy)
+        out_side = rel[0] * cy + rel[1] * sy
+        if abs(out_side) > 0.28:
+            cut = (abs(out_side) - 0.28) * 0.55 * (1 if out_side > 0 else -1)
+            new = (new[0] - cut * cy, new[1] - cut * sy, new[2])
         out[key] = tuple(o + (n - o) * weight for o, n in zip(pose[key], new))
     return out
 
@@ -728,7 +749,12 @@ def calibrate_poles(rig, c, rest_ankle):
 # The elbow pole's direction last frame, per arm (reset at each clip's start).
 _PREV_SIDE = {}
 # Shoulders held down: the collars turn down this much (degrees), more with the arm raised.
-COLLAR_DOWN, COLLAR_DOWN_RAISED = 6.0, 9.0
+COLLAR_DOWN, COLLAR_DOWN_RAISED = 3.0, 4.0
+# Fingers curled in a relaxed loose fist (degrees per joint, base to tip; + curls toward the palm).
+FINGER_CURL = (30.0, 45.0, 30.0)
+THUMB_CURL = (12.0, 22.0, 18.0)
+FINGER_BONES = [f"sk_{f}_0{j}_{s}" for s in ("l", "r") for f in ("index", "middle", "ring", "pinky", "thumb")
+                for j in (1, 2, 3)]
 
 
 def apply_pose(rig, c, pose, rest_ankle):
@@ -758,6 +784,11 @@ def apply_pose(rig, c, pose, rest_ankle):
         axis = (rest.inverted() @ Vector((0.0, 1.0, 0.0))).normalized()
         raised = min(1.0, max(0.0, (pose[hand][2] - pose["hips"][2] - 0.1) / 0.3))
         b.rotation_quaternion = Quaternion(axis, sign * math.radians(COLLAR_DOWN + COLLAR_DOWN_RAISED * raised))
+    for name in FINGER_BONES:
+        b = pb[name]
+        b.rotation_mode = "XYZ"
+        j = int(name.split("_")[2]) - 1
+        b.rotation_euler = (math.radians((THUMB_CURL if "thumb" in name else FINGER_CURL)[j]), 0, 0)
     nod, tilt, turn = pose["head"]
     for name, share in (("neck", 0.4), ("skull", 0.6)):
         b = pb[name]
@@ -789,7 +820,7 @@ def apply_pose(rig, c, pose, rest_ankle):
         sh = shoulder(pose, hx)
         yaw = math.radians(pose["hips_rot"][2])
         cy, sy = math.cos(yaw), math.sin(yaw)
-        want = (hx * 0.3, 0.35, -0.95)  # mostly down: elbows low
+        want = (hx * 0.2, 0.3, -1.0)  # down: elbows low and in
         want = (want[0] * cy - want[1] * sy, want[0] * sy + want[1] * cy, want[2])
         arm = [h - q for h, q in zip(pose[hand], sh)]
         n = math.sqrt(sum(a * a for a in arm)) or 1.0
@@ -856,6 +887,8 @@ def bake_clips(rig):
                 b.keyframe_insert("rotation_euler", frame=frame)
             for bname in ("collar.L", "collar.R"):
                 rig.pose.bones[bname].keyframe_insert("rotation_quaternion", frame=frame)
+            for bname in FINGER_BONES:
+                rig.pose.bones[bname].keyframe_insert("rotation_euler", frame=frame)
         bpy.ops.object.mode_set(mode="POSE")
         bpy.ops.pose.select_all(action="SELECT")
         # Bake from a few frames early and drop them: the IK solver starts from its last solution

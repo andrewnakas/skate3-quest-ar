@@ -343,6 +343,30 @@ fn demo_walk(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=plants`: an ollie at an edge across the path with the foot-off button held near it:
+/// a footplant, then (a grab held too) a handplant.
+const PLANT_EACH: f32 = 4.5;
+fn demo_plants(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> Input {
+    let d = t % PLANT_EACH;
+    let hand = (t / PLANT_EACH) as usize % 2 == 1;
+    let mut i = Input::default();
+    if (0.15..0.5).contains(&d) {
+        i.flick = [0.0, -1.0];
+    } else if (0.5..0.6).contains(&d) {
+        i.flick = [0.0, 1.0];
+    }
+    let near = rail.is_some_and(|[a, b]| {
+        let p = Vec3::from_array(s.position);
+        let ab = b - a;
+        let k = ((p - a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
+        (a + ab * k).distance(p) < 1.2
+    });
+    if (s.mode == skate_lite_sys::Mode::Air && near) || s.mode == skate_lite_sys::Mode::Grind {
+        i.buttons |= buttons::FOOT_OFF | if hand { buttons::GRAB_RIGHT } else { 0 };
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -411,6 +435,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("wallride") => Some((t / WALL_EACH) as usize),
         Ok("held") => Some((t / HELD_EACH) as usize),
         Ok("walk") => Some((t / WALK_EACH) as usize),
+        Ok("plants") => Some((t / PLANT_EACH) as usize),
         _ => None,
     }
 }
@@ -442,7 +467,16 @@ pub(crate) fn read_desktop(
         if slot.is_some() && slot != *demo_at {
             *demo_at = slot;
             let demo_kind = std::env::var("SK8_DEMO").unwrap_or_default();
-            if demo_kind == "wallride" {
+            if demo_kind == "plants" {
+                sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 7.5);
+                let s = sim.current;
+                let fwd = Quat::from_array(s.rider_rot) * Vec3::Z;
+                // the slide rail (across the path): slot 7 in GRIND_SLOTS
+                let rail = demo_rail(7, Vec3::from_array(s.position), fwd);
+                sim.world.clear_rails();
+                sim.world.add_rail(&[rail[0].to_array(), rail[1].to_array()]);
+                sim.demo_rail = Some(rail);
+            } else if demo_kind == "wallride" {
                 // the desktop park's wall runs along z at x = 16 (z 8..20)
                 sim.place_rolling(Vec3::new(15.05, 0.0, 6.0), 0.16, 7.5);
             } else if demo_kind == "grinds" {
@@ -476,6 +510,7 @@ pub(crate) fn read_desktop(
             Ok("wallride") => demo_wallride(*t, &sim.current),
             Ok("held") => demo_held(*t),
             Ok("walk") => demo_walk(*t),
+            Ok("plants") => demo_plants(*t, &sim.current, sim.demo_rail),
             _ => demo_input(*t),
         };
         return;

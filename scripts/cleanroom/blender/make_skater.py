@@ -83,6 +83,9 @@ BONES = {
 }
 
 
+CLOTH_OFFSET = 0.006  # m
+
+
 def build():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     info = dict(PRESET)
@@ -118,6 +121,11 @@ def finish(basemesh):
                 except RuntimeError as e:
                     print("modifier", ob.name, m.name, e)
         # Helper geometry (MPFB's joint/clothing helpers) is masked out of the body.
+        # The clothes sit a few millimetres proud of the skin: with an arm hanging close to the
+        # body the skin poked out through the sleeves.
+        if any("suit" in m.name for m in ob.data.materials if m):
+            for v in ob.data.vertices:
+                v.co += v.normal * CLOTH_OFFSET
         ob.name = "skater_" + ob.name.split(".")[0].lower()
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == "MESH")
     heights = [v.co.z for o in bpy.data.objects if o.type == "MESH" for v in o.data.vertices]

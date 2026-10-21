@@ -53,6 +53,8 @@ const GrindDef kGrindDefs[] = {
 	{"Lipslide", 80, 0, 0, 0, 0},
 	{"Noseblunt", 120, 0.38f, -28, 0, 0},
 	{"Bluntslide", 110, -0.38f, 28, 0, 0},
+	{"Footplant", 130, 0, 0, 0, 0},
+	{"Handplant", 240, 0, 0, 0, 0},
 };
 
 int grind_kind_for(bool slide, float x, float y, bool crouched)
@@ -224,9 +226,22 @@ void Rider::step(World &w, const sk8_input &in)
 		vel_ *= 0.55f; // steps off running it out
 		emit(SK8_EV_LAND, "off board", 0, 0, surface_);
 	} else if (off_press && mode_ == SK8_MODE_WALK) {
-		mode_ = SK8_MODE_RIDE; // drops the board and steps on
 		fakie_ = false;
-		emit(SK8_EV_LAND, "on board", 0, 0, surface_);
+		if (len(vel_) > 2.6f) {
+			// running: the board thrown down ahead and jumped onto (a caveman), carrying the run
+			vel_ = fwd_ * (len(vel_) * 1.2f);
+			mode_ = SK8_MODE_AIR;
+			air_time_ = 0;
+			spin_total_ = spin_speed_ = 0;
+			pop_y_ = pos_.y;
+			vel_ += up_ * 2.6f;
+			pos_ += up_ * 0.02f;
+			emit(SK8_EV_POP, "Caveman", 0, 0, surface_);
+			pending_.push_back({"Caveman", 160});
+		} else {
+			mode_ = SK8_MODE_RIDE; // drops the board and steps on
+			emit(SK8_EV_LAND, "on board", 0, 0, surface_);
+		}
 	}
 	last_flick_[0] = in.flick[0];
 	last_flick_[1] = in.flick[1];
@@ -938,7 +953,9 @@ bool Rider::try_grind(World &w)
 	if (s.rail < 0 || pos_.y - s.point.y < -0.15f)
 		return false;
 	float vt = dot(vel_, s.tangent);
-	if (std::fabs(vt) < 0.8f)
+	// a plant (foot-off held) catches the edge from any way, even straight at it
+	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0;
+	if (std::fabs(vt) < 0.8f && !plant)
 		return false;
 	if (flip_ >= 0 && flip_frac() < p[FlipLenience] && !never_bail()) {
 		bail("Under-flipped");
@@ -959,6 +976,11 @@ bool Rider::try_grind(World &w)
 		a = kPi - a;
 	bool slide = a > 55 * kDeg;
 	grind_kind_ = grind_kind_for(slide, last_steer_[0], last_steer_[1], crouch_ > 0.5f);
+	if (plant) {
+		grind_kind_ = (last_buttons_ & (SK8_GRAB_LEFT | SK8_GRAB_RIGHT)) ? SK8_GRIND_HANDPLANT : SK8_GRIND_FOOTPLANT;
+		plant_in_ = unit(flatten(vel_, kUp), fwd_);
+		rail_speed_ = 0;
+	}
 	grind_name_ = kGrindDefs[grind_kind_].name;
 	fakie_ = backwards && !slide;
 	grind_time_ = 0;
@@ -974,7 +996,8 @@ bool Rider::try_grind(World &w)
 void Rider::leave_grind(V3 velocity, bool popped)
 {
 	add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
-	unslide_ = grind_kind_ == SK8_GRIND_BOARDSLIDE || grind_kind_ >= SK8_GRIND_NOSESLIDE;
+	unslide_ = grind_kind_ == SK8_GRIND_BOARDSLIDE ||
+		(grind_kind_ >= SK8_GRIND_NOSESLIDE && grind_kind_ <= SK8_GRIND_BLUNTSLIDE);
 	emit(SK8_EV_GRIND_END, grind_name_.c_str());
 	mode_ = SK8_MODE_AIR;
 	vel_ = velocity;
@@ -993,6 +1016,16 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 {
 	if (rail_ < 0 || size_t(rail_) >= w.rails.size()) {
 		leave_grind(vel_, false);
+		return;
+	}
+	// a plant: a stall on the edge, then back off it the way it came, up
+	if (grind_kind_ == SK8_GRIND_FOOTPLANT || grind_kind_ == SK8_GRIND_HANDPLANT) {
+		grind_time_ += kDt;
+		float stall = grind_kind_ == SK8_GRIND_HANDPLANT ? 1.1f : 0.65f;
+		if (f.trick >= 0 || grind_time_ > stall || (grind_time_ > 0.15f && !(in.buttons & SK8_FOOT_OFF))) {
+			pos_ += kUp * 0.05f;
+			leave_grind(plant_in_ * -1.2f + kUp * 3.3f, true);
+		}
 		return;
 	}
 	const auto &r = w.rails[size_t(rail_)];

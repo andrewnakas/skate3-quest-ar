@@ -161,6 +161,8 @@ typedef enum sk8_grind_kind
 	SK8_GRIND_LIPSLIDE,    /* across, middle, the board turned the other way over the rail (sideways) */
 	SK8_GRIND_NOSEBLUNT,   /* across, nose pressed down over the rail (up + sideways) */
 	SK8_GRIND_BLUNTSLIDE,  /* across, tail pressed down over the rail (down + sideways) */
+	SK8_GRIND_FOOTPLANT,   /* foot-off held as it reaches an edge: the front foot planted on it, a stall */
+	SK8_GRIND_HANDPLANT,   /* foot-off and a grab held: a hand planted on the edge, upside down */
 } sk8_grind_kind;
 
 /* Grab styles: the trigger(s) held pick the hand, the left stick's direction when the grab starts

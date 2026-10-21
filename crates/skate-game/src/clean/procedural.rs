@@ -386,7 +386,8 @@ pub(crate) fn layer(
         motion.lift_vel = 0.0;
     }
     // No Foot and Superman: both feet leave the board, which hangs from the hands on its edges.
-    let walking = s.mode == Mode::Walk;
+    // on foot, or planted on an edge: the board is in the back hand
+    let walking = s.mode == Mode::Walk || (s.mode == Mode::Grind && s.grind_kind >= 15);
     let hand_held =
         walking || (s.mode == Mode::Air && matches!(s.grab_style, gs::NO_FOOT | gs::SUPERMAN | gs::CHRIST));
     // which hands hold it: both, or the back hand alone (Christ air out to the side, carried on foot)
@@ -489,6 +490,7 @@ pub(crate) fn layer(
         let mut local = rest_inv.transform_point3(ankle);
         let wanted = match s.mode {
             Mode::Bail | Mode::Walk => false,
+            Mode::Grind if s.grind_kind >= 15 => false,
             // The board is in the hands: the feet are off it.
             Mode::Air if motion.held > 0.5 || hippie => false,
             Mode::Air => !flipping,

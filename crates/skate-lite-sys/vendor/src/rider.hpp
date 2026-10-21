@@ -70,6 +70,7 @@ private:
 	bool foot_off_ = false;
 	float last_steer_[2] = {0, 0};
 	bool unslide_ = false;
+	V3 plant_in_; // the way it was going when it planted (a foot/handplant pops back off that way)
 	unsigned last_buttons_ = 0;
 	// revert: landed holding the slide button, the board spins a half turn on its wheels
 	float revert_time_ = -1;

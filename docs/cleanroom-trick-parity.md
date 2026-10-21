@@ -19,7 +19,9 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   board; RB (Touch: right grip) powerslide / revert; manuals on the right stick part-way;
   left stick click old school (our own: the port's stick clicks do nothing while rolling)
 - Off the board: Y steps off to stand / walk / run (left stick), the board carried on its edge;
-  Y again drops it and steps on
+  Y again drops it and steps on; running, Y is a caveman (a hop onto the thrown-down board)
+- Footplant / handplant: foot-off (+ a grab for the hand) held reaching an edge: a stall, then
+  back off it
 - Grinds by the left stick at the catch (along the rail): 50-50, 5-0, nosegrind, crooked,
   overcrook, smith, feeble; slides (across it): boardslide, noseslide, tailslide, lipslide,
   noseblunt, bluntslide; the board turns back to the line of travel coming off a slide
@@ -37,13 +39,14 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 
 ## Next (in order)
 1. Salad, suski, willy grinds
-4. Footplants (on a wall / ledge / coping in the air), handplants
+4. Handplant pose needs a real invert (body upside down over the hand)
 5. Darkslide, primo, casper, body varials; held shove-its (their flick ends at the centre)
 6. Off-board: caveman (jump on from running), jumping on foot
 
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)
 - Landing a held flip before its clip ends snaps the ankles (~100 deg/frame once)
+- Shirt sleeve shows a skin-coloured patch (shirt texture alpha at the sleeve, not the pose)
 - One ankle spike on foot (~68 deg/frame) around stand/walk changes
 - A sideways left stick held through the air spins the board as well as picking the grind
 - Landing while still holding a grab blends grab + air + land; the back arm's blended rotation can
