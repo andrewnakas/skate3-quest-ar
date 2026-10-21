@@ -480,6 +480,10 @@ pub(crate) fn layer(
         Transform::from_translation(at).with_rotation(rider_rot * rel)
     };
     let pusher = if s.push_mongo { 0 } else { 1 };
+    let deck_turned = s.mode == Mode::Air && {
+        let nose = (rider_rot.inverse() * deck) * Vec3::Z;
+        nose.z.abs() < 0.95 // more than ~18 degrees off the body's heading, either end
+    };
     let deck_m = pin_tf.compute_affine();
     let deck_inv = deck_m.inverse();
     let sole = skater::DECK_TOP - skater::DECK_CENTRE;
@@ -496,7 +500,8 @@ pub(crate) fn layer(
             Mode::Grind if s.grind_kind >= 15 => false,
             // The board is in the hands: the feet are off it.
             Mode::Air if motion.held > 0.5 || hippie => false,
-            Mode::Air => !flipping,
+            // the board turned under the body (a body varial): the feet are off it
+            Mode::Air => !flipping && !deck_turned,
             // The pushing foot is on the ground (the back foot, or the front one pushing mongo), and
             // lets go of the deck as it steps off.
             Mode::Ride if s.push_phase.is_some() || s.push_start.is_some_and(|k| k > 0.4) => i != pusher,

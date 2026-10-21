@@ -31,7 +31,8 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   off it); a Wall piece in the park builder and the desktop park
 - Old school on the foot-off button (left stick click / F) + a flick: no comply (ollie), boneless
   (nollie), no comply 180 both ways (shove-its); the front foot steps down while crouching;
-  hippie jump (crouch with the button held, let go with no flick: the board rolls on underneath)
+  hippie jump (crouch with the button held, let go with no flick: the board rolls on underneath);
+  body varial (the button held in the air: the left stick turns the body alone)
 
 ## Feel vs the port (scripts/cleanroom/feel.py, flip_* scenarios)
 - Flick to takeoff 6 ticks (port 6), single flip level 33 ticks after the flick (port 32-34),
@@ -40,7 +41,7 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 
 ## Next (in order)
 1. Salad, suski, willy grinds
-5. Primo, casper, body varials; held shove-its (their flick ends at the centre)
+5. Primo, casper; held shove-its (their flick ends at the centre)
 6. Off-board: caveman (jump on from running), jumping on foot
 
 ## Open polish

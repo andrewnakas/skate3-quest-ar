@@ -367,6 +367,26 @@ fn demo_plants(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> In
     i
 }
 
+/// `SK8_DEMO=varial`: an ollie, then the foot-off button and the left stick: a body varial.
+const VARIAL_EACH: f32 = 3.0;
+fn demo_varial(t: f32, s: &skate_lite_sys::State) -> Input {
+    let d = t % VARIAL_EACH;
+    let mut i = Input::default();
+    if (0.15..0.5).contains(&d) {
+        i.flick = [0.0, -1.0];
+    } else if (0.5..0.6).contains(&d) {
+        i.flick = [0.0, 1.0];
+    }
+    if s.mode == skate_lite_sys::Mode::Air && d > 0.72 {
+        i.buttons |= buttons::FOOT_OFF;
+        // half a turn at the spin rate (the stick let go after it)
+        if d < 0.72 + std::f32::consts::PI / 6.6 {
+            i.steer[0] = 1.0;
+        }
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -436,6 +456,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("held") => Some((t / HELD_EACH) as usize),
         Ok("walk") => Some((t / WALK_EACH) as usize),
         Ok("plants") => Some((t / PLANT_EACH) as usize),
+        Ok("varial") => Some((t / VARIAL_EACH) as usize),
         _ => None,
     }
 }
@@ -511,6 +532,7 @@ pub(crate) fn read_desktop(
             Ok("held") => demo_held(*t),
             Ok("walk") => demo_walk(*t),
             Ok("plants") => demo_plants(*t, &sim.current, sim.demo_rail),
+            Ok("varial") => demo_varial(*t, &sim.current),
             _ => demo_input(*t),
         };
         return;

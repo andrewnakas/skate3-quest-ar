@@ -96,6 +96,7 @@ private:
 	float flip_mult_ = 1, flip_dir_[2] = {0, 0}, last_flick_[2] = {0, 0};
 	int flip_extra_ = 0;
 	float pop_y_ = 0; // height the last pop left from
+	float varial_ = 0; // body varial: how far the body has turned on its own, the board staying
 	std::string flip_name_;
 	void extend_flip();
 	float spin_speed_ = 0, spin_total_ = 0;

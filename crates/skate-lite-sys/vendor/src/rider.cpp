@@ -235,6 +235,7 @@ void Rider::step(World &w, const sk8_input &in)
 			air_time_ = 0;
 			spin_total_ = spin_speed_ = 0;
 			pop_y_ = pos_.y;
+	varial_ = 0;
 			vel_ += up_ * 2.6f;
 			pos_ += up_ * 0.02f;
 			emit(SK8_EV_POP, "Caveman", 0, 0, surface_);
@@ -683,7 +684,12 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 				unslide_ = false;
 		}
 	}
-	spin_total_ += a;
+	// the foot-off button held: the body turns on its own above the board (a body varial), the
+	// board keeping its heading
+	if (in.buttons & SK8_FOOT_OFF)
+		varial_ += a;
+	else
+		spin_total_ += a;
 
 	// level out gently unless this is a vert air
 	if (up_.y > 0.3f && p[AirLevel] > 0) {
@@ -770,7 +776,12 @@ void Rider::land(const Hit &h)
 		side = fakie ? kPi - a : a;
 	}
 	float into = -dot(vel_, n);
+	// a body varial lands square on the board again: half turns, give or take
+	int vhalves = int(std::lround(std::fabs(varial_) / kPi));
+	float voff = std::fabs(std::fabs(varial_) - vhalves * kPi);
 	const char *bad = nullptr;
+	if (voff > 40 * kDeg)
+		bad = "Body varial off the board";
 	if (!flip_done)
 		bad = "Under-flipped";
 	else if (tilt > p[LandMax] * kDeg)
@@ -794,6 +805,13 @@ void Rider::land(const Hit &h)
 	vel_ = travel * along + (vflat - travel * along) * 0.15f;
 	bool clean = tilt < p[LandClean] * kDeg && side < 20 * kDeg;
 
+	if (vhalves > 0) {
+		pending_.push_back({vhalves == 1 ? "Body Varial" : vhalves == 2 ? "360 Body Varial" : "540 Body Varial",
+			unsigned(150 * vhalves)});
+		if (vhalves % 2)
+			fakie_ = !fakie_; // turned round on it
+	}
+	varial_ = 0;
 	int halves = int(std::lround(std::fabs(spin_total_) / kPi));
 	// landing out of a body spin costs speed (each half turn more)
 	if (halves > 0)
@@ -1180,6 +1198,8 @@ void Rider::state(sk8_state &s) const
 		board = board * Q::axis_angle({0, 1, 0}, (lean_ >= 0 ? -1.0f : 1.0f) * slide_amount_ * 1.4f);
 	if (mode_ == SK8_MODE_MANUAL)
 		board = board * Q::axis_angle({1, 0, 0}, -0.21f * float(manual_dir_));
+	if (mode_ == SK8_MODE_AIR && varial_ != 0)
+		board = board * Q::axis_angle({0, 1, 0}, -varial_); // the board stays while the body turns
 	if (mode_ == SK8_MODE_GRIND && grind_kind_ > 0) {
 		// the board sits on the rail the way this grind holds it, the rail under the part it
 		// rides on (local x right = heel edge, y up, z the nose)
