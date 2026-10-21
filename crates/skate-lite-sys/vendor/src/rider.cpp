@@ -56,6 +56,9 @@ const GrindDef kGrindDefs[] = {
 	{"Footplant", 130, 0, 0, 0, 0},
 	{"Handplant", 240, 0, 0, 0, 0},
 	{"Darkslide", 300, 0, 0, 0, 180},
+	{"Salad Grind", 110, -0.2f, -6, -14, 8},
+	{"Willy Grind", 110, -0.2f, -12, 10, -14},
+	{"Suski Grind", 120, -0.2f, -4, 18, 4},
 };
 
 int grind_kind_for(bool slide, float x, float y, bool crouched)
@@ -68,6 +71,8 @@ int grind_kind_for(bool slide, float x, float y, bool crouched)
 			return side ? SK8_GRIND_BLUNTSLIDE : SK8_GRIND_TAILSLIDE;
 		return side ? SK8_GRIND_LIPSLIDE : SK8_GRIND_BOARDSLIDE;
 	}
+	if (crouched && side) // the crouch held with a diagonal: the back-truck oddities
+		return up ? SK8_GRIND_SUSKI : down ? (x < 0 ? SK8_GRIND_SALAD : SK8_GRIND_WILLY) : SK8_GRIND_5_0;
 	if (up)
 		return side ? (x < 0 ? SK8_GRIND_CROOKED : SK8_GRIND_OVERCROOK) : SK8_GRIND_NOSEGRIND;
 	if (down)
@@ -1006,7 +1011,9 @@ bool Rider::try_grind(World &w)
 	if (backwards)
 		a = kPi - a;
 	bool slide = a > 55 * kDeg;
-	grind_kind_ = grind_kind_for(slide, last_steer_[0], last_steer_[1], crouch_ > 0.5f);
+	// crouched for the catch: loaded on the ground, or the right stick held down in the air
+	bool crouched = crouch_ > 0.5f || last_flick_[1] < -0.7f;
+	grind_kind_ = grind_kind_for(slide, last_steer_[0], last_steer_[1], crouched);
 	if (dark)
 		grind_kind_ = SK8_GRIND_DARKSLIDE;
 	if (plant) {

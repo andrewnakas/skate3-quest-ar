@@ -218,10 +218,12 @@ fn demo_oldschool(t: f32) -> Input {
 /// slides), an ollie onto it with the left stick set as the board comes down: every grind kind.
 const GRIND_EACH: f32 = 4.5;
 /// (slide, stick x, stick y) per slot, in sk8_grind_kind order.
-const GRIND_SLOTS: [(bool, f32, f32); 13] = [
+const GRIND_SLOTS: [(bool, f32, f32); 16] = [
     (false, 0.0, 0.0), (false, 0.0, -1.0), (false, 0.0, 1.0), (false, -0.8, 0.8), (false, 0.8, 0.8),
     (false, -0.8, -0.8), (false, 0.8, -0.8), (true, 0.0, 0.0), (true, 0.0, 1.0), (true, 0.0, -1.0),
     (true, 1.0, 0.0), (true, 0.8, 0.8), (true, 0.8, -0.8),
+    // the last three with the crouch held into the catch: salad, willy, suski
+    (false, -0.8, -0.8), (false, 0.8, -0.8), (false, 0.8, 0.8),
 ];
 fn demo_grinds(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> Input {
     let d = t % GRIND_EACH;
@@ -242,6 +244,9 @@ fn demo_grinds(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> In
     });
     if s.mode == skate_lite_sys::Mode::Air && near && d > 0.6 {
         i.steer = [x, y];
+        if (t / GRIND_EACH) as usize % GRIND_SLOTS.len() >= 13 {
+            i.flick = [0.0, -1.0];
+        }
     }
     i
 }

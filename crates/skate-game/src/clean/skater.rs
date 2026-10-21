@@ -366,6 +366,10 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
         Mode::Grind if s.grind_kind == 2 || s.grind_kind == 17 => set(Clip::Boardslide, 1.0, c.idle),
         Mode::Grind if s.grind_kind == 4 => set(Clip::Grind50, 1.0, c.idle),
         // sk8_grind_kind 5..14, in order
+        // salad / willy / suski: the feeble, smith and crooked bodies on the back truck
+        Mode::Grind if s.grind_kind == 18 => set(Clip::GrindFeeble, 1.0, c.idle),
+        Mode::Grind if s.grind_kind == 19 => set(Clip::GrindSmith, 1.0, c.idle),
+        Mode::Grind if s.grind_kind == 20 => set(Clip::GrindCrooked, 1.0, c.idle),
         Mode::Grind if (5..=14).contains(&s.grind_kind) => {
             const KINDS: [Clip; 10] = [Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt];
             set(KINDS[s.grind_kind as usize - 5], 1.0, c.idle)
