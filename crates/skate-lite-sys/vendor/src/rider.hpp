@@ -37,6 +37,7 @@ private:
 	bool try_wallride(const Hit &h);
 	void wallride(World &w, const sk8_input &in, const Flick::Result &f);
 	void leave_wall(bool popped);
+	void walk(World &w, const sk8_input &in);
 
 	void pop(const TrickDef &def, float share);
 	void start_flip(int trick);

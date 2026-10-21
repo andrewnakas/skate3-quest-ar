@@ -4,9 +4,9 @@
 //! - left stick: steer; in the air, spin; in a manual, balance (up/down)
 //! - right stick: hold down to crouch, flick to pop and flip (see How to play); part-way down /
 //!   up and held: manual / nose manual (how far balances it)
-//! - A: push (hold to keep pushing), B: mongo push, Y: brake
+//! - A: push (hold to keep pushing), X: mongo push, B: brake, Y: get off / on the board (walk)
 //! - left stick click held while flicking: old school (no comply, boneless, no comply 180)
-//! - X held into a landing: revert (the board spins round, rolling away fakie)
+//! - right grip (pad: RB) held while steering: powerslide; held into a landing: revert
 //! - X held while steering: powerslide
 //! - triggers in the air: grab (left / right hand)
 //! - right grip: manual, left grip: nose manual
@@ -30,17 +30,18 @@ pub(crate) fn from_touch(touch: &crate::xr::touch::TouchState) -> Input {
     if touch.a {
         b |= buttons::PUSH;
     }
-    if touch.b {
+    // the port's layout: A push, X mongo push, B brake, Y off the board
+    if touch.x {
         b |= buttons::PUSH_MONGO;
     }
-    if touch.y {
+    if touch.b {
         b |= buttons::BRAKE;
+    }
+    if touch.y {
+        b |= buttons::OFF_BOARD;
     }
     if touch.left_stick_click {
         b |= buttons::FOOT_OFF;
-    }
-    if touch.x {
-        b |= buttons::SLIDE;
     }
     if touch.left_trigger > PRESSED {
         b |= buttons::GRAB_LEFT;
@@ -49,7 +50,7 @@ pub(crate) fn from_touch(touch: &crate::xr::touch::TouchState) -> Input {
         b |= buttons::GRAB_RIGHT;
     }
     if touch.right_grip > PRESSED {
-        b |= buttons::MANUAL;
+        b |= buttons::SLIDE;
     }
     if touch.left_grip > PRESSED {
         b |= buttons::NOSE_MANUAL;
@@ -323,6 +324,25 @@ fn demo_held(t: f32) -> Input {
     i
 }
 
+/// `SK8_DEMO=walk`: rolling, off the board (Y), standing, walking, running, back on, pushing away.
+const WALK_EACH: f32 = 8.0;
+fn demo_walk(t: f32) -> Input {
+    let d = t % WALK_EACH;
+    let mut i = Input::default();
+    if (1.0..1.1).contains(&d) || (6.0..6.1).contains(&d) {
+        i.buttons |= buttons::OFF_BOARD;
+    }
+    if (2.0..4.0).contains(&d) {
+        i.steer[1] = 0.55;
+    } else if (4.0..5.6).contains(&d) {
+        i.steer = [0.25, 1.0];
+    }
+    if d > 6.3 {
+        i.buttons |= buttons::PUSH;
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -390,6 +410,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("revert") => Some((t / REVERT_EACH) as usize),
         Ok("wallride") => Some((t / WALL_EACH) as usize),
         Ok("held") => Some((t / HELD_EACH) as usize),
+        Ok("walk") => Some((t / WALK_EACH) as usize),
         _ => None,
     }
 }
@@ -454,6 +475,7 @@ pub(crate) fn read_desktop(
             Ok("revert") => demo_revert(*t),
             Ok("wallride") => demo_wallride(*t, &sim.current),
             Ok("held") => demo_held(*t),
+            Ok("walk") => demo_walk(*t),
             _ => demo_input(*t),
         };
         return;
@@ -475,6 +497,7 @@ pub(crate) fn read_desktop(
         (KeyCode::AltLeft, buttons::PUSH_MONGO),
         (KeyCode::KeyF, buttons::FOOT_OFF),
         (KeyCode::ShiftLeft, buttons::BRAKE),
+        (KeyCode::KeyG, buttons::OFF_BOARD),
         (KeyCode::KeyQ, buttons::GRAB_LEFT),
         (KeyCode::KeyE, buttons::GRAB_RIGHT),
         (KeyCode::KeyZ, buttons::MANUAL),
@@ -500,15 +523,16 @@ pub(crate) fn read_desktop(
             input.flick = r.to_array();
         }
         for (b, bit) in [
+            // the port's layout: A push, X mongo push, B brake, Y off the board; manuals are on the
+            // right stick part-way (as in the port), so RB is the powerslide (and the revert)
             (GamepadButton::South, buttons::PUSH),
-            (GamepadButton::East, buttons::PUSH_MONGO),
-            (GamepadButton::North, buttons::BRAKE),
+            (GamepadButton::West, buttons::PUSH_MONGO),
+            (GamepadButton::East, buttons::BRAKE),
+            (GamepadButton::North, buttons::OFF_BOARD),
             (GamepadButton::LeftThumb, buttons::FOOT_OFF),
-            (GamepadButton::West, buttons::SLIDE),
+            (GamepadButton::RightTrigger, buttons::SLIDE),
             (GamepadButton::LeftTrigger2, buttons::GRAB_LEFT),
             (GamepadButton::RightTrigger2, buttons::GRAB_RIGHT),
-            (GamepadButton::RightTrigger, buttons::MANUAL),
-            (GamepadButton::LeftTrigger, buttons::NOSE_MANUAL),
         ] {
             if pad.pressed(b) {
                 input.buttons |= bit;

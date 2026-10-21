@@ -386,9 +386,11 @@ pub(crate) fn layer(
         motion.lift_vel = 0.0;
     }
     // No Foot and Superman: both feet leave the board, which hangs from the hands on its edges.
-    let hand_held = s.mode == Mode::Air && matches!(s.grab_style, gs::NO_FOOT | gs::SUPERMAN | gs::CHRIST);
-    // which hands hold it: both, or the back hand alone (Christ air, board held out to the side)
-    let one_hand = s.grab_style == gs::CHRIST;
+    let walking = s.mode == Mode::Walk;
+    let hand_held =
+        walking || (s.mode == Mode::Air && matches!(s.grab_style, gs::NO_FOOT | gs::SUPERMAN | gs::CHRIST));
+    // which hands hold it: both, or the back hand alone (Christ air out to the side, carried on foot)
+    let one_hand = s.grab_style == gs::CHRIST || walking;
     if dt > 0.0 {
         let k = 1.0 - (-dt / 0.08).exp();
         motion.held += ((hand_held as u8 as f32) - motion.held) * k;
@@ -412,6 +414,10 @@ pub(crate) fn layer(
         }
     }
     let mut deck = board_rot;
+    // carried on foot: on its edge at the side, nose ahead
+    if walking {
+        deck = rider_rot * Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
+    }
     if carving {
         deck = Quat::from_axis_angle(fwd, -lean * BOARD_ROLL) * deck;
     }
@@ -482,7 +488,7 @@ pub(crate) fn layer(
         // deck really is (so a powerslide, manual or pop turns the feet with it instead of sliding).
         let mut local = rest_inv.transform_point3(ankle);
         let wanted = match s.mode {
-            Mode::Bail => false,
+            Mode::Bail | Mode::Walk => false,
             // The board is in the hands: the feet are off it.
             Mode::Air if motion.held > 0.5 || hippie => false,
             Mode::Air => !flipping,

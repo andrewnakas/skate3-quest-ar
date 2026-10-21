@@ -292,6 +292,25 @@ WALLRIDE = P(hips=(0.0, 0.04, 0.72), hips_rot=(16, 0, 4), spine=(20, 0, 12), hea
              lh=(0.58, -0.12, 1.04), rh=(-0.56, -0.04, 1.06), knee_out=0.55)
 
 
+# On foot, carrying the board in the back hand: the body faces the way it walks (+X here, the
+# board's nose), the feet step on the ground under the deck's level.
+def walk_frame(t, stride, lift, lean, arm):
+    s = math.sin(2 * math.pi * t)
+    def step(ph):  # x along the walk, height: the foot on the ground goes back, the other swings
+        c = math.cos(2 * math.pi * ph)
+        return stride * math.sin(2 * math.pi * ph), lift * max(0.0, c) ** 1.5
+    lx, lz = step(t)
+    rx, rz = step(t + 0.5)
+    bob = 0.02 * abs(math.cos(2 * math.pi * t))
+    return P(hips=(0.0, 0.0, 0.84 + bob), hips_rot=(lean, 0, 90 + 4 * s), spine=(lean * 0.6, 0, -6 * s),
+             head=(-4, 0, 4 * s), lf=foot(lx, 0.1 - FOOT_Y, DECK_TOP_TO_GROUND + lz, yaw=90),
+             rf=foot(rx, -0.1 - FOOT_Y, DECK_TOP_TO_GROUND + rz, yaw=90),
+             lh=(-arm * s * 0.9, 0.22, 0.74), rh=(0.02 + 0.03 * s, -0.27, 0.72), knee_out=0.2)
+
+
+STAND = walk_frame(0.25, 0.0, 0.0, 2.0, 0.0)
+
+
 def flip_part(open_pose, k):
     """Part-way from the pop's extension into the flip's open pose."""
     return mix(POP_TOP, open_pose, k)
@@ -473,6 +492,9 @@ CLIPS = {
     "pop_nollie": (False, [(0.0, NOLLIE_CROUCH), (0.05, NOLLIE_DRIVE), (0.1, NOLLIE_TOP), (0.18, NOLLIE_SLIDE),
                            (0.3, AIR_TUCK)]),
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
+    "stand": (True, loop(lambda t: idle(STAND, t, 0.006, 0.02), IDLE_LEN)),
+    "walk": (True, [(i / 16 * 1.05, walk_frame(i / 16, 0.26, 0.09, 4.0, 0.16)) for i in range(17)]),
+    "run": (True, [(i / 16 * 0.7, walk_frame(i / 16, 0.42, 0.17, 12.0, 0.26)) for i in range(17)]),
     "wallride": (True, loop(lambda t: idle(WALLRIDE, t, 0.01, 0.05), IDLE_LEN)),
     **{name: (True, loop(lambda t, pose=pose: idle(pose, t, 0.012, 0.06), IDLE_LEN)) for name, pose in (
         ("grind_nose", GRIND_NOSE), ("grind_crooked", GRIND_CROOKED), ("grind_overcrook", GRIND_OVERCROOK),

@@ -15,7 +15,11 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - 15 grabs: indy, crail, tail, stalefish, melon, nose, tuck knee, judo, double, superman,
   no foot, stiffy, Christ air, method, rocket air (triggers + left stick: centre / nose / tail /
   right / left)
-- Manual + nose manual on the right stick part-way (and bumpers); push, mongo push (B), brake (Y)
+- Controller = the port's layout (measured with s3trace): A push, X mongo push, B brake, Y off the
+  board; RB (Touch: right grip) powerslide / revert; manuals on the right stick part-way;
+  left stick click old school (our own: the port's stick clicks do nothing while rolling)
+- Off the board: Y steps off to stand / walk / run (left stick), the board carried on its edge;
+  Y again drops it and steps on
 - Grinds by the left stick at the catch (along the rail): 50-50, 5-0, nosegrind, crooked,
   overcrook, smith, feeble; slides (across it): boardslide, noseslide, tailslide, lipslide,
   noseblunt, bluntslide; the board turns back to the line of travel coming off a slide
@@ -35,11 +39,12 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 1. Salad, suski, willy grinds
 4. Footplants (on a wall / ledge / coping in the air), handplants
 5. Darkslide, primo, casper, body varials; held shove-its (their flick ends at the centre)
-6. Off-board: walk, caveman (jump on), get off / on
+6. Off-board: caveman (jump on from running), jumping on foot
 
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)
 - Landing a held flip before its clip ends snaps the ankles (~100 deg/frame once)
+- One ankle spike on foot (~68 deg/frame) around stand/walk changes
 - A sideways left stick held through the air spins the board as well as picking the grind
 - Landing while still holding a grab blends grab + air + land; the back arm's blended rotation can
   jump for a frame (stalefish, ~118 deg/frame once)

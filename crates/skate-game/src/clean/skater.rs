@@ -84,9 +84,12 @@ enum Clip {
     SlideNoseblunt,
     SlideBlunt,
     Wallride,
+    Stand,
+    Walk,
+    Run,
 }
 
-const CLIPS: usize = 52;
+const CLIPS: usize = 55;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -97,10 +100,14 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_push_start_mongo", "sk8_push_end_mongo", "sk8_grab_christ", "sk8_grab_method", "sk8_grab_rocket",
     "sk8_pop_no_comply", "sk8_pop_boneless",
     "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt", "sk8_wallride",
+    "sk8_stand", "sk8_walk", "sk8_run",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
-const LOOPED: [Clip; 21] = [
+const LOOPED: [Clip; 24] = [
     Clip::Wallride,
+    Clip::Stand,
+    Clip::Walk,
+    Clip::Run,
     Clip::GrindNose,
     Clip::GrindCrooked,
     Clip::GrindOvercrook,
@@ -237,12 +244,14 @@ pub(crate) struct Clock {
     pub(crate) hippie: bool,
     /// Drives the idle loops (ride sway, manual and grind balance).
     idle: f32,
+    /// Metres walked (on foot, the step cycle follows it).
+    stride: f32,
 }
 
 impl Default for Clock {
     fn default() -> Self {
         // Long ago, so nothing plays its "just happened" clip at spawn.
-        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, hippie: false, idle: 0.0 }
+        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, hippie: false, idle: 0.0, stride: 0.0 }
     }
 }
 
@@ -292,6 +301,8 @@ fn blend_time(clip: Clip) -> f32 {
         Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv | Clip::FlipHard | Clip::FlipTre => 0.05,
         Clip::Land | Clip::Bail => 0.06,
         Clip::Air | Clip::Grind | Clip::Grind50 | Clip::Boardslide | Clip::Wallride => 0.1,
+        // stepping off / walking speeds blend over a moment
+        Clip::Stand | Clip::Walk | Clip::Run => 0.18,
         Clip::GrindNose | Clip::GrindCrooked | Clip::GrindOvercrook | Clip::GrindSmith | Clip::GrindFeeble | Clip::SlideNose | Clip::SlideTail | Clip::SlideLip | Clip::SlideNoseblunt | Clip::SlideBlunt => 0.1,
         Clip::GrabIndy
         | Clip::GrabCrail
@@ -332,6 +343,14 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
     match s.mode {
         Mode::Bail => set(Clip::Bail, 1.0, s.bail_time.unwrap_or(0.0)),
         Mode::Wallride => set(Clip::Wallride, 1.0, c.idle),
+        // on foot: standing, walking or running by speed, the steps kept to the ground's pace
+        Mode::Walk => {
+            let walk = ((s.speed - 0.2) / 0.6).clamp(0.0, 1.0);
+            let run = ((s.speed - 2.2) / 0.9).clamp(0.0, 1.0);
+            set(Clip::Stand, 1.0 - walk, c.idle);
+            set(Clip::Walk, walk * (1.0 - run), c.stride / 1.45);
+            set(Clip::Run, walk * run, c.stride / 3.7);
+        }
         Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, c.idle),
         Mode::Grind if s.grind_kind == 4 => set(Clip::Grind50, 1.0, c.idle),
         // sk8_grind_kind 5..14, in order
@@ -428,6 +447,7 @@ pub(crate) fn animate(
     clock.since_grab = if b.grab != 0 { clock.since_grab + game_dt } else { 0.0 };
     // The idles quicken a little with speed.
     clock.idle += game_dt * (0.7 + 0.3 * (b.speed / 6.0).min(1.0));
+    clock.stride += game_dt * b.speed;
     for e in &sim.events {
         match e.kind {
             EventKind::Pop => {
@@ -535,6 +555,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::FlipHard, Clip::FlipTre, Clip::Grind50, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo,
     Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket, Clip::PopNoComply, Clip::PopBoneless,
     Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
+    Clip::Stand, Clip::Walk, Clip::Run,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

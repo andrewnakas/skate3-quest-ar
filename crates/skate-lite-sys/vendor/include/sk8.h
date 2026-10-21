@@ -56,6 +56,7 @@ enum
 	SK8_NOSE_MANUAL = 1 << 5, /* hold on the ground: nose manual */
 	SK8_SLIDE = 1 << 6,       /* hold while steering: powerslide */
 	SK8_PUSH_MONGO = 1 << 7,  /* kick-push with the front foot (mongo), whatever push_mongo says */
+	SK8_OFF_BOARD = 1 << 9,   /* press: step off the board and walk; press again: back on it */
 	SK8_FOOT_OFF = 1 << 8,    /* hold while flicking: old school (no comply, boneless, 180 no comply) */
 };
 
@@ -77,6 +78,7 @@ typedef enum sk8_mode
 	SK8_MODE_GRIND,
 	SK8_MODE_BAIL,
 	SK8_MODE_WALLRIDE,  /* rolling along a wall (up = the wall's normal) */
+	SK8_MODE_WALK,      /* off the board on foot, carrying it */
 } sk8_mode;
 
 typedef enum sk8_event_kind

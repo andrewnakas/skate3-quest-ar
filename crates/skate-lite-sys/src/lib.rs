@@ -22,6 +22,8 @@ pub mod buttons {
     pub const PUSH_MONGO: u32 = 1 << 7;
     /// Held while flicking: old school (no comply, boneless, no comply 180).
     pub const FOOT_OFF: u32 = 1 << 8;
+    /// Press: step off the board and walk; press again: back on it.
+    pub const OFF_BOARD: u32 = 1 << 9;
 }
 
 pub mod flags {
@@ -51,6 +53,8 @@ pub enum Mode {
     Bail,
     /// Rolling along a wall.
     Wallride,
+    /// Off the board, on foot.
+    Walk,
 }
 
 impl Mode {
@@ -62,6 +66,7 @@ impl Mode {
             4 => Mode::Grind,
             5 => Mode::Bail,
             6 => Mode::Wallride,
+            7 => Mode::Walk,
             _ => Mode::Ride,
         }
     }

@@ -101,6 +101,7 @@ float smooth01(float t)
 }
 
 bool ground_mode(sk8_mode m) { return m == SK8_MODE_RIDE || m == SK8_MODE_MANUAL || m == SK8_MODE_SLIDE; }
+bool on_foot(sk8_mode m) { return m == SK8_MODE_WALK; }
 
 } // namespace
 
@@ -213,7 +214,20 @@ void Rider::step(World &w, const sk8_input &in)
 
 	since_land_ += kDt;
 	since_wall_ += kDt;
+	// off the board / back on: a press of the button
+	bool off_press = (in.buttons & SK8_OFF_BOARD) && !(last_buttons_ & SK8_OFF_BOARD);
 	last_buttons_ = in.buttons;
+	if (off_press && mode_ == SK8_MODE_RIDE && takeoff_trick_ < 0) {
+		commit_pending();
+		mode_ = SK8_MODE_WALK;
+		push_time_ = -1;
+		vel_ *= 0.55f; // steps off running it out
+		emit(SK8_EV_LAND, "off board", 0, 0, surface_);
+	} else if (off_press && mode_ == SK8_MODE_WALK) {
+		mode_ = SK8_MODE_RIDE; // drops the board and steps on
+		fakie_ = false;
+		emit(SK8_EV_LAND, "on board", 0, 0, surface_);
+	}
 	last_flick_[0] = in.flick[0];
 	last_flick_[1] = in.flick[1];
 	last_steer_[0] = in.steer[0];
@@ -247,6 +261,7 @@ void Rider::step(World &w, const sk8_input &in)
 	case SK8_MODE_GRIND: grind(w, in, f); break;
 	case SK8_MODE_BAIL: bailed(w); break;
 	case SK8_MODE_WALLRIDE: wallride(w, in, f); break;
+	case SK8_MODE_WALK: walk(w, in); break;
 	}
 	float target = mode_ == SK8_MODE_SLIDE ? 1.0f : 0.0f;
 	slide_amount_ = approach(slide_amount_, target, 6 * kDt);
@@ -790,6 +805,35 @@ void Rider::land(const Hit &h)
 	grab_style_ = 0;
 	mode_ = SK8_MODE_RIDE;
 	trick_.clear();
+}
+
+// ---------------------------------------------------------------- walk
+
+namespace {
+constexpr float kWalkSpeed = 1.45f, kRunSpeed = 3.7f, kWalkTurn = 2.6f; // m/s, m/s, rad/s
+} // namespace
+
+// On foot: the left stick turns (x) and walks or runs (y, past 0.8 a run), the board in the hand.
+void Rider::walk(World &w, const sk8_input &in)
+{
+	float x = clampf(in.steer[0], -1, 1), y = clampf(in.steer[1], -1, 1);
+	fwd_ = unit(flatten(rotate(fwd_, up_, -x * kWalkTurn * kDt), up_), fwd_);
+	float want = std::fabs(y) > 0.8f ? kRunSpeed : kWalkSpeed * std::fabs(y) / 0.8f;
+	V3 target = fwd_ * (want * (y < 0 ? -0.5f : 1.0f));
+	if (std::fabs(y) < 0.15f)
+		target = V3{};
+	V3 flat = flatten(vel_, up_);
+	vel_ = flat + (target - flat) * std::min(1.0f, 7.0f * kDt);
+	vel_ += flatten(V3{0, -p[Gravity], 0}, up_) * kDt * 0.1f;
+	move_on_ground(w, vel_ * kDt);
+	if (mode_ != SK8_MODE_WALK)
+		return;
+	follow_ground(w);
+	if (mode_ != SK8_MODE_WALK) {
+		// stepped off an edge: dropping (lands back on the board)
+		return;
+	}
+	up_ = kUp;
 }
 
 // ---------------------------------------------------------------- wallride
