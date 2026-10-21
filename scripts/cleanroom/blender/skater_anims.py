@@ -318,9 +318,9 @@ STAND = walk_frame(0.25, 0.0, 0.0, 2.0, 0.0)
 FOOTPLANT = P(hips=(-0.02, 0.03, 0.72), hips_rot=(14, 0, 4), spine=(18, 0, 10), head=(-16, 0, 50),
               lf=foot(0.04, 0.0, -0.1, yaw=FRONT_YAW), rf=foot(-0.26, 0.06, 0.3, yaw=BACK_YAW, pitch=20),
               lh=(0.42, -0.24, 0.96), rh=(-0.2, -0.06, 0.42), knee_out=0.5)
-HANDPLANT = P(hips=(-0.04, 0.12, 1.02), hips_rot=(62, 0, 6), spine=(30, 0, 8), head=(10, 0, 20),
-              lf=foot(0.08, 0.1, 0.92, yaw=FRONT_YAW, pitch=-30), rf=foot(-0.2, 0.12, 0.98, yaw=BACK_YAW, pitch=-30),
-              lh=(0.1, -0.06, -0.04), rh=(-0.12, 0.02, 0.92), knee_out=0.35)
+HANDPLANT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
+              lf=foot(0.12, 0.08, 1.48, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.16, 0.1, 1.42, yaw=BACK_YAW, pitch=-70),
+              lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.2)
 
 
 def flip_part(open_pose, k):

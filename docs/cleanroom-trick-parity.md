@@ -24,7 +24,8 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   back off it
 - Grinds by the left stick at the catch (along the rail): 50-50, 5-0, nosegrind, crooked,
   overcrook, smith, feeble; slides (across it): boardslide, noseslide, tailslide, lipslide,
-  noseblunt, bluntslide; the board turns back to the line of travel coming off a slide
+  noseblunt, bluntslide; the board turns back to the line of travel coming off a slide;
+  darkslide (a kickflip-type caught across a rail half way round: upside down on it)
 - Powerslide; revert (X held into a landing, rolling away fakie)
 - Wallride (an ollie glancing into a wall rolls along it) and wallie (flick on the wall to pop
   off it); a Wall piece in the park builder and the desktop park
@@ -39,8 +40,7 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 
 ## Next (in order)
 1. Salad, suski, willy grinds
-4. Handplant pose needs a real invert (body upside down over the hand)
-5. Darkslide, primo, casper, body varials; held shove-its (their flick ends at the centre)
+5. Primo, casper, body varials; held shove-its (their flick ends at the centre)
 6. Off-board: caveman (jump on from running), jumping on foot
 
 ## Open polish

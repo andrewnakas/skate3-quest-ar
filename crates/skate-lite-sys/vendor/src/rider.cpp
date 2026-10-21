@@ -55,6 +55,7 @@ const GrindDef kGrindDefs[] = {
 	{"Bluntslide", 110, -0.38f, 28, 0, 0},
 	{"Footplant", 130, 0, 0, 0, 0},
 	{"Handplant", 240, 0, 0, 0, 0},
+	{"Darkslide", 300, 0, 0, 0, 180},
 };
 
 int grind_kind_for(bool slide, float x, float y, bool crouched)
@@ -957,7 +958,15 @@ bool Rider::try_grind(World &w)
 	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0;
 	if (std::fabs(vt) < 0.8f && !plant)
 		return false;
-	if (flip_ >= 0 && flip_frac() < p[FlipLenience] && !never_bail()) {
+	// half way round a flip, across the rail: it lands upside down on it (a darkslide)
+	bool dark = false;
+	if (flip_ >= 0 && trick_table()[size_t(flip_)].roll != 0 && flip_frac() > 0.3f && flip_frac() < 0.75f) {
+		V3 tt = s.tangent;
+		float aa = angle_between(unit(flatten(fwd_, kUp), fwd_), unit(flatten(tt, kUp), tt));
+		aa = std::min(aa, kPi - aa);
+		dark = aa > 55 * kDeg;
+	}
+	if (!dark && flip_ >= 0 && flip_frac() < p[FlipLenience] && !never_bail()) {
 		bail("Under-flipped");
 		return true;
 	}
@@ -976,6 +985,8 @@ bool Rider::try_grind(World &w)
 		a = kPi - a;
 	bool slide = a > 55 * kDeg;
 	grind_kind_ = grind_kind_for(slide, last_steer_[0], last_steer_[1], crouch_ > 0.5f);
+	if (dark)
+		grind_kind_ = SK8_GRIND_DARKSLIDE;
 	if (plant) {
 		grind_kind_ = (last_buttons_ & (SK8_GRAB_LEFT | SK8_GRAB_RIGHT)) ? SK8_GRIND_HANDPLANT : SK8_GRIND_FOOTPLANT;
 		plant_in_ = unit(flatten(vel_, kUp), fwd_);
@@ -996,7 +1007,7 @@ bool Rider::try_grind(World &w)
 void Rider::leave_grind(V3 velocity, bool popped)
 {
 	add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
-	unslide_ = grind_kind_ == SK8_GRIND_BOARDSLIDE ||
+	unslide_ = grind_kind_ == SK8_GRIND_BOARDSLIDE || grind_kind_ == SK8_GRIND_DARKSLIDE ||
 		(grind_kind_ >= SK8_GRIND_NOSESLIDE && grind_kind_ <= SK8_GRIND_BLUNTSLIDE);
 	emit(SK8_EV_GRIND_END, grind_name_.c_str());
 	mode_ = SK8_MODE_AIR;

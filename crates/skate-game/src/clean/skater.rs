@@ -358,7 +358,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
         }
         Mode::Grind if s.grind_kind == 15 => set(Clip::Footplant, 1.0, c.grind_time),
         Mode::Grind if s.grind_kind == 16 => set(Clip::Handplant, 1.0, c.grind_time),
-        Mode::Grind if s.grind_kind == 2 => set(Clip::Boardslide, 1.0, c.idle),
+        Mode::Grind if s.grind_kind == 2 || s.grind_kind == 17 => set(Clip::Boardslide, 1.0, c.idle),
         Mode::Grind if s.grind_kind == 4 => set(Clip::Grind50, 1.0, c.idle),
         // sk8_grind_kind 5..14, in order
         Mode::Grind if (5..=14).contains(&s.grind_kind) => {

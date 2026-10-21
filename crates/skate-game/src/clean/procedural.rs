@@ -474,6 +474,9 @@ pub(crate) fn layer(
         let rel = rider_rot.inverse() * deck;
         let nose = rel * Vec3::Z;
         let rel = if nose.z < 0.0 { rel * Quat::from_rotation_y(std::f32::consts::PI) } else { rel };
+        // upside down (a darkslide): the feet stand on its underside, which faces up
+        let up_side = (rider_rot * rel * Vec3::Y).dot(up);
+        let rel = if up_side < 0.0 { rel * Quat::from_rotation_z(std::f32::consts::PI) } else { rel };
         Transform::from_translation(at).with_rotation(rider_rot * rel)
     };
     let pusher = if s.push_mongo { 0 } else { 1 };
