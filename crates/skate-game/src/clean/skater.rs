@@ -89,9 +89,11 @@ enum Clip {
     Run,
     Footplant,
     Handplant,
+    Primo,
+    Casper,
 }
 
-const CLIPS: usize = 57;
+const CLIPS: usize = 59;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -102,10 +104,12 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_push_start_mongo", "sk8_push_end_mongo", "sk8_grab_christ", "sk8_grab_method", "sk8_grab_rocket",
     "sk8_pop_no_comply", "sk8_pop_boneless",
     "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt", "sk8_wallride",
-    "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant",
+    "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant", "sk8_primo", "sk8_casper",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
-const LOOPED: [Clip; 24] = [
+const LOOPED: [Clip; 26] = [
+    Clip::Primo,
+    Clip::Casper,
     Clip::Wallride,
     Clip::Stand,
     Clip::Walk,
@@ -308,6 +312,7 @@ fn blend_time(clip: Clip) -> f32 {
         // stepping off / walking speeds blend over a moment
         Clip::Stand | Clip::Walk | Clip::Run => 0.18,
         Clip::Footplant | Clip::Handplant => 0.08,
+        Clip::Primo | Clip::Casper => 0.12,
         Clip::GrindNose | Clip::GrindCrooked | Clip::GrindOvercrook | Clip::GrindSmith | Clip::GrindFeeble | Clip::SlideNose | Clip::SlideTail | Clip::SlideLip | Clip::SlideNoseblunt | Clip::SlideBlunt => 0.1,
         Clip::GrabIndy
         | Clip::GrabCrail
@@ -366,6 +371,8 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             set(KINDS[s.grind_kind as usize - 5], 1.0, c.idle)
         }
         Mode::Grind => set(Clip::Grind, 1.0, c.idle),
+        Mode::Manual if s.manual_style == 1 => set(Clip::Primo, 1.0, c.idle),
+        Mode::Manual if s.manual_style == 2 => set(Clip::Casper, 1.0, c.idle),
         Mode::Manual if s.manual_dir < 0 => set(Clip::ManualNose, 1.0, c.idle),
         Mode::Manual => set(Clip::Manual, 1.0, c.idle),
         Mode::Slide => set(Clip::Powerslide, 1.0, c.idle),
@@ -563,7 +570,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::FlipHard, Clip::FlipTre, Clip::Grind50, Clip::StepOff, Clip::PushMongo, Clip::StepOffMongo, Clip::StepOnMongo,
     Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket, Clip::PopNoComply, Clip::PopBoneless,
     Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
-    Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant,
+    Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

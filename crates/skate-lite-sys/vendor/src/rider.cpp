@@ -295,7 +295,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			int trick = takeoff_trick_;
 			takeoff_trick_ = -1;
 			if (mode_ == SK8_MODE_MANUAL) {
-				add_trick(manual_dir_ > 0 ? "Manual" : "Nose Manual", 50 + unsigned(manual_time_ * p[ManualRate]));
+				add_trick(manual_name(), 50 + unsigned(manual_time_ * p[ManualRate]));
 				manual_dir_ = 0;
 			}
 			const TrickDef &def = trick_table()[size_t(trick)];
@@ -309,7 +309,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	}
 	if (f.trick >= 0) {
 		if (mode_ == SK8_MODE_MANUAL) {
-			add_trick(manual_dir_ > 0 ? "Manual" : "Nose Manual",
+			add_trick(manual_name(),
 				50 + unsigned(manual_time_ * p[ManualRate]));
 			manual_dir_ = 0;
 		}
@@ -371,6 +371,8 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	if (mode_ == SK8_MODE_RIDE && want_manual && !manual_lock_ && speed > 0.6f) {
 		mode_ = SK8_MODE_MANUAL;
 		manual_dir_ = stick != 0 ? stick : (in.buttons & SK8_MANUAL) ? 1 : -1;
+		// with the foot-off button: the board flipped onto its side (primo) or upside down (casper)
+		manual_style_ = (in.buttons & SK8_FOOT_OFF) ? (manual_dir_ > 0 ? 1 : 2) : 0;
 		manual_time_ = 0;
 		balance_ = 0;
 	}
@@ -384,7 +386,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		if (stick == manual_dir_)
 			lean += (0.5f - stick_manual_depth_) * 0.65f;
 		balance_ += (drift - lean * p[ManualCorrect] * float(manual_dir_)) * kDt;
-		trick_ = manual_dir_ > 0 ? "Manual" : "Nose Manual";
+		trick_ = manual_name();
 		if (!want_manual || std::fabs(balance_) > 1.0f || speed < 0.3f) {
 			float share = std::fabs(balance_) > 1.0f ? 0.5f : 1.0f;
 			add_trick(trick_, unsigned((50 + manual_time_ * p[ManualRate]) * share));
@@ -450,6 +452,8 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		dec += p[Brake] * kDt;
 	if (mode_ == SK8_MODE_SLIDE)
 		dec += p[SlideDrag] * kDt;
+	if (mode_ == SK8_MODE_MANUAL && manual_style_ == 1)
+		dec += 2.7f * kDt; // a primo scrapes along on the board's edge
 	vel_ = speed > dec ? vel_ * ((speed - dec) / speed) : V3{};
 
 	// a revert turns the board half way round in kRevertTime, easing in and out; the motion carries
@@ -555,7 +559,7 @@ void Rider::follow_ground(World &w)
 	}
 	// rolled off an edge
 	if (mode_ == SK8_MODE_MANUAL) {
-		add_trick(manual_dir_ > 0 ? "Manual" : "Nose Manual", 50 + unsigned(manual_time_ * p[ManualRate]));
+		add_trick(manual_name(), 50 + unsigned(manual_time_ * p[ManualRate]));
 		manual_dir_ = 0;
 		balance_ = 0;
 	}
@@ -1196,7 +1200,11 @@ void Rider::state(sk8_state &s) const
 	}
 	if (slide_amount_ > 0)
 		board = board * Q::axis_angle({0, 1, 0}, (lean_ >= 0 ? -1.0f : 1.0f) * slide_amount_ * 1.4f);
-	if (mode_ == SK8_MODE_MANUAL)
+	if (mode_ == SK8_MODE_MANUAL && manual_style_ == 1)
+		board = board * Q::axis_angle({0, 0, 1}, kPi / 2); // primo: on its side, heel edge up
+	else if (mode_ == SK8_MODE_MANUAL && manual_style_ == 2)
+		board = board * Q::axis_angle({0, 0, 1}, kPi) * Q::axis_angle({1, 0, 0}, 0.38f); // casper: upside down, tail up
+	else if (mode_ == SK8_MODE_MANUAL)
 		board = board * Q::axis_angle({1, 0, 0}, -0.21f * float(manual_dir_));
 	if (mode_ == SK8_MODE_AIR && varial_ != 0)
 		board = board * Q::axis_angle({0, 1, 0}, -varial_); // the board stays while the body turns
@@ -1230,6 +1238,7 @@ void Rider::state(sk8_state &s) const
 	s.combo_count = unsigned(combo_names_.size());
 	s.score = score_;
 	s.manual_dir = mode_ == SK8_MODE_MANUAL ? manual_dir_ : 0;
+	s.manual_style = mode_ == SK8_MODE_MANUAL ? manual_style_ : 0;
 }
 
 } // namespace sk8

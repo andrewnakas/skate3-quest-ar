@@ -104,6 +104,11 @@ private:
 
 	// manual / grind
 	int manual_dir_ = 0;
+	int manual_style_ = 0; // 0 a manual, 1 primo (board on its side), 2 casper (board upside down)
+	const char *manual_name() const
+	{
+		return manual_style_ == 1 ? "Primo" : manual_style_ == 2 ? "Casper" : manual_dir_ > 0 ? "Manual" : "Nose Manual";
+	}
 	float manual_time_ = 0;
 	float balance_ = 0;
 	int rail_ = -1, seg_ = 0;

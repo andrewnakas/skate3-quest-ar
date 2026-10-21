@@ -323,6 +323,17 @@ HANDPLANT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), h
               lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.2)
 
 
+# Primo: standing tall on the board's upturned edge (it's on its side), arms out to balance.
+# Casper: the board upside down with its tail up, the back foot on the raised tail, the front on
+# the underside by the front truck, weight back.
+PRIMO = P(hips=(0.0, 0.0, 0.94), hips_rot=(6, 0, 0), spine=(8, 0, 8), head=(-14, 0, 52),
+          lf=foot(FRONT_X - 0.04, -FOOT_Y, 0.1, yaw=FRONT_YAW), rf=foot(BACK_X + 0.06, -FOOT_Y, 0.1, yaw=BACK_YAW),
+          lh=(0.36, -0.14, 1.0), rh=(-0.36, -0.1, 0.98), knee_out=0.3)
+CASPER = P(hips=(-0.08, 0.02, 0.8), hips_rot=(10, 0, 4), spine=(14, 0, 10), head=(-14, 0, 55),
+           lf=foot(FRONT_X - 0.06, 0.0, 0.0, yaw=FRONT_YAW), rf=foot(BACK_X + 0.04, 0.0, 0.13, yaw=BACK_YAW, pitch=-12),
+           lh=(0.38, -0.16, 0.98), rh=(-0.38, -0.1, 0.96), knee_out=0.45)
+
+
 def flip_part(open_pose, k):
     """Part-way from the pop's extension into the flip's open pose."""
     return mix(POP_TOP, open_pose, k)
@@ -506,6 +517,8 @@ CLIPS = {
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
     "footplant": (False, [(0.0, AIR_TUCK), (0.14, FOOTPLANT), (0.7, idle(FOOTPLANT, 0.25, 0.01, 0.0))]),
     "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT), (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
+    "primo": (True, loop(lambda t: idle(PRIMO, t, 0.016, 0.05), IDLE_LEN)),
+    "casper": (True, loop(lambda t: idle(CASPER, t, 0.012, 0.04), IDLE_LEN)),
     "stand": (True, loop(lambda t: idle(STAND, t, 0.006, 0.02), IDLE_LEN)),
     "walk": (True, [(i / 16 * 1.05, walk_frame(i / 16, 0.26, 0.09, 4.0, 0.16)) for i in range(17)]),
     "run": (True, [(i / 16 * 0.7, walk_frame(i / 16, 0.42, 0.17, 12.0, 0.26)) for i in range(17)]),

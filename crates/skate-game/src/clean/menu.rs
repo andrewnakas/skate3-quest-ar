@@ -310,6 +310,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("Right stick half down/up", "manual / nose manual (depth balances)"),
             pair("Left stick click + flick", "old school: no comply, boneless, 180s"),
             pair("Left stick click in the air", "+ left stick: body varial"),
+            pair("Left stick click + half down/up", "primo / casper"),
             pair("A (hold)", "push"),
             pair("X (hold)", "mongo push"),
             pair("B", "brake"),

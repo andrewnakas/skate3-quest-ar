@@ -497,7 +497,9 @@ pub(crate) fn layer(
         let mut local = rest_inv.transform_point3(ankle);
         let wanted = match s.mode {
             Mode::Bail | Mode::Walk => false,
-            Mode::Grind if s.grind_kind >= 15 => false,
+            Mode::Grind if s.grind_kind >= 15 && s.grind_kind != 17 => false,
+            // primo / casper: on the board's edge or underside, not its grip
+            Mode::Manual if s.manual_style != 0 => false,
             // The board is in the hands: the feet are off it.
             Mode::Air if motion.held > 0.5 || hippie => false,
             // the board turned under the body (a body varial): the feet are off it

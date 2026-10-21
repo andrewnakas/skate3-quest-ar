@@ -387,6 +387,20 @@ fn demo_varial(t: f32, s: &skate_lite_sys::State) -> Input {
     i
 }
 
+/// `SK8_DEMO=primo`: the foot-off button with the right stick part-way down (a primo), then up
+/// (a casper).
+const PRIMO_EACH: f32 = 3.0;
+fn demo_primo(t: f32) -> Input {
+    let d = t % PRIMO_EACH;
+    let casper = (t / PRIMO_EACH) as usize % 2 == 1;
+    let mut i = Input::default();
+    if (0.3..2.2).contains(&d) {
+        i.buttons |= buttons::FOOT_OFF;
+        i.flick = [0.0, if casper { 0.6 } else { -0.6 }];
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -457,6 +471,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("walk") => Some((t / WALK_EACH) as usize),
         Ok("plants") => Some((t / PLANT_EACH) as usize),
         Ok("varial") => Some((t / VARIAL_EACH) as usize),
+        Ok("primo") => Some((t / PRIMO_EACH) as usize),
         _ => None,
     }
 }
@@ -533,6 +548,7 @@ pub(crate) fn read_desktop(
             Ok("walk") => demo_walk(*t),
             Ok("plants") => demo_plants(*t, &sim.current, sim.demo_rail),
             Ok("varial") => demo_varial(*t, &sim.current),
+            Ok("primo") => demo_primo(*t),
             _ => demo_input(*t),
         };
         return;
