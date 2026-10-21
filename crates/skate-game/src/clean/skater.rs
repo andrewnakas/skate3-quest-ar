@@ -369,7 +369,9 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
                     15 => Clip::GrabRocket,
                     n => CLIP_ORDER[GRAB_FIRST + n - 1],
                 };
-                set(clip, 1.0, c.since_grab);
+                // from its first frame once it takes over at the pop's top (pressed earlier, it
+                // would come in half way through its reach)
+                set(clip, 1.0, c.since_grab.min((c.since_pop - POP_TOP_AT).max(0.0)));
             } else {
                 // Tuck, hold, then reach the legs down for the landing.
                 set(Clip::Air, 1.0, c.since_pop - pop_len);
@@ -458,6 +460,15 @@ pub(crate) fn animate(
     if matches!(CLIP_ORDER[lead], Clip::Pop | Clip::PopNollie) && pushing > 0.05 {
         smooth = smooth.max(0.12);
     }
+    // Landing before a flip's clip has finished (a held flick's last turn): the feet come down out
+    // of the flip pose over a moment, not in the landing's quick snap.
+    let flipping: f32 = [Clip::FlipKick, Clip::FlipHeel, Clip::FlipShuv, Clip::FlipHard, Clip::FlipTre]
+        .iter()
+        .map(|c| avatar.weights[*c as usize])
+        .sum();
+    if CLIP_ORDER[lead] == Clip::Land && flipping > 0.3 {
+        smooth = smooth.max(0.1);
+    }
     // A respawn is a cut: no standing up out of the bail in front of the camera.
     if sim.events.iter().any(|e| e.kind == EventKind::Respawn) {
         for i in 0..CLIPS {
@@ -466,7 +477,13 @@ pub(crate) fn animate(
         }
     }
     for i in 0..CLIPS {
-        let (w, v) = smooth_cd(avatar.weights[i], avatar.weight_vel[i], goals[i].0, smooth, dt);
+        let (mut w, mut v) = smooth_cd(avatar.weights[i], avatar.weight_vel[i], goals[i].0, smooth, dt);
+        // A clip on its way out that's nearly gone leaves quickly: three clips at once (a push
+        // still fading under a pop and a grab) blended an arm the long way round.
+        if goals[i].0 == 0.0 && w < 0.15 && dt > 0.0 {
+            w *= (-dt / 0.02).exp();
+            v = 0.0;
+        }
         avatar.weights[i] = w.clamp(0.0, 1.0);
         avatar.weight_vel[i] = v;
         if let Some(time) = goals[i].1 {

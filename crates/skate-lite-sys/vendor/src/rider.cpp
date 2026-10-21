@@ -231,6 +231,8 @@ void Rider::step(World &w, const sk8_input &in)
 		stick_manual_depth_ = clampf((r - kManualIn) / (kRimIn - kManualIn), 0, 1);
 	}
 
+	if (!ground_mode(mode_))
+		takeoff_trick_ = -1;
 	// a stroke cut short (a pop, a grind, a bail) is over: it doesn't pick up again on landing
 	if (mode_ != SK8_MODE_RIDE && push_time_ >= 0) {
 		push_time_ = -1;
@@ -254,6 +256,25 @@ void Rider::step(World &w, const sk8_input &in)
 
 void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 {
+	if (takeoff_trick_ >= 0) {
+		takeoff_time_ += kDt;
+		crouch_ = takeoff_crouch_; // the pop keeps the crouch the flick had
+		if (takeoff_time_ >= p[PopWait]) {
+			int trick = takeoff_trick_;
+			takeoff_trick_ = -1;
+			if (mode_ == SK8_MODE_MANUAL) {
+				add_trick(manual_dir_ > 0 ? "Manual" : "Nose Manual", 50 + unsigned(manual_time_ * p[ManualRate]));
+				manual_dir_ = 0;
+			}
+			const TrickDef &def = trick_table()[size_t(trick)];
+			pop(def, takeoff_share_);
+			if (flip_ < 0 && !def.flat)
+				start_flip(trick);
+			else if (def.flat)
+				pending_.push_back({def.name, def.points});
+			return;
+		}
+	}
 	if (f.trick >= 0) {
 		if (mode_ == SK8_MODE_MANUAL) {
 			add_trick(manual_dir_ > 0 ? "Manual" : "Nose Manual",
@@ -268,6 +289,14 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		if (old >= 0) {
 			trick = old;
 			share = old_pop;
+		}
+		if (p[PopWait] > 0 && takeoff_trick_ < 0) {
+			// the board loads up before it leaves the ground (the takeoff), then pops
+			takeoff_trick_ = trick;
+			takeoff_share_ = share;
+			takeoff_time_ = 0;
+			takeoff_crouch_ = crouch_;
+			return;
 		}
 		const TrickDef &def = trick_table()[size_t(trick)];
 		pop(def, share);
@@ -511,6 +540,8 @@ void Rider::pop(const TrickDef &def, float share)
 	float charge = std::max(crouch_, 0.35f);
 	float v = (p[PopLow] + (p[PopHigh] - p[PopLow]) * charge) * share;
 	pop_y_ = pos_.y;
+	push_time_ = -1; // a stroke ends at the pop
+	push_cooldown_ = 0;
 	vel_ += up_ * v;
 	pos_ += up_ * 0.02f;
 	mode_ = SK8_MODE_AIR;
@@ -528,7 +559,8 @@ void Rider::start_flip(int trick)
 	flip_ = trick;
 	flip_time_ = 0;
 	float turns = std::max({std::fabs(def.roll), std::fabs(def.shove) * 1.2f, std::fabs(def.wrap) * 1.1f});
-	flip_duration_ = p[FlipBase] + p[FlipPerRev] * turns;
+	flip_angle_ = flip_rate_ = 0;
+	flip_turns_ = flip_base_turns_ = std::max(turns, 0.3f);
 	pending_.push_back({def.name, def.points});
 	trick_ = def.name;
 	flip_mult_ = 1;
@@ -572,21 +604,14 @@ void Rider::extend_flip()
 		return;
 	int now = int(std::lround(main * flip_mult_));
 	float mult = float(now + 1) / main;
-	// keep the angle reached: mult' * ease(t / d') == mult * ease(t / d)
-	float t = flip_time_, target = flip_mult_ * smooth01(t / flip_duration_) / mult;
-	float lo = 0, hi = std::min(1.0f, t / flip_duration_);
-	for (int i = 0; i < 30; i++) {
-		float mid = (lo + hi) * 0.5f;
-		(smooth01(mid) < target ? lo : hi) = mid;
-	}
-	float x = std::max(lo, 1e-3f);
-	// only if it can finish before coming back down to where it left from (a held flick in a
+	float turns = flip_base_turns_ * mult;
+	// only if it can get round before coming back down to where it left from (a held flick in a
 	// small air stays at what fits instead of under-flipping)
 	float h = std::max(pos_.y - pop_y_, 0.0f), g = p[Gravity];
 	float to_land = (vel_.y + std::sqrt(std::max(vel_.y * vel_.y + 2 * g * h, 0.0f))) / g;
-	if (t / x * p[FlipLenience] - t > to_land)
+	if ((turns * p[FlipLenience] - flip_angle_) * p[FlipPerRev] > to_land)
 		return;
-	flip_duration_ = t / x;
+	flip_turns_ = turns;
 	flip_mult_ = mult;
 	flip_extra_++;
 	flip_name_ = counted(def.name, halves, now + 1);
@@ -605,8 +630,9 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	if (sp > 0)
 		vel_ *= std::max(0.0f, 1 - p[AirDrag] * sp * kDt);
 
-	// spin about the stance axis
-	float target = -clampf(in.steer[0], -1, 1) * p[SpinRate];
+	// spin about the stance axis; near a rail the stick is picking the grind instead
+	bool by_rail = !w.rails.empty() && w.nearest_rail(pos_, 1.0f).rail >= 0;
+	float target = by_rail ? 0.0f : -clampf(in.steer[0], -1, 1) * p[SpinRate];
 	spin_speed_ = approach(spin_speed_, target, p[SpinEase] * p[SpinRate] * kDt);
 	float a = spin_speed_ * kDt;
 	fwd_ = unit(rotate(fwd_, up_, a), fwd_);
@@ -644,10 +670,19 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		start_flip(f.trick);
 	if (flip_ >= 0) {
 		flip_time_ += kDt;
+		// spin up, cruise, brake to stop on the last turn
+		float cruise = 1.0f / std::max(p[FlipPerRev], 0.05f);
+		float accel = cruise / std::max(p[FlipBase], 0.01f);
+		float left = flip_turns_ - flip_angle_;
+		float brake = std::sqrt(std::max(2 * accel * left, 0.0f));
+		flip_rate_ = std::min({flip_rate_ + accel * kDt, cruise, std::max(brake, 0.4f)});
+		flip_angle_ = std::min(flip_turns_, flip_angle_ + flip_rate_ * kDt);
+		if (flip_turns_ - flip_angle_ < 0.003f)
+			flip_angle_ = flip_turns_;
 		float r = std::sqrt(last_flick_[0] * last_flick_[0] + last_flick_[1] * last_flick_[1]);
 		bool held = r >= kRimIn &&
 			(last_flick_[0] * flip_dir_[0] + last_flick_[1] * flip_dir_[1]) / r > 0.87f;
-		if (held && flip_extra_ < 3 && flip_time_ / flip_duration_ > 0.55f)
+		if (held && flip_extra_ < 3 && flip_turns_ - flip_angle_ < 0.5f)
 			extend_flip();
 	}
 
@@ -693,7 +728,7 @@ void Rider::land(const Hit &h)
 	since_land_ = 0;
 	V3 n = h.normal;
 	float tilt = angle_between(up_, n);
-	bool flip_done = flip_ < 0 || flip_time_ / flip_duration_ >= p[FlipLenience];
+	bool flip_done = flip_ < 0 || flip_frac() >= p[FlipLenience];
 	V3 vflat = flatten(vel_, n);
 	V3 fflat = unit(flatten(fwd_, n), fwd_);
 	float side = 0;
@@ -729,6 +764,9 @@ void Rider::land(const Hit &h)
 	bool clean = tilt < p[LandClean] * kDeg && side < 20 * kDeg;
 
 	int halves = int(std::lround(std::fabs(spin_total_) / kPi));
+	// landing out of a body spin costs speed (each half turn more)
+	if (halves > 0)
+		vel_ *= std::max(0.5f, 1.0f - 0.2f * float(halves));
 	if (halves > 0) {
 		char name[24];
 		std::snprintf(name, sizeof name, "%d Spin", halves * 180);
@@ -770,7 +808,7 @@ bool Rider::try_wallride(const Hit &h)
 		n = -n;
 	V3 along = flatten(vel_, n);
 	float into = -dot(vel_, n);
-	bool flip_done = flip_ < 0 || flip_time_ / flip_duration_ >= p[FlipLenience];
+	bool flip_done = flip_ < 0 || flip_frac() >= p[FlipLenience];
 	// a glancing hit at speed rolls on along it; head-on is a slam
 	if (len(along) < 3.0f || into > len(along) * 1.1f || !flip_done || grab_)
 		return false;
@@ -858,7 +896,7 @@ bool Rider::try_grind(World &w)
 	float vt = dot(vel_, s.tangent);
 	if (std::fabs(vt) < 0.8f)
 		return false;
-	if (flip_ >= 0 && flip_time_ / flip_duration_ < p[FlipLenience] && !never_bail()) {
+	if (flip_ >= 0 && flip_frac() < p[FlipLenience] && !never_bail()) {
 		bail("Under-flipped");
 		return true;
 	}
@@ -1045,7 +1083,7 @@ void Rider::state(sk8_state &s) const
 
 	if (flip_ >= 0) {
 		const TrickDef &def = trick_table()[size_t(flip_)];
-		float e = smooth01(flip_time_ / flip_duration_);
+		float e = flip_frac();
 		float m = flip_mult_;
 		board = board * Q::axis_angle({0, 1, 0}, -def.shove * m * 2 * kPi * e) *
 			Q::axis_angle({0, 0, 1}, def.roll * m * 2 * kPi * e) * Q::axis_angle({1, 0, 0}, -def.wrap * m * 2 * kPi * e);
@@ -1075,7 +1113,7 @@ void Rider::state(sk8_state &s) const
 	s.revert = revert_time_ >= 0 ? clampf(revert_time_ / 0.34f, 0, 1) : -1;
 	s.grab = grab_;
 	s.grab_style = grab_style_;
-	s.flip_progress = flip_ >= 0 ? clampf(flip_time_ / flip_duration_, 0, 1) : -1;
+	s.flip_progress = flip_ >= 0 ? flip_frac() : -1;
 	s.balance = clampf(balance_, -1, 1);
 	s.air_time = air_time_;
 	s.bail_time = mode_ == SK8_MODE_BAIL ? bail_time_ : -1;

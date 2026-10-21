@@ -10,7 +10,7 @@ Runtime (crates/skate-game/src/clean/skater.rs) blends these clips from the engi
 import math
 
 import bpy
-from mathutils import Euler, Matrix, Vector
+from mathutils import Euler, Matrix, Quaternion, Vector
 
 FPS = 30
 DECK_TOP_TO_GROUND = -0.105  # the ground under the wheels, in the rider frame
@@ -114,7 +114,7 @@ GRAB_POSES = {
     # back hand
     "indy": grab_pose(rh=(0.0, -0.12, D)),
     "crail": grab_pose(rh=(0.38, -0.1, D + 0.02), spine=(44, 0, 22), head=(-18, 0, 60),
-                       lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK + 0.03, yaw=15), lh=(-0.4, -0.22, 1.0)),
+                       lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK + 0.03, yaw=15), lh=(0.46, -0.26, 0.98)),  # free hand out front
     "tail": grab_pose(rh=(-0.42, -0.04, D - 0.01), hips_rot=(28, 0, 0), spine=(34, 0, -18), head=(-14, 0, 25),
                       lh=(0.52, -0.28, 0.98)),
     "stalefish": grab_pose(rh=(-0.08, 0.13, D), hips_rot=(30, -8, 0), spine=(32, 0, -12), head=(-14, 0, 40),
@@ -631,9 +631,10 @@ def relaxed(pose, above=-9.0):
             new = tuple(p + (q - p) * hang for p, q in zip(pulled, low))
         else:
             new = (sh[0] + d[0] * k, sh[1] + d[1] * k, sh[2] + d[2] * k)
-        # Raised arms come down toward chest height: out for balance, not held up stiff.
-        lift = max(0.0, new[2] - (hz + 0.18))
-        new = (new[0] + fwd[0], new[1] + fwd[1], new[2] - 0.45 * lift)
+        # Raised arms come down toward chest height: out for balance, never held up high (the
+        # elbows and shoulders stay down).
+        lift = max(0.0, new[2] - (hz + 0.05))
+        new = (new[0] + fwd[0], new[1] + fwd[1], new[2] - 0.85 * lift)
         out[key] = tuple(o + (n - o) * weight for o, n in zip(pose[key], new))
     return out
 
@@ -702,6 +703,12 @@ def calibrate_poles(rig, c, rest_ankle):
         print(f"SKATER pole {mid}: {best[1]} deg (off by {math.degrees(best[0]):.1f})")
 
 
+# The elbow pole's direction last frame, per arm (reset at each clip's start).
+_PREV_SIDE = {}
+# Shoulders held down: the collars turn down this much (degrees), more with the arm raised.
+COLLAR_DOWN, COLLAR_DOWN_RAISED = 6.0, 9.0
+
+
 def apply_pose(rig, c, pose, rest_ankle):
     """Put the rig and its controls in `pose` (rider frame = rig object space)."""
     pb = rig.pose.bones
@@ -722,6 +729,13 @@ def apply_pose(rig, c, pose, rest_ankle):
         b = pb[name]
         b.rotation_mode = "XYZ"
         b.rotation_euler = (math.radians(bend * share), math.radians(twist * share), math.radians(side * share))
+    for side_name, hand, sign in (("L", "lh", 1.0), ("R", "rh", -1.0)):
+        b = pb[f"collar.{side_name}"]
+        b.rotation_mode = "QUATERNION"
+        rest = rig.data.bones[f"collar.{side_name}"].matrix_local.to_3x3()
+        axis = (rest.inverted() @ Vector((0.0, 1.0, 0.0))).normalized()
+        raised = min(1.0, max(0.0, (pose[hand][2] - pose["hips"][2] - 0.1) / 0.3))
+        b.rotation_quaternion = Quaternion(axis, sign * math.radians(COLLAR_DOWN + COLLAR_DOWN_RAISED * raised))
     nod, tilt, turn = pose["head"]
     for name, share in (("neck", 0.4), ("skull", 0.6)):
         b = pb[name]
@@ -753,7 +767,7 @@ def apply_pose(rig, c, pose, rest_ankle):
         sh = shoulder(pose, hx)
         yaw = math.radians(pose["hips_rot"][2])
         cy, sy = math.cos(yaw), math.sin(yaw)
-        want = (hx * 0.45, 0.55, -0.45)
+        want = (hx * 0.3, 0.35, -0.95)  # mostly down: elbows low
         want = (want[0] * cy - want[1] * sy, want[0] * sy + want[1] * cy, want[2])
         arm = [h - q for h, q in zip(pose[hand], sh)]
         n = math.sqrt(sum(a * a for a in arm)) or 1.0
@@ -772,6 +786,13 @@ def apply_pose(rig, c, pose, rest_ankle):
                 side = [a + b * k for a, b in zip(side, e)]
                 size = math.sqrt(sum(a * a for a in side))
         side = [a / (size or 1.0) for a in side]
+        # and as last frame's, as far as it can be: the bend turns smoothly frame to frame
+        prev = _PREV_SIDE.get(side_name)
+        if prev is not None:
+            side = perp([0.65 * p + 0.35 * q for p, q in zip(prev, side)])
+            size = math.sqrt(sum(a * a for a in side)) or 1.0
+            side = [a / size for a in side]
+        _PREV_SIDE[side_name] = side
         mid = [(h + q) * 0.5 for h, q in zip(pose[hand], sh)]
         c[f"epole_{side_name}"].location = tuple(m + 0.5 * d for m, d in zip(mid, side))
 
@@ -795,6 +816,7 @@ def bake_clips(rig):
     made = []
     for name, (looped, keys) in CLIPS.items():
         last = max(1, round(keys[-1][0] * FPS))
+        _PREV_SIDE.clear()
         for f in range(last + 1):
             frame = 1 + f
             scene.frame_set(frame)
@@ -810,6 +832,8 @@ def bake_clips(rig):
                 b = rig.pose.bones[bname]
                 b.keyframe_insert("location", frame=frame)
                 b.keyframe_insert("rotation_euler", frame=frame)
+            for bname in ("collar.L", "collar.R"):
+                rig.pose.bones[bname].keyframe_insert("rotation_quaternion", frame=frame)
         bpy.ops.object.mode_set(mode="POSE")
         bpy.ops.pose.select_all(action="SELECT")
         # Bake from a few frames early and drop them: the IK solver starts from its last solution

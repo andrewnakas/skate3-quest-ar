@@ -29,6 +29,7 @@ const sk8_param kTable[ParamCount] = {
 	{"push_top", "Top pushing speed, m/s", kSpeed, 1.0f, 30.0f, 8.35f, 0.05f},
 	{"push_lead", "Step off before the first push, s", kSpeed, 0.0f, 0.6f, 0.3f, 0.01f},
 	{"push_mongo", "Mongo push (0 off, 1 on)", kSpeed, 0.0f, 1.0f, 0.0f, 1.0f},
+	{"pop_wait", "Flick to takeoff, s", kSpeed, 0.0f, 0.4f, 0.125f, 0.005f},
 	{"roll_drag", "Rolling drag, m/s^2", kSpeed, 0.0f, 3.0f, 0.03f, 0.01f},
 	{"air_drag", "Air drag", kSpeed, 0.0f, 0.05f, 0.0006f, 0.0005f},
 	{"brake", "Brake, m/s^2", kSpeed, 0.0f, 20.0f, 4.65f, 0.05f},
@@ -37,12 +38,12 @@ const sk8_param kTable[ParamCount] = {
 	{"slide_drag", "Powerslide drag, m/s^2", kSpeed, 0.0f, 25.0f, 6.15f, 0.05f},
 	{"ground_snap", "Stick to ground, m", kSpeed, 0.02f, 1.0f, 0.27f, 0.01f},
 
-	{"spin_rate", "Air spin, rad/s", kSpin, 0.0f, 25.0f, 8.1f, 0.05f},
+	{"spin_rate", "Air spin, rad/s", kSpin, 0.0f, 25.0f, 7.05f, 0.05f},
 	{"spin_ease", "Spin response", kSpin, 0.5f, 40.0f, 9.5f, 0.1f},
 	{"air_level", "Auto-level in the air, rad/s", kSpin, 0.0f, 10.0f, 1.14f, 0.01f},
 
-	{"flip_base", "Flip time, s", kFlips, 0.05f, 2.0f, 0.255f, 0.005f},
-	{"flip_per_rev", "Extra time per turn, s", kFlips, 0.0f, 2.0f, 0.235f, 0.005f},
+	{"flip_base", "Flip spin-up, s", kFlips, 0.02f, 1.0f, 0.12f, 0.005f},
+	{"flip_per_rev", "Time per turn, s", kFlips, 0.1f, 2.0f, 0.41f, 0.005f},
 	{"late_flips", "Flick in the air (0 off, 1 on)", kFlips, 0.0f, 1.0f, 1.0f, 1.0f},
 	{"flip_lenience", "Flip done enough to land", kFlips, 0.3f, 1.0f, 0.83f, 0.01f},
 

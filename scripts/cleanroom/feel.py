@@ -45,6 +45,9 @@ def flick_path(points, start):
 
 
 KICKFLIP = [(0, -1)] * 30 + [(0, 0), (-0.707, 0.707), (-0.707, 0.707), (-0.707, 0.707)]
+HEELFLIP = [(0, -1)] * 30 + [(0, 0), (0.707, 0.707), (0.707, 0.707), (0.707, 0.707)]
+# the flick's end kept there through the air (held: more turns)
+KICKFLIP_HELD = KICKFLIP + [(-0.707, 0.707)] * 45
 
 # name -> (action script relative to the action start, ticks to run, metric function name)
 SCENARIOS = {
@@ -57,6 +60,9 @@ SCENARIOS = {
     "ollie_half": (ollie(12), 120, "air"),
     "ollie_full": (ollie(30), 120, "air"),
     "kickflip": (flick_path(KICKFLIP, 0), 140, "air"),
+    "flip_kick": (flick_path(KICKFLIP, 0), 140, "flip"),
+    "flip_heel": (flick_path(HEELFLIP, 0), 140, "flip"),
+    "flip_held": (flick_path(KICKFLIP_HELD, 0), 160, "flip"),
     "carve_right": ("0 90 1 0 0 0 0\n", 100, "carve"),
     "spin_air": (ollie(30, "37 100 -1 0 0 0 0\n"), 130, "air"),
 }
@@ -90,7 +96,9 @@ def series(rows, port):
         else:
             yaw = float(r["yaw"])
             air = r["mode"] == "Air"
-        out.append((int(r["tick"]), float(r["deck_py"]), math.hypot(vx, vz), vy, yaw, air, r.get("events", "")))
+        qx, qy, qz, qw = (float(r.get(k) or 0) for k in ("deck_qx", "deck_qy", "deck_qz", "deck_qw"))
+        board_up_y = 1 - 2 * (qx * qx + qz * qz)  # the deck's up axis, its height part
+        out.append((int(r["tick"]), float(r["deck_py"]), math.hypot(vx, vz), vy, yaw, air, r.get("events", ""), board_up_y))
     return out
 
 
@@ -136,6 +144,26 @@ def m_push(s):
         on = d > 0.004
     return {"speed_start": v0, "lag_s": start * DT, "gain_mps": max(x[2] for x in s) - v0,
             "strokes": strokes, "gain_per_s": (s[-1][2] - v0) / ((len(s) - 1) * DT)}
+
+
+def m_flip(s):
+    """Ticks from the flick's end (tick 33 of the path) to takeoff, to the deck upside down, to it
+    level again, and how many times it went over."""
+    end = 33
+    air = next((i for i, x in enumerate(s) if x[5]), None)
+    flips, down, first_down, last_up = 0, False, None, None
+    for i, x in enumerate(s):
+        if not down and x[7] < -0.3:
+            down = True
+            first_down = first_down if first_down is not None else i
+        elif down and x[7] > 0.9:
+            down = False
+            flips += 1
+            last_up = i
+    return {"takeoff_ticks": (air - end) if air is not None else float("nan"),
+            "upside_down": (first_down - end) if first_down is not None else float("nan"),
+            "level_again": (last_up - end) if last_up is not None else float("nan"),
+            "flips": flips}
 
 
 def m_carve(s):

@@ -251,7 +251,7 @@ fn demo_rail(n: usize, at: Vec3, fwd: Vec3) -> [Vec3; 2] {
     let up = Vec3::Y * 0.45;
     if slide {
         let across = Quat::from_rotation_y(70f32.to_radians()) * fwd;
-        let c = at + fwd * 8.4 + up;
+        let c = at + fwd * 9.2 + up;
         [c - across * 3.0, c + across * 3.0]
     } else {
         [at + fwd * 1.5 + up, at + fwd * 17.0 + up]

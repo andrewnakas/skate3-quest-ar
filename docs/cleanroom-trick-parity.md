@@ -26,6 +26,11 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   (nollie), no comply 180 both ways (shove-its); the front foot steps down while crouching;
   hippie jump (crouch with the button held, let go with no flick: the board rolls on underneath)
 
+## Feel vs the port (scripts/cleanroom/feel.py, flip_* scenarios)
+- Flick to takeoff 6 ticks (port 6), single flip level 33 ticks after the flick (port 32-34),
+  held flick 2 flips in a flat ollie (port 2), landing a 360 body spin 5.1 m/s (port 5.2),
+  air spin 341 deg (port 338)
+
 ## Next (in order)
 1. Salad, suski, willy grinds
 4. Footplants (on a wall / ledge / coping in the air), handplants
@@ -34,6 +39,7 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)
+- Landing a held flip before its clip ends snaps the ankles (~100 deg/frame once)
 - A sideways left stick held through the air spins the board as well as picking the grind
 - Landing while still holding a grab blends grab + air + land; the back arm's blended rotation can
   jump for a frame (stalefish, ~118 deg/frame once)

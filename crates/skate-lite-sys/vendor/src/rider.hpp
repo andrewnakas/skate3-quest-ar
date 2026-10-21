@@ -83,6 +83,13 @@ private:
 	// air
 	int flip_ = -1;
 	float flip_time_ = 0, flip_duration_ = 1;
+	// the board's turning: turns done, its rate (turns/s) and the turns it's going to (it spins up,
+	// cruises at 1 / flip_per_rev and brakes to stop on the last)
+	float flip_angle_ = 0, flip_rate_ = 0, flip_turns_ = 1, flip_base_turns_ = 1;
+	float flip_frac() const { return flip_ >= 0 ? clampf(flip_angle_ / std::max(flip_turns_, 1e-3f), 0, 1) : 1; }
+	// a gesture done on the ground: the takeoff it waits for (the board loads up first)
+	int takeoff_trick_ = -1;
+	float takeoff_time_ = 0, takeoff_share_ = 1, takeoff_crouch_ = 0;
 	// held flicks: the stick kept at the flick's last direction adds turns (double .. quad)
 	float flip_mult_ = 1, flip_dir_[2] = {0, 0}, last_flick_[2] = {0, 0};
 	int flip_extra_ = 0;
