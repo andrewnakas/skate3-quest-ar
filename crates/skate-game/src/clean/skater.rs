@@ -249,7 +249,10 @@ impl Default for Clock {
 /// Which way the feet leave the board for this trick.
 fn flip_clip(trick: &str) -> Clip {
     let t = trick.to_ascii_lowercase();
-    if t.contains("hardflip") {
+    // the board wraps round the back foot: both feet up and out of its way
+    if t.contains("impossible") {
+        Clip::FlipShuv
+    } else if t.contains("hardflip") {
         Clip::FlipHard
     } else if t.contains("tre") || t.contains("laser") {
         Clip::FlipTre

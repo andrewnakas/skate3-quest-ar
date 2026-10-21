@@ -21,6 +21,7 @@ struct TrickDef
 	float shove;  // deck spins about its up axis (revolutions; + = clockwise seen from above)
 	bool nollie;  // pops off the nose
 	bool flat;    // a plain ollie/nollie (no flip to finish before landing)
+	float wrap = 0; // deck turns end over end about its width (revolutions; + = nose up first)
 };
 
 const std::vector<TrickDef> &trick_table();
@@ -68,6 +69,9 @@ private:
 	bool spent_ = false;
 	int centre_steps_ = 0;
 	int last_sector_ = -1;
+	// a finished gesture that's also the start of a longer one: fired when the stick goes on
+	// somewhere else (or back to the centre) rather than straight away
+	int pending_ = -1;
 };
 
 const char *classify_path(const float *xy, int count);

@@ -335,6 +335,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("Esc / Tab", "this menu / SK8 menu"),
             info_row("A gamepad works too: sticks, A push, B mongo push, Y brake."),
             info_row("Manual: right stick part-way down (nose: part-way up), hold it there."),
+            info_row("Hold the stick at the end of a flick for more turns: double, triple, quad."),
             info_row("Old school: hold F (pad: left stick click) and flick: no comply, boneless..."),
         ],
         1 => {

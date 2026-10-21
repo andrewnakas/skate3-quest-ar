@@ -302,6 +302,27 @@ fn demo_wallride(t: f32, s: &skate_lite_sys::State) -> Input {
     i
 }
 
+/// `SK8_DEMO=held`: flip tricks flicked and held at the end of the flick (more turns: double ...),
+/// off the desktop park's kicker for the air.
+const HELD_EACH: f32 = 3.0;
+fn demo_held(t: f32) -> Input {
+    const HOLD: usize = 20;
+    let names = skate_lite_sys::trick_names();
+    let pick = ["Kickflip", "Heelflip", "Pop Shove-it", "Tre Flip", "Impossible"];
+    let n = (t / HELD_EACH) as usize % pick.len();
+    let d = t % HELD_EACH;
+    let mut i = Input::default();
+    let Some(k) = names.iter().position(|x| *x == pick[n]) else { return i };
+    let path = skate_lite_sys::trick_demo_path(k);
+    let f = (d * 60.0) as usize;
+    let f = if f < 4 { f } else if f < 4 + HOLD { 4 } else { f - HOLD + 1 };
+    // the last sample of the flick, then kept there through the air
+    if let Some(p) = path.get(f).or(if d < 1.6 { path.last() } else { None }) {
+        i.flick = *p;
+    }
+    i
+}
+
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
 fn demo_input(t: f32) -> Input {
@@ -368,6 +389,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("grinds") => Some((t / GRIND_EACH) as usize),
         Ok("revert") => Some((t / REVERT_EACH) as usize),
         Ok("wallride") => Some((t / WALL_EACH) as usize),
+        Ok("held") => Some((t / HELD_EACH) as usize),
         _ => None,
     }
 }
@@ -431,6 +453,7 @@ pub(crate) fn read_desktop(
             Ok("grinds") => demo_grinds(*t, &sim.current, sim.demo_rail),
             Ok("revert") => demo_revert(*t),
             Ok("wallride") => demo_wallride(*t, &sim.current),
+            Ok("held") => demo_held(*t),
             _ => demo_input(*t),
         };
         return;

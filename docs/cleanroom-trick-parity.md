@@ -8,7 +8,10 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 (`SK8_VIEWS=3 SK8_CAPTURE=dir`, `SK8_DEMO_FROM=<s>` to start at a slot), audit (names/values).
 
 ## Done
-- Ollie, nollie, 14 flip tricks (kickflip ... laser, nollie flips/shove-its), late flips
+- Ollie, nollie, 14 flip tricks (kickflip ... laser, nollie flips/shove-its), late flips;
+  360 shove-its (the shove-it sweep carried on to straight up), impossible (down, centre, down)
+- Held flicks like the port: the stick kept at a flick's end adds turns (double, triple, quad),
+  only when the air can fit them (port: the second flip ~21 ticks after the pop when held)
 - 15 grabs: indy, crail, tail, stalefish, melon, nose, tuck knee, judo, double, superman,
   no foot, stiffy, Christ air, method, rocket air (triggers + left stick: centre / nose / tail /
   right / left)
@@ -26,7 +29,7 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 ## Next (in order)
 1. Salad, suski, willy grinds
 4. Footplants (on a wall / ledge / coping in the air), handplants
-5. Darkslide, primo, casper, impossible, 360 flip variants, body varials
+5. Darkslide, primo, casper, body varials; held shove-its (their flick ends at the centre)
 6. Off-board: walk, caveman (jump on), get off / on
 
 ## Open polish

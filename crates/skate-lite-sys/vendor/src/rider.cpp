@@ -214,6 +214,8 @@ void Rider::step(World &w, const sk8_input &in)
 	since_land_ += kDt;
 	since_wall_ += kDt;
 	last_buttons_ = in.buttons;
+	last_flick_[0] = in.flick[0];
+	last_flick_[1] = in.flick[1];
 	last_steer_[0] = in.steer[0];
 	last_steer_[1] = in.steer[1];
 	foot_off_ = (in.buttons & SK8_FOOT_OFF) && mode_ == SK8_MODE_RIDE;
@@ -508,6 +510,7 @@ void Rider::pop(const TrickDef &def, float share)
 {
 	float charge = std::max(crouch_, 0.35f);
 	float v = (p[PopLow] + (p[PopHigh] - p[PopLow]) * charge) * share;
+	pop_y_ = pos_.y;
 	vel_ += up_ * v;
 	pos_ += up_ * 0.02f;
 	mode_ = SK8_MODE_AIR;
@@ -524,10 +527,74 @@ void Rider::start_flip(int trick)
 	const TrickDef &def = trick_table()[size_t(trick)];
 	flip_ = trick;
 	flip_time_ = 0;
-	float turns = std::max(std::fabs(def.roll), std::fabs(def.shove) * 1.2f);
+	float turns = std::max({std::fabs(def.roll), std::fabs(def.shove) * 1.2f, std::fabs(def.wrap) * 1.1f});
 	flip_duration_ = p[FlipBase] + p[FlipPerRev] * turns;
 	pending_.push_back({def.name, def.points});
 	trick_ = def.name;
+	flip_mult_ = 1;
+	flip_extra_ = 0;
+	flip_name_ = def.name;
+	float r = std::sqrt(last_flick_[0] * last_flick_[0] + last_flick_[1] * last_flick_[1]);
+	flip_dir_[0] = r > 0.3f ? last_flick_[0] / r : 0;
+	flip_dir_[1] = r > 0.3f ? last_flick_[1] / r : 0;
+}
+
+namespace {
+const char *const kTimes[] = {"", "", "Double ", "Triple ", "Quad "};
+
+// The name with a "Double ", "360 " ... count put in front of it (any given one dropped).
+std::string counted(const std::string &base, bool halves, int count)
+{
+	std::string b = base;
+	for (const char *pre : {"Double ", "360 ", "Frontside 360 "})
+		if (b.rfind(pre, 0) == 0)
+			b = (std::strcmp(pre, "Frontside 360 ") == 0 ? "Frontside " : "") + b.substr(std::strlen(pre));
+	if (halves) { // shove-its: 180 per half turn
+		std::string deg = std::to_string(count * 180) + " ";
+		if (b.rfind("Frontside ", 0) == 0)
+			return "Frontside " + deg + b.substr(10);
+		if (b.rfind("Pop ", 0) == 0)
+			b = b.substr(4);
+		return count == 1 ? base : deg + b;
+	}
+	return count <= 1 ? b : kTimes[std::min(count, 4)] + b;
+}
+} // namespace
+
+// Held into the air at the flick's end, a flip that's past half way gets one more turn: the board
+// speeds up to fit it in without a jump in where it is.
+void Rider::extend_flip()
+{
+	const TrickDef &def = trick_table()[size_t(flip_)];
+	bool halves = def.roll == 0 && def.wrap == 0;
+	float main = halves ? std::fabs(def.shove) * 2 : std::max(std::fabs(def.roll), std::fabs(def.wrap));
+	if (main <= 0)
+		return;
+	int now = int(std::lround(main * flip_mult_));
+	float mult = float(now + 1) / main;
+	// keep the angle reached: mult' * ease(t / d') == mult * ease(t / d)
+	float t = flip_time_, target = flip_mult_ * smooth01(t / flip_duration_) / mult;
+	float lo = 0, hi = std::min(1.0f, t / flip_duration_);
+	for (int i = 0; i < 30; i++) {
+		float mid = (lo + hi) * 0.5f;
+		(smooth01(mid) < target ? lo : hi) = mid;
+	}
+	float x = std::max(lo, 1e-3f);
+	// only if it can finish before coming back down to where it left from (a held flick in a
+	// small air stays at what fits instead of under-flipping)
+	float h = std::max(pos_.y - pop_y_, 0.0f), g = p[Gravity];
+	float to_land = (vel_.y + std::sqrt(std::max(vel_.y * vel_.y + 2 * g * h, 0.0f))) / g;
+	if (t / x * p[FlipLenience] - t > to_land)
+		return;
+	flip_duration_ = t / x;
+	flip_mult_ = mult;
+	flip_extra_++;
+	flip_name_ = counted(def.name, halves, now + 1);
+	trick_ = flip_name_;
+	if (!pending_.empty()) {
+		pending_.back().name = flip_name_;
+		pending_.back().points += 140;
+	}
 }
 
 void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
@@ -575,8 +642,14 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	// flick a trick late
 	if (f.trick >= 0 && flip_ < 0 && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat)
 		start_flip(f.trick);
-	if (flip_ >= 0)
+	if (flip_ >= 0) {
 		flip_time_ += kDt;
+		float r = std::sqrt(last_flick_[0] * last_flick_[0] + last_flick_[1] * last_flick_[1]);
+		bool held = r >= kRimIn &&
+			(last_flick_[0] * flip_dir_[0] + last_flick_[1] * flip_dir_[1]) / r > 0.87f;
+		if (held && flip_extra_ < 3 && flip_time_ / flip_duration_ > 0.55f)
+			extend_flip();
+	}
 
 	// grabs: the hands come from the triggers, the style from where the left stick points when the
 	// grab starts (it keeps spinning the board after that)
@@ -973,8 +1046,9 @@ void Rider::state(sk8_state &s) const
 	if (flip_ >= 0) {
 		const TrickDef &def = trick_table()[size_t(flip_)];
 		float e = smooth01(flip_time_ / flip_duration_);
-		board = board * Q::axis_angle({0, 1, 0}, -def.shove * 2 * kPi * e) *
-			Q::axis_angle({0, 0, 1}, def.roll * 2 * kPi * e);
+		float m = flip_mult_;
+		board = board * Q::axis_angle({0, 1, 0}, -def.shove * m * 2 * kPi * e) *
+			Q::axis_angle({0, 0, 1}, def.roll * m * 2 * kPi * e) * Q::axis_angle({1, 0, 0}, -def.wrap * m * 2 * kPi * e);
 	}
 	if (slide_amount_ > 0)
 		board = board * Q::axis_angle({0, 1, 0}, (lean_ >= 0 ? -1.0f : 1.0f) * slide_amount_ * 1.4f);

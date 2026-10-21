@@ -83,6 +83,12 @@ private:
 	// air
 	int flip_ = -1;
 	float flip_time_ = 0, flip_duration_ = 1;
+	// held flicks: the stick kept at the flick's last direction adds turns (double .. quad)
+	float flip_mult_ = 1, flip_dir_[2] = {0, 0}, last_flick_[2] = {0, 0};
+	int flip_extra_ = 0;
+	float pop_y_ = 0; // height the last pop left from
+	std::string flip_name_;
+	void extend_flip();
 	float spin_speed_ = 0, spin_total_ = 0;
 	float air_time_ = 0;
 

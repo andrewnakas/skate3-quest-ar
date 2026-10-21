@@ -28,6 +28,11 @@ const std::vector<TrickDef> kTricks = {
 	{"Nollie Heelflip", {TUp, TCentre, TDownRight}, 320, -1, 0, true, false},
 	{"Nollie Shove-it", {TUp, TUpLeft, TLeft, TCentre}, 220, 0, 0.5f, true, false},
 	{"Nollie Frontside Shove-it", {TUp, TUpRight, TRight, TCentre}, 240, 0, -0.5f, true, false},
+	// Carry on past a gesture's end (the shorter trick waits a moment to see). Doubles, triples
+	// and quads are the plain flicks held at their end (see Rider::extend_flip).
+	{"360 Shove-it", {TDown, TDownLeft, TLeft, TUpLeft, TUp}, 340, 0, 1, false, false},
+	{"Frontside 360 Shove-it", {TDown, TDownRight, TRight, TUpRight, TUp}, 360, 0, -1, false, false},
+	{"Impossible", {TDown, TCentre, TDown}, 480, 0, 0, false, false, 1},
 	// Old school: no gesture of their own, the foot-off button turns a flick into one (see
 	// foot_off_variant). Kept after the gestures; sk8_trick_count() covers only those.
 	{"No Comply", {}, 160, 0, 0, false, true},
@@ -105,6 +110,7 @@ int sector_of(float x, float y)
 void Flick::reset()
 {
 	tokens_.clear();
+	pending_ = -1;
 	on_rim_ = false;
 	centre_steps_ = 0;
 	last_sector_ = -1;
@@ -125,13 +131,27 @@ Flick::Result Flick::resolve(bool ending)
 	if (tokens_.empty())
 		return r;
 	bool extendable = false;
+	int exact = -1;
 	for (size_t i = 0; i < kTricks.size(); i++) {
-		if (kTricks[i].tokens == tokens_) {
-			r.trick = int(i);
-			return r;
-		}
-		if (is_prefix(tokens_, kTricks[i].tokens))
+		if (kTricks[i].tokens == tokens_)
+			exact = int(i);
+		else if (is_prefix(tokens_, kTricks[i].tokens))
 			extendable = true;
+	}
+	if (exact >= 0 && !(extendable && !ending)) {
+		pending_ = -1;
+		r.trick = exact;
+		return r;
+	}
+	if (exact >= 0) { // complete, but a longer gesture starts the same way: wait for the next move
+		pending_ = exact;
+		return r;
+	}
+	if (pending_ >= 0 && (!extendable || ending || tokens_.back() == TCentre)) {
+		// went on somewhere that isn't the longer gesture (or let go): the shorter one it was
+		r.trick = pending_;
+		pending_ = -1;
+		return r;
 	}
 	if (extendable && !ending)
 		return r;
