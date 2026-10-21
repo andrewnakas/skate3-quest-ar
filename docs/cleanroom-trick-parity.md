@@ -11,7 +11,8 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - Ollie, nollie, 14 flip tricks (kickflip ... laser, nollie flips/shove-its), late flips;
   360 shove-its (the shove-it sweep carried on to straight up), impossible (down, centre, down)
 - Held flicks like the port: the stick kept at a flick's end adds turns (double, triple, quad),
-  only when the air can fit them (port: the second flip ~21 ticks after the pop when held)
+  only when the air can fit them (port: the second flip ~21 ticks after the pop when held);
+  shove-its held at the sweep's sideways end: 360, 540
 - 15 grabs: indy, crail, tail, stalefish, melon, nose, tuck knee, judo, double, superman,
   no foot, stiffy, Christ air, method, rocket air (triggers + left stick: centre / nose / tail /
   right / left)
@@ -25,7 +26,8 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - Grinds by the left stick at the catch (along the rail): 50-50, 5-0, nosegrind, crooked,
   overcrook, smith, feeble; slides (across it): boardslide, noseslide, tailslide, lipslide,
   noseblunt, bluntslide; the board turns back to the line of travel coming off a slide;
-  darkslide (a kickflip-type caught across a rail half way round: upside down on it)
+  darkslide (a kickflip-type caught across a rail half way round: upside down on it);
+  salad, willy, suski (the crouch held into the catch with a diagonal)
 - Powerslide; revert (X held into a landing, rolling away fakie)
 - Wallride (an ollie glancing into a wall rolls along it) and wallie (flick on the wall to pop
   off it); a Wall piece in the park builder and the desktop park
@@ -41,9 +43,8 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   air spin 341 deg (port 338)
 
 ## Next (in order)
-1. Salad, suski, willy grinds
-5. Held shove-its (their flick ends at the centre)
-6. Off-board: caveman (jump on from running), jumping on foot
+1. Jumping on foot (off the board)
+2. Polish list below
 
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)

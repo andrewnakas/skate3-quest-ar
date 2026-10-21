@@ -186,11 +186,22 @@ Flick::Result Flick::feed(float x, float y)
 				push((unsigned char)((last_sector_ + step + 8) % 8));
 			}
 		}
+		rim_steps_ = s == last_sector_ ? rim_steps_ + 1 : 0;
 		push((unsigned char)s);
 		last_sector_ = s;
 		on_rim_ = true;
 		centre_steps_ = 0;
 		out = resolve(false);
+		// A shove-it's sweep held at its sideways end (instead of let go to the centre): it pops
+		// as the shove-it, and kept there it turns on (held: 360, 540)
+		if (out.trick < 0 && rim_steps_ >= 9) {
+			static const struct { unsigned char a, b, c; const char *name; } held[] = {
+				{TDown, TDownLeft, TLeft, "Pop Shove-it"}, {TDown, TDownRight, TRight, "Frontside Shove-it"},
+				{TUp, TUpLeft, TLeft, "Nollie Shove-it"}, {TUp, TUpRight, TRight, "Nollie Frontside Shove-it"}};
+			for (const auto &h : held)
+				if (tokens_.size() == 3 && tokens_[0] == h.a && tokens_[1] == h.b && tokens_[2] == h.c)
+					out.trick = find_trick(h.name);
+		}
 	} else if (r < kCentreIn) {
 		on_rim_ = false;
 		if (!tokens_.empty()) {

@@ -68,6 +68,7 @@ private:
 	bool on_rim_ = false;
 	bool spent_ = false;
 	int centre_steps_ = 0;
+	int rim_steps_ = 0; // steps the stick has stayed in one rim sector
 	int last_sector_ = -1;
 	// a finished gesture that's also the start of a longer one: fired when the stick goes on
 	// somewhere else (or back to the centre) rather than straight away
