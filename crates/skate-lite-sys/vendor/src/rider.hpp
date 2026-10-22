@@ -129,6 +129,8 @@ private:
 	float seg_u_ = 0, rail_speed_ = 0;
 	int rail_dir_ = 1;
 	int grind_kind_ = 0;
+	float carve_in_ = 0, carve_ = 0; // the steer, eased in two stages
+	bool vert_air_ = false; // off the top of a steep wall: comes back down into it
 	int settle_trick_ = -1; // a flip landed short: the board finishing its turn
 	float settle_e_ = 1, settle_mult_ = 1;
 	float brake_held_ = 0, brake_up_ = 0, push_gain_ = 0, skid_ = 0, skid_time_ = 0, land_settle_ = 0.8f;

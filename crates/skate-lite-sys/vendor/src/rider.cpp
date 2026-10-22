@@ -135,6 +135,7 @@ namespace {
 
 constexpr float kPushBite = 0.12f; // s: how long a stroke's foot takes to give its speed
 constexpr float kSkidTime = 0.3f;
+constexpr float kVertIn = 0.15f; // m: a vert air comes back down this far inside the lip
 constexpr float kSettleFlip = 0.45f; // s for a whole flip's worth of settling (the last bit: a few ticks)  // s: a crooked landing scrubs its speed off over this
 constexpr float kSettleClean = 0.8f, kSettleSketchy = 1.26f; // s: riding away from a landing before it's settled
 
@@ -188,6 +189,8 @@ void Rider::place(V3 position, float facing, float speed)
 	fakie_time_ = 0;
 	push_queued_ = false;
 	skid_time_ = 0;
+	vert_air_ = false;
+	carve_in_ = carve_ = 0;
 	flick_.reset();
 	crouch_ = crouch_time_ = 0;
 	flip_ = -1;
@@ -491,8 +494,11 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	else if (mode_ == SK8_MODE_SLIDE && ((!want_slide && !(in.buttons & SK8_SLIDE)) || speed < 0.6f))
 		mode_ = SK8_MODE_RIDE;
 
-	// carve
-	float rate = p[Carve] * steer * clampf(speed / 2.5f, 0.35f, 1.0f);
+	// carve: the turn comes on over a moment (two easing stages: a gentle start, like the port)
+	float ease = 1 - std::exp(-kDt / std::max(p[CarveEase], 0.001f));
+	carve_in_ += (steer - carve_in_) * ease;
+	carve_ += (carve_in_ - carve_) * ease;
+	float rate = p[Carve] * carve_ * clampf(speed / 2.5f, 0.35f, 1.0f);
 	if (mode_ == SK8_MODE_SLIDE)
 		rate *= 0.5f;
 	fwd_ = unit(flatten(rotate(fwd_, up_, -rate * kDt), up_), fwd_);
@@ -501,7 +507,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		vel_ = rotate(vel_, up_, -rate * kDt);
 
 	// gravity along the surface
-	vel_ += flatten(V3{0, -p[Gravity], 0}, up_) * kDt;
+	vel_ += flatten(V3{0, -p[Gravity] * p[SlopeGravity], 0}, up_) * kDt; // rolling: less than the air's pull
 
 	// push: a step off the board (first stroke only), then strokes; the speed comes on while the
 	// foot is on the ground driving back, not the moment the button goes down
@@ -515,7 +521,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		t1 = std::min(t1, t0 + kPushBite);
 		float drive = std::min(push_time_ + kDt, t1) - std::max(push_time_, t0);
 		if (push_time_ <= t0)
-			push_gain_ = std::max(0.0f, p[PushTop] - std::fabs(dot(vel_, travel))) * p[PushKick];
+			push_gain_ = std::min(p[PushCap], std::max(0.0f, p[PushTop] - std::fabs(dot(vel_, travel))) * p[PushKick]);
 		if (mode_ == SK8_MODE_RIDE && drive > 0)
 			vel_ += travel * (push_gain_ * drive / (t1 - t0));
 		push_time_ += kDt;
@@ -672,6 +678,19 @@ void Rider::follow_ground(World &w)
 		}
 		return;
 	}
+	// rolled off the top of a steep wall going up (a vert air): no drift out over the lip - the
+	// motion toward or away from the wall is let go, with a little back toward it, so it comes down
+	// into the transition again (as the port does)
+	if (up_.y < 0.5f && vel_.y > 0.5f) {
+		V3 in = flatten(up_, kUp);
+		if (len(in) > 0.2f) {
+			in = unit(in, in);
+			// enough to come down ~kVertIn inside the lip over the air it will have
+			float t_air = 2 * vel_.y / std::max(p[Gravity], 1.0f);
+			vel_ = vel_ - in * dot(vel_, in) + in * clampf(kVertIn / std::max(t_air, 0.1f), 0.05f, 0.6f);
+			vert_air_ = true;
+		}
+	}
 	// rolled off an edge
 	if (mode_ == SK8_MODE_MANUAL) {
 		add_trick(manual_name(), 50 + unsigned(manual_time_ * p[ManualRate]));
@@ -693,6 +712,7 @@ void Rider::pop(const TrickDef &def, float share)
 	pop_y_ = pos_.y;
 	push_time_ = -1; // a stroke ends at the pop
 	skid_time_ = 0;
+	vert_air_ = false;
 	push_cooldown_ = 0;
 	vel_ += up_ * v;
 	pos_ += up_ * 0.02f;
@@ -953,6 +973,11 @@ void Rider::land(const Hit &h)
 	fakie_ = fakie;
 	// line the wheels up with the motion
 	V3 travel = fakie ? -fwd_ : fwd_;
+	// back down into the transition out of a vert air: the speed carries on along the wall (it
+	// comes down nearly along it), none lost into it
+	if (vert_air_ && len(vflat) > 0.1f)
+		vflat = unit(vflat, travel) * len(vel_);
+	vert_air_ = false;
 	// landing off the line of travel skids: the further round, the more speed it scrubs off
 	float keep = std::max(0.0f, 1 - std::pow(side / (p[LandSkid] * kDeg), 1.6f));
 	vel_ = travel * len(vflat);
@@ -1328,6 +1353,7 @@ void Rider::bail(const char *reason)
 	bail_dir_ = slipped ? -1 : 1;
 	bail_reason_ = reason;
 	mode_ = SK8_MODE_BAIL;
+	vert_air_ = false;
 	bail_time_ = 0;
 	bail_stage_ = SK8_BAIL_FLAIL;
 	bail_stage_time_ = 0;
