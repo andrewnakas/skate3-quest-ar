@@ -20,7 +20,7 @@ const sk8_param kTable[ParamCount] = {
 	{"pop_low", "Pop (quick flick), m/s", kPop, 1.0f, 12.0f, 4.55f, 0.05f},
 	{"pop_high", "Pop (full crouch), m/s", kPop, 1.0f, 16.0f, 5.35f, 0.05f},
 	{"crouch_charge", "Crouch to full pop, s", kPop, 0.05f, 1.5f, 0.21f, 0.01f},
-	{"nollie_pop", "Nollie pop share", kPop, 0.3f, 1.5f, 0.93f, 0.01f},
+	{"nollie_pop", "Nollie pop share", kPop, 0.3f, 1.5f, 1.015f, 0.005f},
 	{"grind_pop", "Pop off rails share", kPop, 0.3f, 1.5f, 0.82f, 0.01f},
 
 	{"gravity", "Gravity, m/s^2", kSpeed, 1.0f, 40.0f, 12.55f, 0.05f},

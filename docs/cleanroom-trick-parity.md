@@ -32,8 +32,13 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   salad, willy, suski (the crouch held into the catch with a diagonal)
 - Powerslide (left stick back to a diagonal, the port's way; or the slide button + steer); revert
   (X held into a landing, rolling away fakie)
-- Flick mapping = the port's (measured with s3trace): kickflip finishes up-right, heelflip up-left,
-  pop shove-it sweeps round the right, frontside round the left
+- Flick gestures = the port's, found by trying ~1200 stick paths in it (89% give the same trick;
+  the rest are odd multi-direction paths): a flick goes by where it gets to (up-right kickflip,
+  up-left heelflip), a slow sweep round the rim is a shove-it (a quick one just passes through),
+  doubling back past the crouch adds the 360 (tre D L D R, laser D R D UL, 360 shove-its, 360
+  hardflip, 360 inward heelflip), a brief lean to one side before crossing to up varials it; nollie
+  versions of all of them; a flick nothing matches pops nothing. scripts/cleanroom/trick_table.py
+  runs every trick through both engines (names, flips, shove turns, timing)
 - Fakie and switch like the port: rolling fakie ~0.6 s once settled, the feet shuffle round to
   switch (0.7 s; the crouch held keeps it fakie; a push from fakie switches at once, quicker);
   a 180 from switch back to rolling forwards switches back. Tricks are named Fakie / Switch;

@@ -30,6 +30,7 @@ import feel  # noqa: E402  (PREFIX, T0, run)
 TOKENS = {"TUp": 0, "TUpRight": 1, "TRight": 2, "TDownRight": 3, "TDown": 4, "TDownLeft": 5, "TLeft": 6,
           "TUpLeft": 7, "TCentre": 8}
 CROUCH = 30
+DWELL = 6  # ticks on each token (sk8's kSweepDwell + 1: held, not swept through)
 
 
 def gesture_tricks():
@@ -50,12 +51,14 @@ def path_for(tokens):
             pts += [(0, 0), (0, 0)]
             prev = None
             continue
-        if prev is not None:
+        if prev is not None and min(abs(tok - prev) % 8, 8 - abs(tok - prev) % 8) >= 3:
+            pass  # straight across the stick
+        elif prev is not None:
             d = 1 if ((tok - prev + 8) % 8) <= 4 else -1
             pts += [rim(prev + d * k / 4) for k in (1, 2, 3)]
         else:
             pts.append((0, 0))
-        pts += [rim(tok)] * 4
+        pts += [rim(tok)] * DWELL
         prev = tok
     return pts
 

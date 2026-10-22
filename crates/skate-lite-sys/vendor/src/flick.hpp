@@ -36,6 +36,8 @@ int find_trick(const char *name);
 constexpr float kRimIn = 0.88f;
 constexpr float kManualIn = 0.3f;
 constexpr float kCentreIn = 0.30f;
+// A rim sector the stick stays in fewer ticks than this was only swept through (doesn't count).
+constexpr int kSweepDwell = 5;
 
 int sector_of(float x, float y);
 
@@ -69,6 +71,7 @@ private:
 	bool spent_ = false;
 	int centre_steps_ = 0;
 	int rim_steps_ = 0; // steps the stick has stayed in one rim sector
+	bool young_ = false; // the newest rim sector is only just reached (may be a sweep passing through)
 	int last_sector_ = -1;
 	// a finished gesture that's also the start of a longer one: fired when the stick goes on
 	// somewhere else (or back to the centre) rather than straight away
