@@ -13,7 +13,7 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - Held flicks like the port: the stick kept at a flick's end adds turns (double, triple, quad),
   only when the air can fit them (port: the second flip ~21 ticks after the pop when held);
   shove-its held at the sweep's sideways end: 360, 540
-- 17 grabs picked the port's way (s3trace-probed): the right stick held, then the trigger(s).
+- 21 grabs (17 + 4 tweaks) picked the port's way (s3trace-probed): the right stick held, then the trigger(s).
   Centre: melon / indy / double; up: tail / seatbelt / tail; up-left: judo / Christ / superman;
   left: stiffy / tuck knee / double; down-left: stiffy / tuck knee / no foot; down: crail / nose /
   rocket; down-right: stalefish / method / method; right: stalefish / mute / mute (left / right /
@@ -70,8 +70,13 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   rail), manuals for the stance; after a landing the feet only shuffle to switch once it has settled
   (0.8 s clean / 1.26 s sketchy, then 0.6 s: port ~85 / 105-122 ticks); a fresh manual waits 0.75 s
   after a landing unless held into it (port 45 ticks)
-- Not matched: a held flick in a 1-tick-crouch ollie (the port bails the double, sk8 lands it);
-  wall-slam threshold not measured (the test world has no wall)
+- Held flicks: the next turn is tried when the air looks long enough, judged hopefully
+  (held_reach 1.26): out of a barely-crouched ollie (crouch 1-6 ticks) the held double comes down
+  under-flipped, from 8 ticks it lands - as the port; landing lenience is counted in turns left
+- Grab tweaks like the port: a one-hand grab started with the stick centred, the stick then
+  pushed out: left trigger up nosebone, right tuck knee, down tailbone, left stiffy; right trigger
+  up melon, right method, down japan, left cross bone (both triggers: no tweak)
+- Not measured: the wall-slam threshold (the test world has no wall)
 
 - Poses vs port captures (web capture, analog pseudo-keys RY=/LX= in a local copy of the page):
   manuals stand tall, arms hanging, eyes ahead (board tilt 0.13 rad); the powerslide sits back over
@@ -81,10 +86,8 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 1. Quest APK + headset test (needs the headset), then the 0.03 release decision
 
 ## Open polish
-- Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)
-- Landing a held flip before its clip ends: ankles ~54 deg/frame (was 100)
-- Handplant: the legs twist as they swing up overhead (~68 deg/frame, was 88; mostly twist along
-  the shin); the arm is fixed (hand plants first, then the body tips over it)
+- Pre-existing, not yet looked at: worst frames walk 33, wallride 46, primo 52 deg/frame (primo
+  62 foot slips)
 - Port grinds were not captured on screen (the spawn rail's catch window is too narrow for the
   browser path); grind poses follow the reference-footage medians instead
 - Grabs now <= 27 deg/frame (were 118-163)
