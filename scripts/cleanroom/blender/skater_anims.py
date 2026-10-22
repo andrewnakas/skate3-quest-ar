@@ -300,6 +300,24 @@ SLIDE_BLUNT = P(hips=(-0.18, 0.04, 0.72), hips_rot=(2, 0, 26), spine=(8, 0, 26),
                 lh=(0.6, -0.08, 1.08), rh=(-0.56, 0.06, 1.0), knee_out=0.55)
 
 
+def _settled_on_rail(pose):
+    """On a rail the body stands taller over the board (legs near straight: reference median knee
+    ~20 deg on a 50-50, ~40 on a boardslide) with the hands low and in, not held out at the chest."""
+    hx, hy, hz = pose["hips"]
+    nod, tilt, turn = pose["head"]
+    out = dict(pose, hips=(hx, hy, hz + 0.04), head=(nod + 18, tilt, turn))  # eyes down the rail
+    for key in ("lh", "rh"):
+        x, y, z = pose[key]
+        out[key] = (hx + (x - hx) * 0.78, y, z - 0.15)
+    return out
+
+
+GRIND, BOARDSLIDE, GRIND_50, GRIND_NOSE, GRIND_CROOKED, GRIND_OVERCROOK, GRIND_SMITH, GRIND_FEEBLE = (
+    _settled_on_rail(p) for p in (GRIND, BOARDSLIDE, GRIND_50, GRIND_NOSE, GRIND_CROOKED, GRIND_OVERCROOK, GRIND_SMITH, GRIND_FEEBLE))
+SLIDE_NOSE, SLIDE_TAIL, SLIDE_LIP, SLIDE_BLUNT = (
+    _settled_on_rail(p) for p in (SLIDE_NOSE, SLIDE_TAIL, SLIDE_LIP, SLIDE_BLUNT))
+
+
 # Wallride: low and compact on the wheels, the board flat on the wall below the feet (the runtime
 # leans the body out from the wall only part way), arms out for balance, eyes along the wall.
 WALLRIDE = P(hips=(0.0, 0.04, 0.72), hips_rot=(16, 0, 4), spine=(20, 0, 12), head=(-12, 0, 62),
