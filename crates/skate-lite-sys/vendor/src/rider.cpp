@@ -89,9 +89,10 @@ int grab_style_for(int hands, float x, float y)
 	enum { C, U, UL, L, DL, D, DR, R };
 	int dir = C;
 	if (x * x + y * y > 0.25f) {
-		float a = std::atan2(x, y) * (180.0f / 3.14159265f); // degrees: 0 up, 90 right
-		dir = a > -22.5f && a <= 67.5f ? U : a > 67.5f && a <= 112.5f ? R : a > 112.5f && a <= 157.5f ? DR
-			: a > -67.5f && a <= -22.5f ? UL : a > -112.5f && a <= -67.5f ? L : a > -157.5f && a <= -112.5f ? DL : D;
+		// the nearest of the eight directions, counted round from up toward the right
+		int oct = int(std::floor(std::atan2(x, y) * (4.0f / 3.14159265f) + 0.5f)) & 7;
+		static const int kOct[8] = {U, U, R, DR, D, DL, L, UL}; // up, up-right (the port: up), right ...
+		dir = kOct[oct];
 	}
 	// [direction][left, right, both]
 	static const int kTable[8][3] = {
