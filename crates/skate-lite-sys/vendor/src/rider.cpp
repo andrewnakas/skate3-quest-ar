@@ -1404,7 +1404,7 @@ void Rider::state(sk8_state &s) const
 	else if (mode_ == SK8_MODE_MANUAL && manual_style_ == 2)
 		board = board * Q::axis_angle({0, 0, 1}, kPi) * Q::axis_angle({1, 0, 0}, 0.38f); // casper: upside down, tail up
 	else if (mode_ == SK8_MODE_MANUAL)
-		board = board * Q::axis_angle({1, 0, 0}, -0.21f * float(manual_dir_));
+		board = board * Q::axis_angle({1, 0, 0}, -0.13f * float(manual_dir_));
 	if (mode_ == SK8_MODE_AIR && varial_ != 0)
 		board = board * Q::axis_angle({0, 1, 0}, -varial_); // the board stays while the body turns
 	if (mode_ == SK8_MODE_GRIND && grind_kind_ > 0) {

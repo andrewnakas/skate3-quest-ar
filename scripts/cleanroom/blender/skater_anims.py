@@ -87,14 +87,20 @@ FLIP_CATCH = P(hips=(0.0, 0.03, 0.88), hips_rot=(16, 0, 0), spine=(18, 0, 10), h
                lf=foot(FRONT_X, 0.0, 0.1, yaw=15), rf=foot(BACK_X, 0.0, 0.09, yaw=0),
                lh=(0.64, -0.1, 1.32), rh=(-0.62, -0.04, 1.29), knee_out=0.55)  # arms still high at the catch
 LAND_LOW = P(hips=(0.0, 0.04, 0.72), hips_rot=(22, 0, 0), spine=(22, 0, 12), lh=(0.4, -0.26, 0.8), rh=(-0.4, -0.2, 0.78))
-MANUAL = P(hips=(-0.13, 0.0, 0.8), hips_rot=(-4, 0, 0), spine=(-2, 0, 12), lh=(0.38, -0.05, 1.02), rh=(-0.5, -0.05, 1.0))
-NOSE_MANUAL = P(hips=(0.14, 0.0, 0.78), hips_rot=(14, 0, 0), spine=(24, 0, 14), lh=(0.52, -0.08, 1.0), rh=(-0.36, -0.08, 1.04))
+# Manuals stand tall over the wheels that are down, legs near straight, arms hanging easy, eyes ahead
+# on the line (port side-by-sides: no hunch, no arms up)
+MANUAL = P(hips=(-0.1, 0.0, 0.83), hips_rot=(-2, 0, 0), spine=(4, 0, 10), head=(14, 0, 60),
+           lh=(0.3, -0.13, 0.8), rh=(-0.36, -0.11, 0.78), knee_out=0.3)
+NOSE_MANUAL = P(hips=(0.13, 0.0, 0.8), hips_rot=(14, 0, 0), spine=(18, 0, 14), head=(18, 0, 58),
+                lh=(0.42, -0.15, 0.84), rh=(-0.28, -0.13, 0.8), knee_out=0.35)
 GRIND = P(hips=(0.0, 0.02, 0.74), hips_rot=(12, 0, 0), spine=(18, 0, 12), lh=(0.62, -0.05, 1.08), rh=(-0.62, -0.05, 1.04))
 BOARDSLIDE = P(hips=(0.0, 0.03, 0.74), hips_rot=(12, 0, 30), spine=(16, 0, 30), head=(-6, 0, 70),
                lh=(0.6, -0.15, 1.06), rh=(-0.58, 0.1, 1.04))
-POWERSLIDE = P(hips=(0.0, 0.16, 0.68), hips_rot=(-12, 0, 10), spine=(-6, 0, 20),
+# Powerslide: sat right back over the heel edge against the slide, knees bent, both arms spread wide
+# at shoulder height for balance (as the port's)
+POWERSLIDE = P(hips=(0.0, 0.2, 0.64), hips_rot=(-24, 0, 12), spine=(-8, 0, 22), head=(4, 0, 70),
                lf=foot(FRONT_X, 0.03, 0.0, yaw=10), rf=foot(BACK_X, 0.03, 0.0, yaw=-3),
-               lh=(0.5, 0.05, 0.95), rh=(-0.5, 0.15, 0.9))
+               lh=(0.7, 0.02, 1.1), rh=(-0.66, 0.1, 1.06), knee_out=0.5)
 # Grabs: a compact tuck with the board pulled up under the feet and a hand on the deck. The deck top is
 # at GRAB_DECK (the soles), its toe edge at y -0.11 and heel edge at +0.11, nose x +0.4, tail x -0.4.
 # Shapes after the 3-angle grab footage; every number our own. Judo kicks the front foot off, and in
@@ -731,7 +737,7 @@ SHOULDER_UP, SHOULDER_HALF = 0.47, 0.18
 ARM_REACH_MAX = 0.41
 # The bail's hands reach for the ground and are left alone; in a grab only the free hand (above the
 # board) relaxes.
-REACHING = ("bail", "get_up")
+REACHING = ("bail", "get_up", "powerslide")  # (the powerslide: arms spread wide on purpose)
 GRABBING = ("grab_", "pop_boneless", "footplant", "handplant")
 
 
