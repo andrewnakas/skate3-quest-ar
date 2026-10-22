@@ -128,10 +128,53 @@ def finish(basemesh):
             for v in ob.data.vertices:
                 v.co += v.normal * CLOTH_OFFSET
         ob.name = "skater_" + ob.name.split(".")[0].lower()
+    hide_covered_skin()
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == "MESH")
     heights = [v.co.z for o in bpy.data.objects if o.type == "MESH" for v in o.data.vertices]
     print(f"SKATER meshes={sum(1 for o in bpy.data.objects if o.type == 'MESH')} tris={tris} "
           f"bones={len(rig.data.bones)} height={max(heights) - min(heights):.3f}")
+
+
+def hide_covered_skin():
+    """Deletes the body's faces that lie wholly under the clothes (straight out from the skin, cloth
+    within 12 cm): in a deep bend (a noseblunt) skin could otherwise push out through the shirt,
+    whatever the offset. MPFB already drops most covered skin; this takes the rest near the hems.
+    Skin at the hems, neck, hands and face stays."""
+    import bmesh
+    from mathutils.bvhtree import BVHTree
+    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    body = next((o for o in meshes if any(m and m.name.endswith("body") for m in o.data.materials)), None)
+    covers = [o for o in meshes if any(m and ("suit" in m.name or "shoes" in m.name) for m in o.data.materials)]
+    if body is None or not covers:
+        print("SKATER skin: no body or clothes found")
+        return
+    dg = bpy.context.evaluated_depsgraph_get()
+    trees = [(BVHTree.FromObject(o, dg), o.matrix_world.inverted()) for o in covers]
+    # the body as it stands (armature applied), the same state the clothes' trees are built from
+    body_eval = body.evaluated_get(dg)
+    me = body_eval.to_mesh()
+    covered = set()
+    for v in me.vertices:
+        p = body.matrix_world @ v.co
+        n = (body.matrix_world.to_3x3() @ v.normal).normalized()
+        hit = False
+        for tree, inv in trees:
+            q = inv @ p
+            # straight out from the skin: cloth in the way, close by
+            loc, _, _, _ = tree.ray_cast(q, (inv.to_3x3() @ n).normalized(), 0.12)
+            if loc is not None:
+                hit = True
+                break
+        if hit:
+            covered.add(v.index)
+    body_eval.to_mesh_clear()
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    gone = [f for f in bm.faces if all(v.index in covered for v in f.verts)]
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bm.to_mesh(body.data)
+    bm.free()
+    print(f"SKATER skin: {len(gone)} faces under the clothes removed ({len(covered)} covered vertices)")
 
 
 def export():
@@ -164,10 +207,17 @@ def preview(clips):
     board.scale = (0.8, 0.21, 0.02)
     scene.render.engine = "BLENDER_WORKBENCH"
     scene.render.resolution_x, scene.render.resolution_y = 300, 360
+    # SK8_PREVIEW_MATERIAL=1: material colours and a bigger image (skin poking through clothes)
+    if os.environ.get("SK8_PREVIEW_MATERIAL"):
+        scene.display.shading.color_type = "TEXTURE"
+        scene.render.resolution_x, scene.render.resolution_y = 600, 720
     rig = bpy.data.objects["skater_rig"]
     rig.animation_data_create()
     frames = []
     views = {"front": ((2.2, -3.4, 1.3), (80, 0, 33)), "side": ((4.0, 0.0, 0.8), (90, 0, 90))}
+    if os.environ.get("SK8_PREVIEW_MATERIAL"):  # and from behind / above (the back of the shirt)
+        views["back"] = ((-1.6, 3.2, 2.0), (65, 0, 206))
+        views["top"] = ((0.6, 1.2, 3.4), (20, 0, 160))
     # SK8_PREVIEW_ONLY=bail,get_up: only clips whose names contain one of these
     only = [x for x in os.environ.get("SK8_PREVIEW_ONLY", "").split(",") if x]
     for name in clips:
