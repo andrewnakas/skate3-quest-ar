@@ -951,7 +951,8 @@ def apply_pose(rig, c, pose, rest_ankle):
         # tipped well over (an invert) the knees still bend toward where the chest faces: the
         # pole goes out in front of the chest in the hips' own frame
         kpitch = math.radians(pose["hips_rot"][0])
-        w = min(1.0, max(0.0, (pose["hips_rot"][0] - 80) / 40))
+        # (from 60 deg: by the time the legs swing overhead the pole already turns with the chest)
+        w = min(1.0, max(0.0, (pose["hips_rot"][0] - 60) / 40))
         if w > 0:
             hx_, hy_, hz_ = pose["hips"]
             front = (0.0, -math.cos(kpitch), -math.sin(kpitch))
