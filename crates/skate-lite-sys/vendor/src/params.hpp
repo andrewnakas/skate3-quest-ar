@@ -8,7 +8,7 @@ namespace sk8 {
 enum Param : int
 {
 	// Pop & Jump
-	PopLow, PopHigh, CrouchCharge, NolliePop, GrindPop,
+	PopLow, PopHigh, CrouchCharge, NolliePop, GrindPop, BonelessPop,
 	// Gravity & Speed
 	Gravity, SlopeGravity, PushKick, PushPeriod, PushTop, PushCap, PushLead, PushMongo, PopWait, RollDrag, AirDrag, Brake, BrakeLead, BrakeOut, Carve, CarveEase, Grip, SlideDrag, SlideSoft, GroundSnap,
 	SwitchWait, SwitchTime,
@@ -19,7 +19,7 @@ enum Param : int
 	// Bails
 	LandClean, LandMax, SideMax, LandSkid, WallBail, ImpactBail, BailTime, BailSlide, Rise,
 	// Grinds
-	GrindCatch, GrindDrag, GrindBalance, GrindKeep, GrindOffKeep,
+	GrindCatch, GrindDrag, GrindBalance, GrindKeep, GrindOffKeep, PlantStall,
 	// Manuals
 	ManualWobble, ManualCorrect, ManualHold, ManualDrag, ManualLand,
 	// Scoring

@@ -22,6 +22,7 @@ const sk8_param kTable[ParamCount] = {
 	{"crouch_charge", "Crouch to full pop, s", kPop, 0.05f, 1.5f, 0.21f, 0.01f},
 	{"nollie_pop", "Nollie pop share", kPop, 0.3f, 1.5f, 1.015f, 0.005f},
 	{"grind_pop", "Pop off rails share", kPop, 0.3f, 1.5f, 0.7f, 0.01f},
+	{"boneless_pop", "Boneless / fastplant pop share", kPop, 0.3f, 1.5f, 0.835f, 0.01f},
 
 	{"gravity", "Gravity, m/s^2", kSpeed, 1.0f, 40.0f, 12.55f, 0.05f},
 	{"slope_gravity", "Share of gravity rolling on a slope", kSpeed, 0.1f, 1.5f, 0.78f, 0.01f},
@@ -71,6 +72,7 @@ const sk8_param kTable[ParamCount] = {
 	{"grind_balance", "Rail balance (0 off)", kGrinds, 0.0f, 3.0f, 0.0f, 0.05f},
 	{"grind_keep", "Speed kept catching a rail", kGrinds, 0.5f, 1.5f, 1.027f, 0.005f},
 	{"grind_off_keep", "Speed kept rolling off a rail's end", kGrinds, 0.5f, 1.0f, 0.89f, 0.01f},
+	{"plant_stall", "Longest handplant held, s", kGrinds, 0.2f, 5.0f, 1.28f, 0.01f},
 
 	{"manual_wobble", "Manual wobble", kManuals, 0.0f, 5.0f, 0.38f, 0.02f},
 	{"manual_correct", "Manual correction", kManuals, 0.0f, 10.0f, 2.45f, 0.05f},

@@ -23,8 +23,17 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   left stick click old school (our own: the port's stick clicks do nothing while rolling)
 - Off the board: Y steps off to stand / walk / run (left stick), the board carried on its edge;
   Y again drops it and steps on; on foot A jumps; running, Y is a caveman (a hop onto the thrown-down board)
-- Footplant / handplant: foot-off (+ a grab for the hand) held reaching an edge: a stall, then
-  back off it
+- Handplant the port's way (from a recorded web-port session): RB (Touch: right grip) held riding
+  up a ramp plants a hand on the coping; it stays while RB is held (longest 1.28 s, the port's ~77
+  ticks), comes off as soon as it's let go and drops straight back in nose first. While planted:
+  A back foot off, X front foot off (both: plain), B no foot, right stick down / sideways (Handplant
+  Down / Left / Right), each held 0.15 s, the one left scored. Not matched: the port's FS / BS names.
+- Boneless / fastplant the port's way: a grab trigger held and A (or X) pressed on the ground: a
+  wind-up (36 ticks press to air, as the port), then the pop (41 ticks in the air, as the port);
+  the left stick up on the way: a fastplant. The trigger still held in the air also scores the grab
+  (the port does too). The wind-up shows only as a crouch (no step-down pose yet).
+- Footplant / handplant (ours, kept): foot-off (+ a grab for the hand) held reaching an edge: a
+  stall, then back off it
 - Grinds by the left stick at the catch (along the rail): 50-50, 5-0, nosegrind, crooked,
   overcrook, smith, feeble; slides (across it): boardslide, noseslide, tailslide, lipslide,
   noseblunt, bluntslide; the board turns back to the line of travel coming off a slide;
@@ -44,7 +53,7 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   a 180 from switch back to rolling forwards switches back. Tricks are named Fakie / Switch;
   switch flips and shove-its turn the goofy way. The body is the regular one mirrored (mirror.rs),
   one clip for the shuffle (to a pose the same both ways, played back mirrored); SK8_DEMO=switch
-- Wallride (an ollie glancing into a wall rolls along it) and wallie (flick on the wall to pop
+- Wallride (ours: the recorded port session found no wallride at all) (an ollie glancing into a wall rolls along it) and wallie (flick on the wall to pop
   off it); a Wall piece in the park builder and the desktop park
 - Old school on the foot-off button (left stick click / F) + a flick: no comply (ollie), boneless
   (nollie), no comply 180 both ways (shove-its); the front foot steps down while crouching;
@@ -93,8 +102,7 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - Walls: at riding speed (7.5-9 m/s measured) the port stops against a wall without bailing; sk8
   now bails only above 11.6 m/s
 - Not measured: kickers (KenneyPark geometry isn't loadable in sk8trace), the hard-landing
-  threshold (no tall drop in the test world), plants and wallrides (port input unknown / no port
-  wallride found)
+  threshold (no tall drop in the test world)
 
 - Poses vs port captures (web capture, analog pseudo-keys RY=/LX= in a local copy of the page):
   manuals stand tall, arms hanging, eyes ahead (board tilt 0.13 rad); the powerslide sits back over

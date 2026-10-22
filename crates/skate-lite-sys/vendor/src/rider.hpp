@@ -40,6 +40,7 @@ private:
 	void walk(World &w, const sk8_input &in);
 
 	void pop(const TrickDef &def, float share);
+	std::string plant_variant(const sk8_input &in) const;
 	void start_flip(int trick);
 	void land(const Hit &h);
 	bool try_grind(World &w);
@@ -79,6 +80,16 @@ private:
 	float last_steer_[2] = {0, 0};
 	bool unslide_ = false;
 	V3 plant_in_; // the way it was going when it planted (a foot/handplant pops back off that way)
+	unsigned plant_hold_ = 0; // the button that keeps a plant on the edge (let go, it comes off)
+	std::string plant_want_; // a handplant's variant the buttons / stick ask for, and how long
+	float plant_want_time_ = 0, plant_time_ = 0;
+	// a boneless on the ground (grab trigger + push): the wind-up before the pop, and whether the
+	// left stick went up on the way (a fastplant)
+	float plant_wind_ = -1;
+	bool plant_air_ = false; // off a plant (the slide button still held coming down isn't a revert)
+	V3 vert_in_;             // off a steep wall going up: level, from the wall into the ramp
+	bool wall_off_ = false;  // in the air off the top of a steep wall (until the next landing)
+	bool plant_fast_ = false;
 	unsigned last_buttons_ = 0, prev_buttons_ = 0;
 	// revert: landed holding the slide button, the board spins a half turn on its wheels
 	float revert_time_ = -1;

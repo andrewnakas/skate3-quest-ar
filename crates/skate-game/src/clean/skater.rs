@@ -314,7 +314,7 @@ fn old_school_clip(trick: &str) -> Option<Clip> {
     let t = trick.to_ascii_lowercase();
     if t.contains("no comply") {
         Some(Clip::PopNoComply)
-    } else if t.contains("boneless") {
+    } else if t.contains("boneless") || t.contains("fastplant") {
         Some(Clip::PopBoneless)
     } else {
         None

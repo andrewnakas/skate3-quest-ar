@@ -146,6 +146,8 @@ constexpr float kSkidTime = 0.3f;
 constexpr float kVertIn = 0.15f; // m: a vert air comes back down this far inside the lip
 constexpr float kSettleFlip = 0.45f;
 constexpr float kCrookToBoard = 0.13f;  // s a crooked holds before turning across into a boardslide
+constexpr float kPlantWind = 0.605f;   // s: a boneless's wind-up, push pressed to the pop
+constexpr float kPlantVariant = 0.15f; // s a handplant variant's buttons / stick hold before it changes
 constexpr float kGrindTransfer = 0.12f; // s the right stick holds a new way before the grind changes // s for a whole flip's worth of settling (the last bit: a few ticks)  // s: a crooked landing scrubs its speed off over this
 constexpr float kSettleClean = 0.8f, kSettleSketchy = 1.26f; // s: riding away from a landing before it's settled
 
@@ -498,7 +500,8 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	// powerslide: the left stick pulled back to a diagonal (the port's way: back-right slides
 	// right), or the slide button held while steering
 	bool stick_slide = in.steer[1] < -0.45f && std::fabs(in.steer[0]) > 0.4f;
-	bool want_slide = stick_slide || ((in.buttons & SK8_SLIDE) && std::fabs(steer) > 0.4f);
+	// (the button only on the flat: held riding up a ramp, it's for a handplant at the top)
+	bool want_slide = stick_slide || ((in.buttons & SK8_SLIDE) && std::fabs(steer) > 0.4f && up_.y > 0.95f);
 	if (mode_ == SK8_MODE_RIDE && want_slide && speed > 1.8f)
 		mode_ = SK8_MODE_SLIDE;
 	else if (mode_ == SK8_MODE_SLIDE && ((!want_slide && !(in.buttons & SK8_SLIDE)) || speed < 0.6f))
@@ -542,8 +545,33 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	} else {
 		since_stroke_ += kDt;
 	}
+	// boneless (the port's way in): a grab trigger held with push pressed: no stroke, the front foot
+	// steps down off the board for a wind-up, then the pop. The left stick up on the way: a fastplant.
+	const unsigned grab_bits = SK8_GRAB_LEFT | SK8_GRAB_RIGHT, push_bits = SK8_PUSH | SK8_PUSH_MONGO;
+	bool grab_held = (in.buttons & grab_bits) != 0;
+	bool plant_press = grab_held && (in.buttons & push_bits) &&
+		(((in.buttons & ~prev_buttons_) & push_bits) || !(prev_buttons_ & grab_bits));
+	if (plant_press && plant_wind_ < 0 && mode_ == SK8_MODE_RIDE && takeoff_trick_ < 0 && switching_ < 0) {
+		plant_wind_ = 0;
+		plant_fast_ = false;
+		push_time_ = -1;
+		push_queued_ = false;
+	}
+	if (plant_wind_ >= 0 && mode_ != SK8_MODE_RIDE)
+		plant_wind_ = -1;
+	if (plant_wind_ >= 0) {
+		plant_wind_ += kDt;
+		plant_fast_ = plant_fast_ || in.steer[1] > 0.5f;
+		crouch_ = std::min(0.85f, plant_wind_ / kPlantWind); // loads up as the foot goes down
+		if (plant_wind_ >= kPlantWind) {
+			const TrickDef &def = trick_table()[size_t(find_trick(plant_fast_ ? "Fastplant" : "Boneless"))];
+			pop(def, p[BonelessPop]);
+			pending_.push_back({staged(def.name), def.points});
+			return;
+		}
+	}
 	// pushing while fakie: a quick shuffle round to switch first, then the push
-	bool push_button = (in.buttons & (SK8_PUSH | SK8_PUSH_MONGO)) || push_queued_;
+	bool push_button = ((in.buttons & push_bits) && !grab_held) || push_queued_;
 	if (push_button && fakie_ && mode_ == SK8_MODE_RIDE && switching_ < 0 && push_time_ < 0 && p[SwitchWait] > 0) {
 		start_switch(p[SwitchTime] * 0.5f);
 		push_queued_ = true;
@@ -555,7 +583,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		brake_up_ = brake_held_ > p[BrakeLead] ? p[BrakeOut] : 0;
 	else if (brake_up_ > 0)
 		brake_up_ -= kDt;
-	if (push_button && switching_ < 0 && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 &&
+	if (push_button && switching_ < 0 && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 && plant_wind_ < 0 &&
 		brake_up_ <= 0 && !(in.buttons & SK8_BRAKE) &&
 		std::fabs(dot(vel_, travel)) < p[PushTop]) {
 		push_queued_ = false;
@@ -684,6 +712,8 @@ void Rider::follow_ground(World &w)
 		if (up_.y < 0.25f && speed < 1.2f) { // too slow to hold a near-vertical wall
 			mode_ = SK8_MODE_AIR;
 			air_time_ = 0;
+			wall_off_ = true;
+			vert_in_ = unit(flatten(up_, kUp), up_);
 			vel_ += up_ * 0.4f;
 		}
 		return;
@@ -699,6 +729,8 @@ void Rider::follow_ground(World &w)
 			float t_air = 2 * vel_.y / std::max(p[Gravity], 1.0f);
 			vel_ = vel_ - in * dot(vel_, in) + in * clampf(kVertIn / std::max(t_air, 0.1f), 0.05f, 0.6f);
 			vert_air_ = true;
+			wall_off_ = true;
+			vert_in_ = in;
 		}
 	}
 	// rolled off an edge
@@ -735,6 +767,9 @@ void Rider::pop(const TrickDef &def, float share)
 	stance_pre_ = switch_ ? "Switch " : fakie_ ? "Fakie " : "";
 	switching_ = -1; // a pop cuts a shuffle short
 	push_queued_ = false;
+	plant_wind_ = -1;
+	plant_air_ = false;
+	wall_off_ = false;
 	emit(SK8_EV_POP, staged(def.name).c_str(), 0, 0, surface_);
 }
 
@@ -1013,11 +1048,13 @@ void Rider::land(const Hit &h)
 		pending_.push_back({name, unsigned(halves * 110)});
 	}
 	// the slide button held into the landing: a revert (the board spun round on its wheels)
-	if (last_buttons_ & SK8_SLIDE) {
+	if ((last_buttons_ & SK8_SLIDE) && !plant_air_) {
 		revert_time_ = 0;
 		revert_dir_ = lean_ < -0.1f ? -1.0f : 1.0f;
 		pending_.push_back({"Revert", 90});
 	}
+	plant_air_ = false;
+	wall_off_ = false;
 	commit_pending();
 	land_settle_ = clean ? kSettleClean : kSettleSketchy;
 	if (!clean)
@@ -1171,16 +1208,31 @@ void Rider::wallride(World &w, const sk8_input &in, const Flick::Result &f)
 
 // ---------------------------------------------------------------- grind
 
+std::string Rider::plant_variant(const sk8_input &in) const
+{
+	unsigned b = in.buttons;
+	bool back = b & SK8_PUSH, front = b & SK8_PUSH_MONGO;
+	std::string name = (b & SK8_BRAKE) ? "No Foot " : front && !back ? "One Foot " : back && !front ? "Back Foot " : "";
+	name += "Handplant";
+	if (in.flick[1] < -0.6f)
+		name += " Down";
+	else if (std::fabs(in.flick[0]) > 0.6f)
+		name += in.flick[0] > 0 ? " Right" : " Left";
+	return name;
+}
+
 bool Rider::try_grind(World &w)
 {
-	if (grind_cooldown_ > 0 || w.rails.empty() || vel_.y > 2.5f)
+	// the slide button held going up off a ramp: a handplant on its edge (the port's way in)
+	bool hand = (last_buttons_ & SK8_SLIDE) && (wall_off_ || vel_.y > 0.5f);
+	if (grind_cooldown_ > 0 || w.rails.empty() || (vel_.y > 2.5f && !hand))
 		return false;
 	RailSpot s = w.nearest_rail(pos_, p[GrindCatch]);
 	if (s.rail < 0 || pos_.y - s.point.y < -0.15f)
 		return false;
 	float vt = dot(vel_, s.tangent);
 	// a plant (foot-off held) catches the edge from any way, even straight at it
-	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0;
+	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0 || hand;
 	if (std::fabs(vt) < 0.8f && !plant)
 		return false;
 	// over the rail, along it: coming down, the board is drawn onto it over a few ticks (no snap
@@ -1230,8 +1282,13 @@ bool Rider::try_grind(World &w)
 	if (dark)
 		grind_kind_ = SK8_GRIND_DARKSLIDE;
 	if (plant) {
-		grind_kind_ = (last_buttons_ & (SK8_GRAB_LEFT | SK8_GRAB_RIGHT)) ? SK8_GRIND_HANDPLANT : SK8_GRIND_FOOTPLANT;
-		plant_in_ = unit(flatten(vel_, kUp), fwd_);
+		grind_kind_ = hand || (last_buttons_ & (SK8_GRAB_LEFT | SK8_GRAB_RIGHT)) ? SK8_GRIND_HANDPLANT : SK8_GRIND_FOOTPLANT;
+		plant_hold_ = hand ? SK8_SLIDE : SK8_FOOT_OFF;
+		plant_want_.clear();
+		plant_want_time_ = 0;
+		plant_time_ = 0;
+		// (off a ramp's lip going up: the way up the wall, so it comes back down into the ramp)
+		plant_in_ = wall_off_ ? vert_in_ * -1.0f : unit(flatten(vel_, kUp), fwd_);
 		rail_speed_ = 0;
 	}
 	// named for how it's ridden: switch stance, or riding the rail backwards (fakie)
@@ -1279,10 +1336,40 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 	// a plant: a stall on the edge, then back off it the way it came, up
 	if (grind_kind_ == SK8_GRIND_FOOTPLANT || grind_kind_ == SK8_GRIND_HANDPLANT) {
 		grind_time_ += kDt;
-		float stall = grind_kind_ == SK8_GRIND_HANDPLANT ? 1.1f : 0.65f;
-		if (f.trick >= 0 || grind_time_ > stall || (grind_time_ > 0.15f && !(in.buttons & SK8_FOOT_OFF))) {
-			pos_ += kUp * 0.05f;
-			leave_grind(plant_in_ * -1.2f + kUp * 3.3f, true);
+		plant_time_ += kDt;
+		// held on a handplant: a foot (or both) off, or the body dropped / swung with the right
+		// stick, held a moment (the one left is scored)
+		if (grind_kind_ == SK8_GRIND_HANDPLANT && plant_hold_ == SK8_SLIDE) {
+			std::string want = plant_variant(in);
+			plant_want_time_ = want == plant_want_ ? plant_want_time_ + kDt : 0;
+			plant_want_ = want;
+			if (want != grind_name_ && plant_want_time_ >= kPlantVariant) {
+				add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
+				grind_name_ = trick_ = want;
+				grind_time_ = 0;
+			}
+		}
+		float stall = grind_kind_ == SK8_GRIND_HANDPLANT ? p[PlantStall] : 0.65f;
+		if (f.trick >= 0 || plant_time_ > stall || (plant_time_ > 0.15f && !(in.buttons & plant_hold_))) {
+			if (wall_off_ && f.trick < 0) {
+				// on a ramp's lip: the body swings back over and it drops straight in, nose first,
+				// onto the wall it came up (comes down along it, as a vert air does)
+				leave_grind(kUp * -1.6f + vert_in_ * 0.3f, true);
+				up_ = vert_in_;
+				fwd_ = fakie_ ? kUp : kUp * -1.0f;
+				vert_air_ = true;
+				plant_air_ = true;
+				Hit h;
+				if (w.cast(pos_ + vert_in_ * 0.3f - kUp * 0.1f, vert_in_ * -0.6f, h))
+					land(h);
+				else
+					pos_ += vert_in_ * 0.06f - kUp * 0.04f;
+				return;
+			} else {
+				pos_ += kUp * 0.05f;
+				leave_grind(plant_in_ * -1.2f + kUp * 3.3f, true);
+			}
+			plant_air_ = true;
 		}
 		return;
 	}

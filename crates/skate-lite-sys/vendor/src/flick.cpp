@@ -51,6 +51,9 @@ const std::vector<TrickDef> kTricks = {
 	// foot_off_variant). Kept after the gestures; sk8_trick_count() covers only those.
 	{"No Comply", {}, 160, 0, 0, false, true},
 	{"Boneless", {}, 200, 0, 0, false, true},
+	// a grab trigger held and push pressed on the ground (no flick): the boneless wind-up; the left
+	// stick pushed up on the way, a fastplant
+	{"Fastplant", {}, 220, 0, 0, false, true},
 	{"No Comply 180", {}, 260, 0, 0.5f, false, false},
 	{"Frontside No Comply 180", {}, 280, 0, -0.5f, false, false},
 	{"Hippie Jump", {}, 150, 0, 0, false, true},

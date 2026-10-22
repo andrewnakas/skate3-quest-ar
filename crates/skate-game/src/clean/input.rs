@@ -444,12 +444,26 @@ fn demo_walk(t: f32) -> Input {
 }
 
 /// `SK8_DEMO=plants`: an ollie at an edge across the path with the foot-off button held near it:
-/// a footplant, then (a grab held too) a handplant.
+/// a footplant, then (a grab held too) a handplant; then the port's way to a boneless (a trigger
+/// held, push pressed: the wind-up, then the pop) and a fastplant (the left stick up on the way).
 const PLANT_EACH: f32 = 4.5;
 fn demo_plants(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> Input {
     let d = t % PLANT_EACH;
-    let hand = (t / PLANT_EACH) as usize % 2 == 1;
+    let slot = (t / PLANT_EACH) as usize % 4;
+    let hand = slot == 1;
     let mut i = Input::default();
+    if slot >= 2 {
+        if (0.1..1.2).contains(&d) {
+            i.buttons |= buttons::GRAB_RIGHT;
+        }
+        if (0.2..0.9).contains(&d) {
+            i.buttons |= buttons::PUSH;
+            if slot == 3 && d < 0.5 {
+                i.steer = [0.0, 1.0];
+            }
+        }
+        return i;
+    }
     if (0.15..0.5).contains(&d) {
         i.flick = [0.0, -1.0];
     } else if (0.5..0.6).contains(&d) {
@@ -616,7 +630,10 @@ pub(crate) fn read_desktop(
                 // the slide rail (across the path): slot 7 in GRIND_SLOTS
                 let rail = demo_rail(7, Vec3::from_array(s.position), fwd);
                 sim.world.clear_rails();
-                sim.world.add_rail(&[rail[0].to_array(), rail[1].to_array()]);
+                // (the boneless slots, 2 and 3, on open ground)
+                if slot.unwrap_or(0) % 4 < 2 {
+                    sim.world.add_rail(&[rail[0].to_array(), rail[1].to_array()]);
+                }
                 sim.demo_rail = Some(rail);
             } else if demo_kind == "wallride" {
                 // the desktop park's wall runs along z at x = 16 (z 8..20)
