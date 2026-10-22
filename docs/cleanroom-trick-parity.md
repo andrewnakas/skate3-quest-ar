@@ -73,15 +73,20 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - Not matched: a held flick in a 1-tick-crouch ollie (the port bails the double, sk8 lands it);
   wall-slam threshold not measured (the test world has no wall)
 
+- Poses vs port captures (web capture, analog pseudo-keys RY=/LX= in a local copy of the page):
+  manuals stand tall, arms hanging, eyes ahead (board tilt 0.13 rad); the powerslide sits back over
+  the heels with the arms spread; grinds/slides from the reference medians (taller, hands low)
+
 ## Next (in order)
-1. Animation fidelity: grind/manual/powerslide poses vs port captures; open polish below
-2. Quest APK + headset test
+1. Quest APK + headset test (needs the headset), then the 0.03 release decision
 
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)
 - Landing a held flip before its clip ends: ankles ~54 deg/frame (was 100)
-- Handplant: the legs twist as they swing up overhead (~88 deg/frame, mostly twist along a near
-  straight leg); the arm is fixed (hand plants first, then the body tips over it)
+- Handplant: the legs twist as they swing up overhead (~68 deg/frame, was 88; mostly twist along
+  the shin); the arm is fixed (hand plants first, then the body tips over it)
+- Port grinds were not captured on screen (the spawn rail's catch window is too narrow for the
+  browser path); grind poses follow the reference-footage medians instead
 - Grabs now <= 27 deg/frame (were 118-163)
 - Plant at ~8 m/s is a fast leg sweep (real motion)
 - audit `bytes`: glTF JSON keys + PNG IHDR headers match retail files (boilerplate)
