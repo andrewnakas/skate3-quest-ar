@@ -380,6 +380,11 @@ HANDPLANT_REACH = P(hips=(0.02, 0.04, 0.66), hips_rot=(40, 0, 6), spine=(30, 0, 
 HANDPLANT_TIP = P(hips=(0.02, 0.05, 0.8), hips_rot=(100, 0, 6), spine=(22, 0, 6), head=(5, 0, 25),
                   lf=foot(0.1, 0.06, 0.9, yaw=FRONT_YAW, pitch=-40), rf=foot(-0.14, 0.08, 0.86, yaw=BACK_YAW, pitch=-40),
                   lh=(0.06, -0.06, -0.08), rh=(-0.1, 0.06, 0.7), knee_out=0.3)
+# half way up: the feet swing round behind the body at hip height (straight from under the hips to
+# over them the foot target ran through the hip joint and the knees flipped)
+HANDPLANT_SWING = P(hips=(0.02, 0.06, 0.74), hips_rot=(70, 0, 6), spine=(26, 0, 7), head=(-6, 0, 32),
+                    lf=foot(0.1, 0.46, 0.62, yaw=FRONT_YAW, pitch=-20), rf=foot(-0.14, 0.48, 0.6, yaw=BACK_YAW, pitch=-20),
+                    lh=(0.06, -0.06, -0.08), rh=(-0.12, 0.06, 0.66), knee_out=0.4)
 HANDPLANT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
               lf=foot(0.12, 0.08, 1.48, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.16, 0.1, 1.42, yaw=BACK_YAW, pitch=-70),
               lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.2)
@@ -650,7 +655,7 @@ CLIPS = {
     "grind_5_0": (True, loop(lambda t: idle(GRIND_50, t, 0.012, 0.06), IDLE_LEN)),
     "footplant": (False, [(0.0, AIR_TUCK), (0.14, FOOTPLANT), (0.7, idle(FOOTPLANT, 0.25, 0.01, 0.0))]),
     # the hand goes down to the edge first, still upright, then the body tips over it
-    "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT_REACH), (0.36, HANDPLANT_TIP), (0.52, HANDPLANT),
+    "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT_REACH), (0.29, HANDPLANT_SWING), (0.36, HANDPLANT_TIP), (0.52, HANDPLANT),
                           (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
     "primo": (True, loop(lambda t: idle(PRIMO, t, 0.016, 0.05), IDLE_LEN)),
     "casper": (True, loop(lambda t: idle(CASPER, t, 0.012, 0.04), IDLE_LEN)),
