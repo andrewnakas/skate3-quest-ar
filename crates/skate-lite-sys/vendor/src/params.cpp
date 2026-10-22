@@ -72,6 +72,7 @@ const sk8_param kTable[ParamCount] = {
 	{"manual_correct", "Manual correction", kManuals, 0.0f, 10.0f, 2.45f, 0.05f},
 	{"manual_hold", "Right stick part-way, s to manual", kManuals, 0.0f, 1.0f, 0.18f, 0.01f},
 	{"manual_drag", "Manual slow-down, m/s^2", kManuals, 0.0f, 5.0f, 0.37f, 0.01f},
+	{"manual_land", "After a landing, s before a fresh manual (held into it: at once)", kManuals, 0.0f, 2.0f, 0.75f, 0.05f},
 
 	{"score_scale", "Score multiplier", kScore, 0.0f, 100.0f, 1.0f, 0.1f},
 	{"bank_wait", "Roll-away to bank, s", kScore, 0.0f, 5.0f, 0.95f, 0.05f},

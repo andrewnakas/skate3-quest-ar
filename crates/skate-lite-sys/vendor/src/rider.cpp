@@ -99,6 +99,7 @@ namespace {
 
 constexpr float kPushBite = 0.12f; // s: how long a stroke's foot takes to give its speed
 constexpr float kSkidTime = 0.3f;  // s: a crooked landing scrubs its speed off over this
+constexpr float kSettleClean = 0.8f, kSettleSketchy = 1.26f; // s: riding away from a landing before it's settled
 
 constexpr float kDt = SK8_DT;
 constexpr float kDeg = kPi / 180.0f;
@@ -384,8 +385,9 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		if (switching_ >= 1 || mode_ != SK8_MODE_RIDE)
 			switching_ = -1;
 	}
+	// (after a landing: once it has settled from it, longer from a sketchy one)
 	bool settled = mode_ == SK8_MODE_RIDE && takeoff_trick_ < 0 && crouch_ < 0.2f && !flick_.holding_lead() &&
-		push_time_ < 0 && !foot_off_ && revert_time_ < 0 && since_land_ > 0.6f && speed > 0.3f;
+		push_time_ < 0 && !foot_off_ && revert_time_ < 0 && since_land_ > land_settle_ && speed > 0.3f;
 	if (fakie_ && settled && switching_ < 0 && p[SwitchWait] > 0) {
 		fakie_time_ += kDt;
 		if (fakie_time_ >= p[SwitchWait])
@@ -406,7 +408,9 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	bool want_manual = (in.buttons & (SK8_MANUAL | SK8_NOSE_MANUAL)) || stick != 0;
 	if (!want_manual)
 		manual_lock_ = false;
-	if (mode_ == SK8_MODE_RIDE && want_manual && !manual_lock_ && speed > 0.6f) {
+	// caught on the landing (held into it) or, pressed fresh, only once the landing has settled
+	bool settling = since_land_ >= 0.1f && since_land_ < p[ManualLand];
+	if (mode_ == SK8_MODE_RIDE && want_manual && !manual_lock_ && speed > 0.6f && !settling) {
 		mode_ = SK8_MODE_MANUAL;
 		manual_dir_ = stick != 0 ? stick : (in.buttons & SK8_MANUAL) ? 1 : -1;
 		// with the foot-off button: the board flipped onto its side (primo) or upside down (casper)
@@ -927,6 +931,7 @@ void Rider::land(const Hit &h)
 		pending_.push_back({"Revert", 90});
 	}
 	commit_pending();
+	land_settle_ = clean ? kSettleClean : kSettleSketchy;
 	if (!clean)
 		emit(SK8_EV_LAND, "sketchy", 0, 1, h.surface);
 	else
@@ -1132,7 +1137,8 @@ bool Rider::try_grind(World &w)
 		plant_in_ = unit(flatten(vel_, kUp), fwd_);
 		rail_speed_ = 0;
 	}
-	grind_name_ = kGrindDefs[grind_kind_].name;
+	// named for how it's ridden: switch stance, or riding the rail backwards (fakie)
+	grind_name_ = std::string(switch_ ? "Switch " : backwards && !slide ? "Fakie " : "") + kGrindDefs[grind_kind_].name;
 	fakie_ = backwards && !slide;
 	grind_time_ = 0;
 	balance_ = 0;

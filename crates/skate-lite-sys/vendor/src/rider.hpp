@@ -114,9 +114,11 @@ private:
 	// manual / grind
 	int manual_dir_ = 0;
 	int manual_style_ = 0; // 0 a manual, 1 primo (board on its side), 2 casper (board upside down)
-	const char *manual_name() const
+	// named for the stance it's ridden in, like the flips: Fakie Manual, Switch Nose Manual
+	std::string manual_name() const
 	{
-		return manual_style_ == 1 ? "Primo" : manual_style_ == 2 ? "Casper" : manual_dir_ > 0 ? "Manual" : "Nose Manual";
+		const char *base = manual_style_ == 1 ? "Primo" : manual_style_ == 2 ? "Casper" : manual_dir_ > 0 ? "Manual" : "Nose Manual";
+		return std::string(switch_ ? "Switch " : fakie_ ? "Fakie " : "") + base;
 	}
 	float manual_time_ = 0;
 	float balance_ = 0;
@@ -124,7 +126,7 @@ private:
 	float seg_u_ = 0, rail_speed_ = 0;
 	int rail_dir_ = 1;
 	int grind_kind_ = 0;
-	float brake_held_ = 0, brake_up_ = 0, push_gain_ = 0, skid_ = 0, skid_time_ = 0;
+	float brake_held_ = 0, brake_up_ = 0, push_gain_ = 0, skid_ = 0, skid_time_ = 0, land_settle_ = 0.8f;
 	bool grind_tip_ = false; // a 50-50 near the rail's end, the front truck past it: tipped onto the tail
 	float grind_time_ = 0;
 	float grind_cooldown_ = 0;

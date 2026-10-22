@@ -21,7 +21,7 @@ enum Param : int
 	// Grinds
 	GrindCatch, GrindDrag, GrindBalance, GrindKeep, GrindOffKeep,
 	// Manuals
-	ManualWobble, ManualCorrect, ManualHold, ManualDrag,
+	ManualWobble, ManualCorrect, ManualHold, ManualDrag, ManualLand,
 	// Scoring
 	ScoreScale, BankWait, GrindRate, ManualRate,
 	ParamCount

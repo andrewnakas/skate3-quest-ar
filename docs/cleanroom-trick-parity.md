@@ -64,14 +64,17 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - Brake: foot down 0.2 s, then 4.1 m/s^2; foot back up 0.42 s before a push can start
 - Push: a burst as the foot bites, ~61% of the way to top speed (9.15) per stroke, strokes 1 s,
   first contact 1.0 s after a brake (port 1.0); coasting ~0.01 m/s^2
+- Fakie/switch: grinds named for how they're ridden (Switch stance, Fakie when backwards on the
+  rail), manuals for the stance; after a landing the feet only shuffle to switch once it has settled
+  (0.8 s clean / 1.26 s sketchy, then 0.6 s: port ~85 / 105-122 ticks); a fresh manual waits 0.75 s
+  after a landing unless held into it (port 45 ticks)
 - Not matched: a held flick in a 1-tick-crouch ollie (the port bails the double, sk8 lands it);
   wall-slam threshold not measured (the test world has no wall)
 
 ## Next (in order)
 1. Animation fidelity: grind/manual/powerslide poses vs port captures; open polish below
-2. Fakie/switch names on grinds and manuals; switch timer after a sketchy land
-3. Grab input like the port (right stick held into the trigger)
-4. Quest APK + headset test
+2. Grab input like the port (right stick held into the trigger)
+3. Quest APK + headset test
 
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)
