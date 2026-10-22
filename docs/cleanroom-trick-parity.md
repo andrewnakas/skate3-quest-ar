@@ -81,7 +81,20 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - Grab tweaks like the port: a one-hand grab started with the stick centred, the stick then
   pushed out: left trigger up nosebone, right tuck knee, down tailbone, left stiffy; right trigger
   up melon, right method, down japan, left cross bone (both triggers: no tweak)
-- Not measured: the wall-slam threshold (the test world has no wall)
+- Ramps (sk8trace --world test: the port's test-course shapes as our own mesh): rolling down the
+  roll-in within 1% of the port (slope_gravity 0.78), steering eases in like the port (two 0.11 s
+  stages: turn-in matches tick for tick), push from a standstill 3.6 m/s (push_cap); a half pipe
+  carve climbs the wall like the port; vert airs come back down into the transition with their
+  speed (the port's air height there is cut by the test course's coping box, so not compared)
+- Grinds by the right stick at the catch like the port (up nosegrind, down 5-0, right crooked
+  held on into a boardslide, left lipslide, up-left overcrook, down-left willy; left stick back for
+  smith/feeble/salad/suski), moving it on the rail transfers, let go it stays; pop off a rail as
+  high as the port (grind_pop 0.7)
+- Walls: at riding speed (7.5-9 m/s measured) the port stops against a wall without bailing; sk8
+  now bails only above 11.6 m/s
+- Not measured: kickers (KenneyPark geometry isn't loadable in sk8trace), the hard-landing
+  threshold (no tall drop in the test world), plants and wallrides (port input unknown / no port
+  wallride found)
 
 - Poses vs port captures (web capture, analog pseudo-keys RY=/LX= in a local copy of the page):
   manuals stand tall, arms hanging, eyes ahead (board tilt 0.13 rad); the powerslide sits back over

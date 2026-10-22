@@ -73,12 +73,20 @@ int grind_kind_for(bool slide, float x, float y, bool crouched)
 			return side ? SK8_GRIND_BLUNTSLIDE : SK8_GRIND_TAILSLIDE;
 		return side ? SK8_GRIND_LIPSLIDE : SK8_GRIND_BOARDSLIDE;
 	}
-	if (crouched && side) // the crouch held with a diagonal: the back-truck oddities
-		return up ? SK8_GRIND_SUSKI : down ? (x < 0 ? SK8_GRIND_SALAD : SK8_GRIND_WILLY) : SK8_GRIND_5_0;
+	// the right stick, as the port: up (or up-right) nosegrind, down (or down-right) 5-0, right
+	// crooked (held, it slides on into a boardslide), left lipslide, up-left overcrook, down-left
+	// willy; with the left stick held back: left smith, right feeble, down-right salad, up-right suski
+	bool right = x > 0.45f, left = x < -0.45f;
+	if (crouched && side)
+		return up ? SK8_GRIND_SUSKI : down ? SK8_GRIND_SALAD : right ? SK8_GRIND_FEEBLE : SK8_GRIND_SMITH;
 	if (up)
-		return side ? (x < 0 ? SK8_GRIND_CROOKED : SK8_GRIND_OVERCROOK) : SK8_GRIND_NOSEGRIND;
+		return left ? SK8_GRIND_OVERCROOK : SK8_GRIND_NOSEGRIND;
 	if (down)
-		return side ? (x < 0 ? SK8_GRIND_SMITH : SK8_GRIND_FEEBLE) : SK8_GRIND_5_0;
+		return left ? SK8_GRIND_WILLY : SK8_GRIND_5_0;
+	if (right)
+		return SK8_GRIND_CROOKED;
+	if (left)
+		return SK8_GRIND_LIPSLIDE;
 	return crouched ? SK8_GRIND_5_0 : SK8_GRIND_50_50;
 }
 
@@ -136,7 +144,9 @@ namespace {
 constexpr float kPushBite = 0.12f; // s: how long a stroke's foot takes to give its speed
 constexpr float kSkidTime = 0.3f;
 constexpr float kVertIn = 0.15f; // m: a vert air comes back down this far inside the lip
-constexpr float kSettleFlip = 0.45f; // s for a whole flip's worth of settling (the last bit: a few ticks)  // s: a crooked landing scrubs its speed off over this
+constexpr float kSettleFlip = 0.45f;
+constexpr float kCrookToBoard = 0.13f;  // s a crooked holds before turning across into a boardslide
+constexpr float kGrindTransfer = 0.12f; // s the right stick holds a new way before the grind changes // s for a whole flip's worth of settling (the last bit: a few ticks)  // s: a crooked landing scrubs its speed off over this
 constexpr float kSettleClean = 0.8f, kSettleSketchy = 1.26f; // s: riding away from a landing before it's settled
 
 constexpr float kDt = SK8_DT;
@@ -1173,9 +1183,11 @@ bool Rider::try_grind(World &w)
 	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0;
 	if (std::fabs(vt) < 0.8f && !plant)
 		return false;
-	// over the rail: coming down, the board is drawn onto it over a few ticks (no snap from high up)
+	// over the rail, along it: coming down, the board is drawn onto it over a few ticks (no snap
+	// from high up). Across it (a slide) the moment over it is brief: caught at once.
 	float gap = pos_.y - s.point.y;
-	if (gap > 0.09f && !plant) {
+	float along_cos = std::fabs(dot(unit(flatten(vel_, kUp), fwd_), unit(flatten(s.tangent, kUp), s.tangent)));
+	if (gap > 0.09f && !plant && along_cos > 0.57f) {
 		if (vel_.y < 0) {
 			vel_.y = std::min(vel_.y, -gap * 10.7f);
 			V3 lat = flatten(s.point - pos_, kUp);
@@ -1211,8 +1223,10 @@ bool Rider::try_grind(World &w)
 		a = kPi - a;
 	bool slide = a > 55 * kDeg;
 	// crouched for the catch: loaded on the ground, or the right stick held down in the air
-	bool crouched = crouch_ > 0.5f || last_flick_[1] < -0.7f;
-	grind_kind_ = grind_kind_for(slide, last_steer_[0], last_steer_[1], crouched);
+	bool crouched = crouch_ > 0.5f || last_steer_[1] < -0.6f; // loaded, or the left stick held back
+	grind_slide_ = slide;
+	grind_transfer_ = 0;
+	grind_kind_ = grind_kind_for(slide, last_flick_[0], last_flick_[1], crouched);
 	if (dark)
 		grind_kind_ = SK8_GRIND_DARKSLIDE;
 	if (plant) {
@@ -1221,7 +1235,8 @@ bool Rider::try_grind(World &w)
 		rail_speed_ = 0;
 	}
 	// named for how it's ridden: switch stance, or riding the rail backwards (fakie)
-	grind_name_ = std::string(switch_ ? "Switch " : backwards && !slide ? "Fakie " : "") + kGrindDefs[grind_kind_].name;
+	grind_backwards_ = backwards && !slide;
+	grind_name_ = std::string(switch_ ? "Switch " : grind_backwards_ ? "Fakie " : "") + kGrindDefs[grind_kind_].name;
 	fakie_ = backwards && !slide;
 	grind_time_ = 0;
 	balance_ = 0;
@@ -1281,6 +1296,34 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 		if (!def.flat)
 			start_flip(f.trick);
 		return;
+	}
+	// the right stick moved and held a moment: over into that grind (the one left is scored), as
+	// the port does mid-rail
+	// (let go to the centre, it stays in the grind it's in; a crooked held on turns across into a
+	// boardslide)
+	bool held = in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1] > 0.2f;
+	if (grind_kind_ != SK8_GRIND_DARKSLIDE && held) {
+		int want = grind_kind_for(grind_slide_, in.flick[0], in.flick[1], in.steer[1] < -0.6f);
+		if (want == SK8_GRIND_CROOKED && grind_kind_ == SK8_GRIND_CROOKED && grind_time_ >= kCrookToBoard)
+			want = SK8_GRIND_BOARDSLIDE;
+		else if (want == SK8_GRIND_CROOKED && grind_kind_ == SK8_GRIND_BOARDSLIDE)
+			want = SK8_GRIND_BOARDSLIDE;
+		if (want != grind_kind_) {
+			grind_transfer_ += kDt;
+			if (grind_transfer_ >= kGrindTransfer) {
+				add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
+				grind_kind_ = want;
+				grind_name_ = (switch_ ? "Switch " : grind_backwards_ ? "Fakie " : "") + std::string(kGrindDefs[grind_kind_].name);
+				grind_time_ = 0;
+				grind_transfer_ = 0;
+				trick_ = grind_name_;
+				emit(SK8_EV_GRIND, grind_name_.c_str(), 0, grind_kind_, surface_);
+			}
+		} else {
+			grind_transfer_ = 0;
+		}
+	} else {
+		grind_transfer_ = 0;
 	}
 	rail_speed_ += -p[Gravity] * t.y * kDt;
 	rail_speed_ -= p[GrindDrag] * kDt;

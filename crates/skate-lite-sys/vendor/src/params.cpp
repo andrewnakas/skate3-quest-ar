@@ -21,7 +21,7 @@ const sk8_param kTable[ParamCount] = {
 	{"pop_high", "Pop (full crouch), m/s", kPop, 1.0f, 16.0f, 5.35f, 0.05f},
 	{"crouch_charge", "Crouch to full pop, s", kPop, 0.05f, 1.5f, 0.21f, 0.01f},
 	{"nollie_pop", "Nollie pop share", kPop, 0.3f, 1.5f, 1.015f, 0.005f},
-	{"grind_pop", "Pop off rails share", kPop, 0.3f, 1.5f, 0.82f, 0.01f},
+	{"grind_pop", "Pop off rails share", kPop, 0.3f, 1.5f, 0.7f, 0.01f},
 
 	{"gravity", "Gravity, m/s^2", kSpeed, 1.0f, 40.0f, 12.55f, 0.05f},
 	{"slope_gravity", "Share of gravity rolling on a slope", kSpeed, 0.1f, 1.5f, 0.78f, 0.01f},
@@ -60,7 +60,7 @@ const sk8_param kTable[ParamCount] = {
 	{"land_max", "Worst landing, degrees", kBails, 5.0f, 170.0f, 58.0f, 0.5f},
 	{"side_max", "Worst sideways landing, degrees", kBails, 5.0f, 90.0f, 88.0f, 0.5f},
 	{"land_skid", "Landing skid: no speed kept at, degrees", kBails, 30.0f, 180.0f, 100.0f, 1.0f},
-	{"wall_bail", "Wall slam speed, m/s", kBails, 0.5f, 60.0f, 6.45f, 0.05f},
+	{"wall_bail", "Wall slam speed, m/s", kBails, 0.5f, 60.0f, 11.6f, 0.05f},
 	{"impact_bail", "Hard landing speed, m/s", kBails, 1.0f, 80.0f, 13.6f, 0.1f},
 	{"bail_time", "Bail to back on the board, s", kBails, 0.5f, 12.0f, 4.9f, 0.05f},
 	{"bail_slide", "Body sliding along the ground, m/s^2", kBails, 0.5f, 30.0f, 5.35f, 0.05f},

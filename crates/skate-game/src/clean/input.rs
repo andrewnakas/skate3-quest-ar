@@ -246,34 +246,38 @@ fn demo_oldschool(t: f32) -> Input {
 /// slides), an ollie onto it with the left stick set as the board comes down: every grind kind.
 const GRIND_EACH: f32 = 4.5;
 /// (slide, stick x, stick y) per slot, in sk8_grind_kind order.
-const GRIND_SLOTS: [(bool, f32, f32); 16] = [
-    (false, 0.0, 0.0), (false, 0.0, -1.0), (false, 0.0, 1.0), (false, -0.8, 0.8), (false, 0.8, 0.8),
-    (false, -0.8, -0.8), (false, 0.8, -0.8), (true, 0.0, 0.0), (true, 0.0, 1.0), (true, 0.0, -1.0),
-    (true, 1.0, 0.0), (true, 0.8, 0.8), (true, 0.8, -0.8),
-    // the last three with the crouch held into the catch: salad, willy, suski
-    (false, -0.8, -0.8), (false, 0.8, -0.8), (false, 0.8, 0.8),
+const GRIND_SLOTS: [(bool, f32, f32); 17] = [
+    // grinds by the right stick at the catch, as the port: 50-50, nosegrind, 5-0, crooked (held on
+    // into a boardslide), overcrook, lipslide, willy
+    (false, 0.0, 0.0), (false, 0.0, 1.0), (false, 0.0, -1.0), (false, 1.0, 0.0), (false, -0.8, 0.8),
+    (false, -1.0, 0.0), (false, -0.8, -0.8),
+    // slides (the rail across the path): boardslide, noseslide, tailslide, lipslide, noseblunt, bluntslide
+    (true, 0.0, 0.0), (true, 0.0, 1.0), (true, 0.0, -1.0), (true, 1.0, 0.0), (true, 0.8, 0.8), (true, 0.8, -0.8),
+    // with the left stick held back: smith, feeble, salad, suski
+    (false, -1.0, 0.0), (false, 1.0, 0.0), (false, 0.8, -0.8), (false, 0.8, 0.8),
 ];
 fn demo_grinds(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> Input {
     let d = t % GRIND_EACH;
-    let (_, x, y) = GRIND_SLOTS[(t / GRIND_EACH) as usize % GRIND_SLOTS.len()];
+    let slot = (t / GRIND_EACH) as usize % GRIND_SLOTS.len();
+    let (_, x, y) = GRIND_SLOTS[slot];
     let mut i = Input::default();
     if (0.15..0.5).contains(&d) {
         i.flick = [0.0, -1.0];
     } else if (0.5..0.6).contains(&d) {
         i.flick = [0.0, 1.0];
     }
-    // the stick set as the board comes down to the rail (held longer, sideways would spin it)
-    // (only right at the rail: held sideways any longer it spins the board round)
+    // the right stick set as the board comes down to the rail and kept there along it
     let near = rail.is_some_and(|[a, b]| {
         let p = Vec3::from_array(s.position);
         let ab = b - a;
         let k = ((p - a).dot(ab) / ab.length_squared()).clamp(0.0, 1.0);
         (a + ab * k).distance(p) < 0.9
     });
-    if s.mode == skate_lite_sys::Mode::Air && near && d > 0.6 {
-        i.steer = [x, y];
-        if (t / GRIND_EACH) as usize % GRIND_SLOTS.len() >= 13 {
-            i.flick = [0.0, -1.0];
+    let on = s.mode == skate_lite_sys::Mode::Grind || (s.mode == skate_lite_sys::Mode::Air && near && d > 0.6);
+    if on {
+        i.flick = [x, y];
+        if slot >= 13 {
+            i.steer = [0.0, -1.0];
         }
     }
     i
@@ -619,7 +623,7 @@ pub(crate) fn read_desktop(
                 sim.place_rolling(Vec3::new(15.05, 0.0, 6.0), 0.16, 7.5);
             } else if demo_kind == "bail" && slot.unwrap_or(0) % 2 == 1 {
                 // straight at the desktop park's wall (x = 16, z 8..20), fast enough to slam
-                sim.place_rolling(Vec3::new(10.0, 0.0, 14.0), std::f32::consts::FRAC_PI_2, 8.5);
+                sim.place_rolling(Vec3::new(10.0, 0.0, 14.0), std::f32::consts::FRAC_PI_2, 13.0);
             } else if demo_kind == "bail" {
                 sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 7.0);
             } else if demo_kind == "grinds" {

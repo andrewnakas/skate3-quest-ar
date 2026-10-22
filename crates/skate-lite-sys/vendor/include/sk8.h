@@ -161,7 +161,7 @@ typedef enum sk8_bail_stage
 #define SK8_PUSH_PLANT 0.18f
 #define SK8_PUSH_RELEASE 0.62f
 
-/* Grinds and slides: the board's angle to the rail when it lands on it picks a grind (along it) or
+/* Grinds and slides (the right stick picks, and moving it while on the rail changes): the board's angle to the rail when it lands on it picks a grind (along it) or
  * a slide (across it); the left stick then picks which (centre, toward the nose = up, toward the
  * tail = down, sideways, and the diagonals). */
 typedef enum sk8_grind_kind
@@ -172,10 +172,10 @@ typedef enum sk8_grind_kind
 	SK8_GRIND_UNUSED,
 	SK8_GRIND_5_0,         /* back truck (down, or crouched) */
 	SK8_GRIND_NOSEGRIND,   /* front truck (up) */
-	SK8_GRIND_CROOKED,     /* front truck, nose turned over the near side (up + left) */
-	SK8_GRIND_OVERCROOK,   /* front truck, nose turned over the far side (up + right) */
-	SK8_GRIND_SMITH,       /* back truck, front dipped below the near side (down + left) */
-	SK8_GRIND_FEEBLE,      /* back truck, front truck over the far side (down + right) */
+	SK8_GRIND_CROOKED,     /* front truck, nose turned over the near side (right stick right, or up + right) */
+	SK8_GRIND_OVERCROOK,   /* front truck, nose turned over the far side (up + left) */
+	SK8_GRIND_SMITH,       /* back truck, front dipped below the near side (left) */
+	SK8_GRIND_FEEBLE,      /* back truck, front truck over the far side (crouched, right) */
 	SK8_GRIND_NOSESLIDE,   /* across, on the nose (up) */
 	SK8_GRIND_TAILSLIDE,   /* across, on the tail (down) */
 	SK8_GRIND_LIPSLIDE,    /* across, middle, the board turned the other way over the rail (sideways) */
@@ -184,8 +184,8 @@ typedef enum sk8_grind_kind
 	SK8_GRIND_FOOTPLANT,   /* foot-off held as it reaches an edge: the front foot planted on it, a stall */
 	SK8_GRIND_HANDPLANT,   /* foot-off and a grab held: a hand planted on the edge, upside down */
 	SK8_GRIND_DARKSLIDE,   /* across, the board caught upside down mid-flip: sliding on its grip */
-	SK8_GRIND_SALAD,       /* back truck, nose turned out over the far side (crouched, down + left) */
-	SK8_GRIND_WILLY,       /* back truck, front dipped over the near side (crouched, down + right) */
+	SK8_GRIND_SALAD,       /* back truck, nose turned out over the far side (down + right) */
+	SK8_GRIND_WILLY,       /* back truck, front dipped over the near side (down + left) */
 	SK8_GRIND_SUSKI,       /* back truck, nose turned in over the near side (crouched, up + sideways) */
 } sk8_grind_kind;
 
