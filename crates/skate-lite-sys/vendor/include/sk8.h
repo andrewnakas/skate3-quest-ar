@@ -140,7 +140,21 @@ typedef struct sk8_state
 	                      * turned round with it, so a goofy body mirrored on rider_rot) */
 	float stance_change; /* 0..1 through the feet shuffling round into the new stance (stance already
 	                      * the new one), -1 otherwise */
+	int bail_stage;      /* sk8_bail_stage while bailing, 0 otherwise */
+	int bail_dir;        /* 1 thrown forward (over the toes / ahead), -1 slipped out backward */
+	float bail_stage_time; /* seconds into the bail stage */
 } sk8_state;
+
+/* A bail goes through stages: thrown off (in the air, arms flailing), tumbling and sliding along the
+ * ground, lying still, then getting up (only when it will respawn). */
+typedef enum sk8_bail_stage
+{
+	SK8_BAIL_NONE,
+	SK8_BAIL_FLAIL,
+	SK8_BAIL_TUMBLE,
+	SK8_BAIL_LIE,
+	SK8_BAIL_GETUP,
+} sk8_bail_stage;
 
 /* Where in a stroke (push_phase) the pushing foot is on the ground; the push's speed is added
  * between the two, while the foot drives. */

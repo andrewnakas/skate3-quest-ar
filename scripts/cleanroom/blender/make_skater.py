@@ -10,6 +10,7 @@ mesh per material plus the armature.
 import importlib
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -167,7 +168,11 @@ def preview(clips):
     rig.animation_data_create()
     frames = []
     views = {"front": ((2.2, -3.4, 1.3), (80, 0, 33)), "side": ((4.0, 0.0, 0.8), (90, 0, 90))}
+    # SK8_PREVIEW_ONLY=bail,get_up: only clips whose names contain one of these
+    only = [x for x in os.environ.get("SK8_PREVIEW_ONLY", "").split(",") if x]
     for name in clips:
+        if only and not any(o in name for o in only):
+            continue
         act = bpy.data.actions[name]
         rig.animation_data.action = act
         lo, hi = (int(f) for f in act.frame_range)

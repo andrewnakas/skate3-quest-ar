@@ -45,6 +45,7 @@ def P(**kw):
         "lh": (0.28, -0.12, 0.8),          # front hand: hanging easy, a little ahead
         "rh": (-0.28, -0.08, 0.78),        # back hand
         "knee_out": 0.35,                  # knees point toward the chest side
+        "knee_down": 0.0,                  # lying face down: the knees bend toward the ground
     }
     pose.update(kw)
     return pose
@@ -486,6 +487,60 @@ BAIL_REST = P(hips=(0.0, -0.5, 0.28), hips_rot=(64, 12, 15), spine=(36, 0, 0), h
               lh=(0.3, -0.95, -0.07), rh=(-0.24, -0.95, -0.07), knee_out=0.7)
 
 
+# Staged bail (the engine's bail stages: flail, tumble, lie, get up). Thrown forward the body turns
+# toward where it was going, the hands go out to catch it and it ends face down, sliding; slipped
+# out (the board shot ahead) it sits down hard and rolls onto its back, the feet ahead. Getting up
+# pushes up to a knee, stands and steps back onto the board (the runtime puts the board under it).
+G = DECK_TOP_TO_GROUND
+BAIL_FLAIL_A = P(hips=(0.05, 0.0, 0.86), hips_rot=(-8, 6, 30), spine=(-6, 4, 10), head=(-24, 0, 30),
+                 lf=foot(FRONT_X + 0.12, -0.08, 0.16, yaw=30, pitch=-15), rf=foot(BACK_X - 0.05, 0.1, 0.06, yaw=10),
+                 lh=(0.42, -0.25, 1.45), rh=(-0.52, 0.12, 0.98), knee_out=0.5)
+BAIL_FLAIL_B = P(hips=(0.05, 0.0, 0.84), hips_rot=(-4, -6, 36), spine=(-2, -4, 14), head=(-20, 0, 34),
+                 lf=foot(FRONT_X + 0.08, -0.12, 0.1, yaw=30, pitch=-10), rf=foot(BACK_X - 0.1, 0.06, 0.14, yaw=10),
+                 lh=(0.55, 0.12, 0.98), rh=(-0.4, -0.28, 1.45), knee_out=0.55)
+BAIL_TOSS = P(hips=(0.14, -0.08, 0.7), hips_rot=(38, 6, 50), spine=(28, 0, 10), head=(-24, 0, 30),
+              lf=foot(FRONT_X + 0.12, -0.05, 0.0, yaw=40), rf=foot(BACK_X + 0.3, -0.18, G + 0.14, yaw=60),
+              lh=(0.62, -0.32, 0.78), rh=(0.36, -0.48, 0.72), knee_out=0.5)
+BAIL_CATCH = P(hips=(0.3, -0.1, 0.42), hips_rot=(64, 6, 80), spine=(36, 0, 0), head=(-34, 0, 0),
+               lf=foot(-0.02, 0.04, G + 0.06, yaw=90, pitch=35), rf=foot(-0.16, -0.2, G + 0.1, yaw=90, pitch=35),
+               lh=(0.86, 0.16, G + 0.1), rh=(0.84, -0.24, G + 0.1), knee_out=0.6, knee_down=0.5)
+BAIL_PRONE = P(hips=(0.36, -0.04, G + 0.17), hips_rot=(84, 4, 90), spine=(6, 0, 0), head=(-44, 0, 10),
+               lf=foot(-0.44, 0.12, G + 0.04, yaw=90, pitch=70), rf=foot(-0.47, -0.14, G + 0.05, yaw=90, pitch=70),
+               lh=(0.76, 0.3, G + 0.06), rh=(0.72, -0.32, G + 0.06), knee_out=0.0, knee_down=1.0)
+BAIL_PRONE_REST = P(hips=(0.36, -0.04, G + 0.16), hips_rot=(86, 2, 92), spine=(4, 0, 0), head=(-26, 4, 20),
+                    lf=foot(-0.45, 0.14, G + 0.04, yaw=95, pitch=72), rf=foot(-0.47, -0.16, G + 0.04, yaw=85, pitch=72),
+                    lh=(0.7, 0.34, G + 0.05), rh=(0.66, -0.34, G + 0.05), knee_out=0.0, knee_down=1.0)
+BAIL_SLIP = P(hips=(-0.08, 0.04, 0.72), hips_rot=(-26, 0, 40), spine=(-10, 0, 10), head=(-6, 0, 30),
+              lf=foot(FRONT_X + 0.26, -0.02, 0.2, yaw=60, pitch=-30), rf=foot(0.1, 0.06, 0.26, yaw=60, pitch=-30),
+              lh=(0.45, -0.3, 1.1), rh=(-0.56, -0.3, 0.78), knee_out=0.5)
+BAIL_SIT = P(hips=(-0.16, 0.0, G + 0.15), hips_rot=(-34, 0, 90), spine=(-4, 0, 0), head=(4, 0, 0),
+             lf=foot(0.52, 0.12, G + 0.02, yaw=90, pitch=-40), rf=foot(0.46, -0.13, G + 0.03, yaw=90, pitch=-40),
+             lh=(-0.42, 0.26, G + 0.05), rh=(-0.42, -0.26, G + 0.05), knee_out=0.3)
+BAIL_SUPINE = P(hips=(-0.16, 0.0, G + 0.15), hips_rot=(-82, 0, 90), spine=(-6, 0, 0), head=(16, 0, 0),
+                lf=foot(0.62, 0.14, G + 0.03, yaw=90, pitch=-60), rf=foot(0.58, -0.16, G + 0.05, yaw=90, pitch=-60),
+                lh=(-0.3, 0.52, G + 0.05), rh=(-0.32, -0.52, G + 0.05), knee_out=0.2)
+BAIL_SUPINE_REST = P(hips=(-0.16, 0.0, G + 0.14), hips_rot=(-84, 2, 92), spine=(-6, 0, 0), head=(10, 6, 14),
+                     lf=foot(0.6, 0.18, G + 0.03, yaw=100, pitch=-62), rf=foot(0.57, -0.17, G + 0.04, yaw=80, pitch=-62),
+                     lh=(-0.26, 0.56, G + 0.05), rh=(-0.3, -0.5, G + 0.05), knee_out=0.25)
+GETUP_PUSH = P(hips=(0.18, -0.04, 0.3), hips_rot=(68, 0, 90), spine=(14, 0, 0), head=(-36, 0, 0),
+               lf=foot(-0.36, 0.12, G + 0.05, yaw=90, pitch=70), rf=foot(-0.38, -0.14, G + 0.05, yaw=90, pitch=70),
+               lh=(0.62, 0.22, G + 0.02), rh=(0.6, -0.22, G + 0.02), knee_out=0.0, knee_down=1.0)
+# the front knee drawn up under the body before the foot plants ahead (a leg swung straight
+# through flipped the knee)
+GETUP_TUCK = P(hips=(0.1, -0.02, 0.36), hips_rot=(52, 0, 90), spine=(18, 0, 0), head=(-28, 0, 0),
+               lf=foot(-0.02, 0.1, G + 0.1, yaw=90, pitch=40), rf=foot(-0.36, -0.13, G + 0.05, yaw=90, pitch=65),
+               lh=(0.5, 0.22, G + 0.02), rh=(0.5, -0.22, G + 0.02), knee_out=0.1, knee_down=0.6)
+GETUP_KNEE = P(hips=(0.0, 0.0, 0.5), hips_rot=(24, 0, 90), spine=(14, 0, 0), head=(-14, 0, 0),
+               lf=foot(0.28, 0.1, G, yaw=90), rf=foot(-0.34, -0.12, G + 0.06, yaw=90, pitch=60),
+               lh=(0.3, 0.14, 0.52), rh=(0.22, -0.18, 0.46), knee_out=0.2)
+GETUP_SIT_UP = P(hips=(-0.12, 0.0, G + 0.17), hips_rot=(-20, 0, 90), spine=(10, 0, 0), head=(-8, 0, 0),
+                 lf=foot(0.4, 0.12, G + 0.02, yaw=90, pitch=-20), rf=foot(0.22, -0.13, G, yaw=90),
+                 lh=(-0.36, 0.26, G + 0.04), rh=(0.1, -0.3, 0.2), knee_out=0.4)
+GETUP_RISE = P(hips=(0.0, 0.0, 0.8), hips_rot=(14, 0, 60), spine=(12, 0, 10), head=(-8, 0, 30),
+               lf=foot(FRONT_X, 0.0, G + 0.04, yaw=50), rf=foot(BACK_X, 0.0, G + 0.04, yaw=30),
+               lh=(0.3, -0.12, 0.78), rh=(-0.28, -0.1, 0.76), knee_out=0.3)
+
+
 # Fakie into switch: the feet walk round on the deck to a stance the same both ways (feet the same
 # distance either side of the middle, toes square, chest and head straight over the toe edge), the
 # back foot first. The runtime plays this, then the same clip backwards on the mirrored body (the
@@ -574,7 +629,14 @@ CLIPS = {
     "grind": (True, loop(lambda t: idle(GRIND, t, 0.012, 0.06), IDLE_LEN)),
     "boardslide": (True, loop(lambda t: idle(BOARDSLIDE, t, 0.012, 0.06), IDLE_LEN)),
     "powerslide": (True, loop(lambda t: idle(POWERSLIDE, t, 0.01, 0.03), IDLE_LEN)),
-    "bail": (False, [(0.0, STANCE), (0.18, BAIL_STUMBLE), (0.42, BAIL_REACH), (0.62, BAIL_DOWN), (1.2, BAIL_REST)]),
+    # thrown forward: from the flail, the hands out to catch it, face down sliding, then still
+    "bail": (False, [(0.0, BAIL_FLAIL_A), (0.16, BAIL_TOSS), (0.42, BAIL_CATCH), (0.72, BAIL_PRONE), (1.4, BAIL_PRONE_REST)]),
+    "bail_flail": (True, [(0.0, BAIL_FLAIL_A), (0.25, BAIL_FLAIL_B), (0.5, BAIL_FLAIL_A)]),
+    # slipped out: sits down hard, rolls onto the back, feet ahead
+    "bail_back": (False, [(0.0, BAIL_FLAIL_A), (0.14, BAIL_SLIP), (0.38, BAIL_SIT), (0.7, BAIL_SUPINE), (1.4, BAIL_SUPINE_REST)]),
+    "get_up": (False, [(0.0, BAIL_PRONE_REST), (0.32, GETUP_PUSH), (0.6, GETUP_TUCK), (0.92, GETUP_KNEE), (1.25, GETUP_RISE),
+                       (1.6, STANCE)]),
+    "get_up_back": (False, [(0.0, BAIL_SUPINE_REST), (0.4, GETUP_SIT_UP), (0.8, GETUP_KNEE), (1.2, GETUP_RISE), (1.6, STANCE)]),
 }
 # Overlapping action: parts sample the clip this much later (s), so the head and arms trail the
 # hips instead of every joint arriving on the same frame.
@@ -662,7 +724,7 @@ SHOULDER_UP, SHOULDER_HALF = 0.47, 0.18
 ARM_REACH_MAX = 0.41
 # The bail's hands reach for the ground and are left alone; in a grab only the free hand (above the
 # board) relaxes.
-REACHING = ("bail",)
+REACHING = ("bail", "get_up")
 GRABBING = ("grab_", "pop_boneless", "footplant", "handplant")
 
 
@@ -864,6 +926,13 @@ def apply_pose(rig, c, pose, rest_ankle):
             front = (0.0, -math.cos(kpitch), -math.sin(kpitch))
             fp = (f["at"][0] + kx, hy_ + front[1] * 1.0, hz_ + front[2] * 1.0)
             kp = tuple(a + (b - a) * w for a, b in zip(kp, fp))
+        # face down on the ground (a bail): the pole goes under the leg, so the knees bend down into
+        # the ground the whole way through instead of flipping over as the legs stretch out behind
+        kd = pose.get("knee_down", 0.0)
+        if kd > 0:
+            hx_, hy_, _ = pose["hips"]
+            dp = ((hx_ + f["at"][0]) * 0.5, (hy_ + f["at"][1]) * 0.5, DECK_TOP_TO_GROUND - 0.6)
+            kp = tuple(a + (b - a) * kd for a, b in zip(kp, dp))
         c[f"kpole_{side}"].location = kp
         c[f"hand_{side}"].location = pose[hand]
         # Elbows bend out, back and down from the body (turned with the hips, so a body facing down

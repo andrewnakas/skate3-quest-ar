@@ -109,6 +109,36 @@ struct RawState {
     on_foot: c_int,
     stance: c_int,
     stance_change: f32,
+    bail_stage: c_int,
+    bail_dir: c_int,
+    bail_stage_time: f32,
+}
+
+/// A bail's stages (`sk8_bail_stage`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BailStage {
+    #[default]
+    None,
+    /// Thrown off, arms flailing (in the air).
+    Flail,
+    /// Tumbling and sliding along the ground.
+    Tumble,
+    /// Lying still.
+    Lie,
+    /// Getting up, before going back on the board.
+    Rise,
+}
+
+impl BailStage {
+    fn from_raw(v: c_int) -> Self {
+        match v {
+            1 => Self::Flail,
+            2 => Self::Tumble,
+            3 => Self::Lie,
+            4 => Self::Rise,
+            _ => Self::None,
+        }
+    }
 }
 
 /// Where in a stroke the pushing foot plants and lifts (`SK8_PUSH_PLANT`, `SK8_PUSH_RELEASE`).
@@ -157,6 +187,11 @@ pub struct State {
     pub air_time: f32,
     /// Seconds since the bail began.
     pub bail_time: Option<f32>,
+    /// The bail's stage ([`BailStage`]) and seconds into it; `bail_back` when it slipped out
+    /// backward (else thrown forward).
+    pub bail_stage: BailStage,
+    pub bail_stage_time: f32,
+    pub bail_back: bool,
     /// 0 none, 1 axle, 2 board slide, 3 nose, 4 tail.
     pub grind_kind: u32,
     pub combo_points: u32,
@@ -195,6 +230,9 @@ impl From<RawState> for State {
             balance: r.balance,
             air_time: r.air_time,
             bail_time: (r.bail_time >= 0.0).then_some(r.bail_time),
+            bail_stage: BailStage::from_raw(r.bail_stage),
+            bail_stage_time: r.bail_stage_time,
+            bail_back: r.bail_dir < 0,
             grind_kind: r.grind_kind as u32,
             combo_points: r.combo_points,
             combo_count: r.combo_count,

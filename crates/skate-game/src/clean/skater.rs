@@ -7,7 +7,7 @@
 //! from the mode, eased so transitions blend. The board is built in code.
 use super::sim::CleanSkate;
 use bevy::prelude::*;
-use skate_lite_sys::{EventKind, Mode, State};
+use skate_lite_sys::{BailStage, EventKind, Mode, State};
 use std::f32::consts::FRAC_PI_2;
 
 
@@ -94,9 +94,15 @@ enum Clip {
     JumpFoot,
     /// The feet shuffling round into switch, to a pose the same both ways (played back mirrored).
     Switch,
+    /// Bail stages: thrown off with the arms flailing; slipped out onto the back (the forward
+    /// tumble is `Bail`); getting up from the front / from the back.
+    BailFlail,
+    BailBack,
+    Rise,
+    RiseBack,
 }
 
-const CLIPS: usize = 61;
+const CLIPS: usize = 65;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -108,10 +114,11 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_pop_no_comply", "sk8_pop_boneless",
     "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt", "sk8_wallride",
     "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant", "sk8_primo", "sk8_casper", "sk8_jump_foot",
-    "sk8_switch",
+    "sk8_switch", "sk8_bail_flail", "sk8_bail_back", "sk8_get_up", "sk8_get_up_back",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
-const LOOPED: [Clip; 26] = [
+const LOOPED: [Clip; 27] = [
+    Clip::BailFlail,
     Clip::Primo,
     Clip::Casper,
     Clip::Wallride,
@@ -262,12 +269,14 @@ pub(crate) struct Clock {
     stride: f32,
     /// Time on the rail (plays the plant clips from their start).
     grind_time: f32,
+    /// Since a bail's body hit the ground (the tumble, then lying).
+    down: f32,
 }
 
 impl Default for Clock {
     fn default() -> Self {
         // Long ago, so nothing plays its "just happened" clip at spawn.
-        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, hippie: false, idle: 0.0, stride: 0.0, grind_time: 0.0 }
+        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, hippie: false, idle: 0.0, stride: 0.0, grind_time: 0.0, down: 0.0 }
     }
 }
 
@@ -335,7 +344,10 @@ fn blend_time(clip: Clip) -> f32 {
         // the front foot steps down off the board: a little time to get there
         Clip::PopNoComply | Clip::PopBoneless => 0.06,
         Clip::FlipKick | Clip::FlipHeel | Clip::FlipShuv | Clip::FlipHard | Clip::FlipTre => 0.05,
-        Clip::Land | Clip::Bail => 0.06,
+        Clip::Land | Clip::Bail | Clip::BailBack => 0.06,
+        Clip::BailFlail => 0.1,
+        // getting up starts from wherever the tumble left the body: a moment to gather
+        Clip::Rise | Clip::RiseBack => 0.2,
         Clip::Air | Clip::Grind | Clip::Grind50 | Clip::Boardslide | Clip::Wallride => 0.1,
         // stepping off / walking speeds blend over a moment
         Clip::Stand | Clip::Walk | Clip::Run => 0.18,
@@ -381,7 +393,12 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
     };
     let pop_len = len[Clip::Pop as usize];
     match s.mode {
-        Mode::Bail => set(Clip::Bail, 1.0, s.bail_time.unwrap_or(0.0)),
+        Mode::Bail => match s.bail_stage {
+            BailStage::Flail | BailStage::None => set(Clip::BailFlail, 1.0, s.bail_stage_time),
+            // the tumble plays through and holds its last pose while lying there
+            BailStage::Tumble | BailStage::Lie => set(if s.bail_back { Clip::BailBack } else { Clip::Bail }, 1.0, c.down),
+            BailStage::Rise => set(if s.bail_back { Clip::RiseBack } else { Clip::Rise }, 1.0, s.bail_stage_time),
+        },
         Mode::Wallride => set(Clip::Wallride, 1.0, c.idle),
         // on foot: standing, walking or running by speed, the steps kept to the ground's pace
         Mode::Walk => {
@@ -504,6 +521,7 @@ pub(crate) fn animate(
     clock.idle += game_dt * (0.7 + 0.3 * (b.speed / 6.0).min(1.0));
     clock.stride += game_dt * b.speed;
     clock.grind_time = if b.mode == Mode::Grind { clock.grind_time + game_dt } else { 0.0 };
+    clock.down = if matches!(b.bail_stage, BailStage::Tumble | BailStage::Lie) { clock.down + game_dt } else { 0.0 };
     for e in &sim.events {
         match e.kind {
             EventKind::Pop => {
@@ -612,6 +630,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket, Clip::PopNoComply, Clip::PopBoneless,
     Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
     Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper, Clip::JumpFoot, Clip::Switch,
+    Clip::BailFlail, Clip::BailBack, Clip::Rise, Clip::RiseBack,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

@@ -348,6 +348,29 @@ fn demo_wallride(t: f32, s: &skate_lite_sys::State) -> Input {
     i
 }
 
+/// `SK8_DEMO=bail`: the bail's stages, both ways: an ollie with a kickflip flicked late, just before
+/// it comes down (under-flipped: thrown forward), then rolling hard straight into the desktop park's
+/// wall (slipped out backward). Each slot lasts long enough to see it get up and back on.
+const BAIL_EACH: f32 = 7.0;
+fn demo_bail(t: f32) -> Input {
+    let d = t % BAIL_EACH;
+    let mut i = Input::default();
+    if (t / BAIL_EACH) as usize % 2 == 0 {
+        if (0.2..0.45).contains(&d) {
+            i.flick = [0.0, -1.0];
+        } else if (0.45..0.5).contains(&d) {
+            i.flick = [0.0, 1.0];
+        } else if (0.95..1.0).contains(&d) {
+            i.flick = [0.0, -1.0];
+        } else if (1.0..1.05).contains(&d) {
+            i.flick = [0.0, 0.0];
+        } else if (1.05..1.15).contains(&d) {
+            i.flick = [0.7, 0.7];
+        }
+    }
+    i
+}
+
 /// `SK8_DEMO=held`: flip tricks flicked and held at the end of the flick (more turns: double ...),
 /// off the desktop park's kicker for the air.
 const HELD_EACH: f32 = 3.0;
@@ -518,6 +541,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("plants") => Some((t / PLANT_EACH) as usize),
         Ok("varial") => Some((t / VARIAL_EACH) as usize),
         Ok("primo") => Some((t / PRIMO_EACH) as usize),
+        Ok("bail") => Some((t / BAIL_EACH) as usize),
         _ => None,
     }
 }
@@ -561,6 +585,11 @@ pub(crate) fn read_desktop(
             } else if demo_kind == "wallride" {
                 // the desktop park's wall runs along z at x = 16 (z 8..20)
                 sim.place_rolling(Vec3::new(15.05, 0.0, 6.0), 0.16, 7.5);
+            } else if demo_kind == "bail" && slot.unwrap_or(0) % 2 == 1 {
+                // straight at the desktop park's wall (x = 16, z 8..20), fast enough to slam
+                sim.place_rolling(Vec3::new(10.0, 0.0, 14.0), std::f32::consts::FRAC_PI_2, 8.5);
+            } else if demo_kind == "bail" {
+                sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 7.0);
             } else if demo_kind == "grinds" {
                 let (slide, ..) = GRIND_SLOTS[slot.unwrap_or(0) % GRIND_SLOTS.len()];
                 sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, if slide { 7.5 } else { 6.0 });
@@ -596,6 +625,7 @@ pub(crate) fn read_desktop(
             Ok("plants") => demo_plants(*t, &sim.current, sim.demo_rail),
             Ok("varial") => demo_varial(*t, &sim.current),
             Ok("primo") => demo_primo(*t),
+            Ok("bail") => demo_bail(*t),
             _ => demo_input(*t),
         };
         return;

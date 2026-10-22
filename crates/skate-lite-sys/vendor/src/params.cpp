@@ -58,7 +58,9 @@ const sk8_param kTable[ParamCount] = {
 	{"land_skid", "Landing skid: no speed kept at, degrees", kBails, 30.0f, 180.0f, 100.0f, 1.0f},
 	{"wall_bail", "Wall slam speed, m/s", kBails, 0.5f, 60.0f, 6.45f, 0.05f},
 	{"impact_bail", "Hard landing speed, m/s", kBails, 1.0f, 80.0f, 13.6f, 0.1f},
-	{"bail_time", "Time on the ground, s", kBails, 0.2f, 10.0f, 1.9f, 0.05f},
+	{"bail_time", "Bail to back on the board, s", kBails, 0.5f, 12.0f, 4.9f, 0.05f},
+	{"bail_slide", "Body sliding along the ground, m/s^2", kBails, 0.5f, 30.0f, 5.35f, 0.05f},
+	{"get_up", "Getting up at the end of a bail, s", kBails, 0.2f, 4.0f, 1.6f, 0.05f},
 
 	{"grind_catch", "Rail catch distance, m", kGrinds, 0.05f, 2.0f, 0.42f, 0.01f},
 	{"grind_drag", "Rail drag, m/s^2", kGrinds, 0.0f, 10.0f, 0.83f, 0.01f},

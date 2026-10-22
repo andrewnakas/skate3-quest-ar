@@ -156,6 +156,7 @@ void Rider::place(V3 position, float facing, float speed)
 	spin_speed_ = spin_total_ = 0;
 	air_time_ = 0;
 	bail_time_ = -1;
+	bail_stage_ = 0;
 	rail_ = -1;
 	grind_kind_ = 0;
 	manual_dir_ = 0;
@@ -582,6 +583,8 @@ void Rider::move_on_ground(World &w, V3 delta)
 		if (facing_up < 0.55f) { // a wall
 			float into = -dot(vel_, h.normal);
 			if (into > p[WallBail] && !never_bail()) {
+				// bounced back off it: the body lands away from the wall, not in it
+				vel_ -= h.normal * (dot(vel_, h.normal) * 1.8f);
 				bail("Wall");
 				return;
 			}
@@ -1254,36 +1257,85 @@ void Rider::bail(const char *reason)
 	if (mode_ == SK8_MODE_GRIND)
 		emit(SK8_EV_GRIND_END, grind_name_.c_str());
 	lose_combo();
+	// thrown forward unless the board shot out ahead (nose up) or it bounced off a wall
+	V3 travel = fakie_ ? -fwd_ : fwd_;
+	bool slipped = std::strcmp(reason, "Wall") == 0 ||
+		(std::strcmp(reason, "Bad angle") == 0 && dot(up_, travel) < -0.05f);
+	bail_dir_ = slipped ? -1 : 1;
+	bail_reason_ = reason;
 	mode_ = SK8_MODE_BAIL;
 	bail_time_ = 0;
+	bail_stage_ = SK8_BAIL_FLAIL;
+	bail_stage_time_ = 0;
 	skid_time_ = 0;
 	flip_ = -1;
 	rail_ = -1;
 	grind_kind_ = 0;
 	manual_dir_ = 0;
 	trick_.clear();
-	vel_ *= 0.6f;
+	vel_ *= slipped ? 0.55f : 0.92f;
 	emit(SK8_EV_BAIL, reason, 0, 0, surface_);
 }
 
 void Rider::bailed(World &w)
 {
 	bail_time_ += kDt;
+	bail_stage_time_ += kDt;
+	auto stage = [&](int st) {
+		bail_stage_ = st;
+		bail_stage_time_ = 0;
+	};
+	// the body: thrown, then sliding along the ground to a stop
 	vel_ += V3{0, -p[Gravity], 0} * kDt;
 	V3 delta = vel_ * kDt;
 	Hit h;
-	if (len(delta) > 1e-6f && w.cast(pos_ + V3{0, 0.05f, 0}, delta, h)) {
+	bool ground = false;
+	if (len(delta) > 1e-6f && w.cast(pos_ + V3{0, 0.05f, 0}, delta + V3{0, -0.05f, 0}, h)) {
 		pos_ = h.point;
-		vel_ = flatten(vel_, h.normal) * 0.6f;
+		vel_ = flatten(vel_, h.normal);
 		up_ = h.normal;
+		ground = true;
 	} else {
 		pos_ += delta;
 	}
-	vel_ *= std::max(0.0f, 1 - 1.5f * kDt);
-	if (bail_time_ >= p[BailTime] && !(flags & SK8_FLAG_NO_RESPAWN)) {
-		place(safe_pos_, safe_facing_, 0);
-		emit(SK8_EV_RESPAWN);
+	if (ground) {
+		float sp = len(vel_), dec = p[BailSlide] * kDt;
+		vel_ = sp > dec ? vel_ * ((sp - dec) / sp) : V3{};
 	}
+	bool respawns = !(flags & SK8_FLAG_NO_RESPAWN);
+	float getup_at = p[BailTime] - p[Rise];
+	switch (bail_stage_) {
+	case SK8_BAIL_FLAIL:
+		if (ground && bail_stage_time_ > 0.1f)
+			stage(SK8_BAIL_TUMBLE);
+		break;
+	case SK8_BAIL_TUMBLE:
+		if (bail_stage_time_ > 0.45f && len(vel_) < 0.8f)
+			stage(SK8_BAIL_LIE);
+		break;
+	case SK8_BAIL_LIE:
+		if (respawns && bail_time_ >= getup_at && bail_stage_time_ > 0.35f)
+			stage(SK8_BAIL_GETUP);
+		break;
+	case SK8_BAIL_GETUP:
+		vel_ = V3{};
+		if (bail_stage_time_ >= p[Rise]) {
+			// back on the board where the body came to rest (somewhere flat), else at the last safe spot
+			Hit g;
+			bool flat = bail_reason_ != "Out of bounds" && pos_.y > -50 &&
+				w.cast(pos_ + V3{0, 0.5f, 0}, V3{0, -1.0f, 0}, g) && g.normal.y > 0.85f;
+			V3 f = flatten(fwd_, kUp);
+			if (flat && len(f) > 0.1f)
+				place(g.point, std::atan2(f.x, f.z), 0);
+			else
+				place(safe_pos_, safe_facing_, 0);
+			emit(SK8_EV_RESPAWN);
+		}
+		return;
+	}
+	// no ground to stop on (out of bounds), or a long time down: on to getting up anyway
+	if (respawns && bail_stage_ != SK8_BAIL_GETUP && bail_time_ >= getup_at + 1.0f)
+		stage(SK8_BAIL_GETUP);
 }
 
 // ---------------------------------------------------------------- output
@@ -1357,6 +1409,9 @@ void Rider::state(sk8_state &s) const
 	s.balance = clampf(balance_, -1, 1);
 	s.air_time = air_time_;
 	s.bail_time = mode_ == SK8_MODE_BAIL ? bail_time_ : -1;
+	s.bail_stage = mode_ == SK8_MODE_BAIL ? bail_stage_ : 0;
+	s.bail_dir = bail_dir_;
+	s.bail_stage_time = mode_ == SK8_MODE_BAIL ? bail_stage_time_ : 0;
 	s.grind_kind = grind_tip_ ? SK8_GRIND_5_0 : grind_kind_;
 	s.combo_points = combo_points_;
 	s.combo_count = unsigned(combo_names_.size());

@@ -131,7 +131,9 @@ private:
 	std::string grind_name_;
 
 	// bail
-	float bail_time_ = -1;
+	float bail_time_ = -1, bail_stage_time_ = 0;
+	int bail_stage_ = 0, bail_dir_ = 1;
+	std::string bail_reason_;
 	V3 safe_pos_;
 	float safe_facing_ = 0;
 	float safe_timer_ = 0;

@@ -45,13 +45,33 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   body varial (the button held in the air: the left stick turns the body alone);
   primo / casper (the button with the right stick part-way down / up)
 
-## Feel vs the port (scripts/cleanroom/feel.py, flip_* scenarios)
+- Bails in stages like the port: thrown (arms flailing), tumbling and sliding to a stop
+  (~5.4 m/s^2, port ~5.5), lying still, getting up, back on the board where the body came to rest
+  (~4.9 s, port ~5); thrown forward (face down) or slipped out backward (on the back; a wall slam
+  bounces off the wall); SK8_DEMO=bail
+
+## Feel vs the port (scripts/cleanroom/feel.py; every scenario within ~10%)
 - Flick to takeoff 6 ticks (port 6), single flip level 33 ticks after the flick (port 32-34),
   held flick 2 flips in a flat ollie (port 2), landing a 360 body spin 5.1 m/s (port 5.2),
   air spin 341 deg (port 338)
+- Grinds (grind_low: the test world's low rail, the port steered round onto it): speed kept on
+  the catch, rail drag 0.83 m/s^2 (port 0.84), the board drawn down onto the rail, rolling off the
+  end tips off with no hop and scrubs ~11% (port the same), a 50-50 leans onto the tail at the end
+- Powerslide: bites in, eases off as it slows (speed kept at 0.25/0.5/1/2 s within 3%)
+- Manuals: no wobble-out (the port holds one indefinitely with the stick still), 0.38 m/s^2
+- Landings: sideways never bails (the port lands even 90 deg sketchy), a crooked landing skids its
+  speed off over 0.3 s by angle (46 deg keeps 0.69, port 0.69)
+- Brake: foot down 0.2 s, then 4.1 m/s^2; foot back up 0.42 s before a push can start
+- Push: a burst as the foot bites, ~61% of the way to top speed (9.15) per stroke, strokes 1 s,
+  first contact 1.0 s after a brake (port 1.0); coasting ~0.01 m/s^2
+- Not matched: a held flick in a 1-tick-crouch ollie (the port bails the double, sk8 lands it);
+  wall-slam threshold not measured (the test world has no wall)
 
 ## Next (in order)
-1. Polish list below (every move on the list is in)
+1. Animation fidelity: grind/manual/powerslide poses vs port captures; open polish below
+2. Fakie/switch names on grinds and manuals; switch timer after a sketchy land
+3. Grab input like the port (right stick held into the trigger)
+4. Quest APK + headset test
 
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)

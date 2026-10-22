@@ -17,7 +17,7 @@ enum Param : int
 	// Flips
 	FlipBase, FlipPerRev, AirFlick, FlipLenience,
 	// Bails
-	LandClean, LandMax, SideMax, LandSkid, WallBail, ImpactBail, BailTime,
+	LandClean, LandMax, SideMax, LandSkid, WallBail, ImpactBail, BailTime, BailSlide, Rise,
 	// Grinds
 	GrindCatch, GrindDrag, GrindBalance, GrindKeep, GrindOffKeep,
 	// Manuals
