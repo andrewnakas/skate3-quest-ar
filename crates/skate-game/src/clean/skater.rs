@@ -100,9 +100,11 @@ enum Clip {
     BailBack,
     Rise,
     RiseBack,
+    GrabSeatbelt,
+    GrabMute,
 }
 
-const CLIPS: usize = 65;
+const CLIPS: usize = 67;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -115,6 +117,7 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt", "sk8_wallride",
     "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant", "sk8_primo", "sk8_casper", "sk8_jump_foot",
     "sk8_switch", "sk8_bail_flail", "sk8_bail_back", "sk8_get_up", "sk8_get_up_back",
+    "sk8_grab_seatbelt", "sk8_grab_mute",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
 const LOOPED: [Clip; 27] = [
@@ -375,6 +378,7 @@ fn blend_time(clip: Clip) -> f32 {
         Clip::Ride | Clip::Crouch => 0.16,
         // both arms cross to the nose: given time, so the back arm doesn't whip round
         Clip::GrabRocket => 0.18,
+        Clip::GrabSeatbelt | Clip::GrabMute => 0.13,
         // The step-off clips do the turn to face down the board themselves.
         Clip::StepOff | Clip::StepOffMongo => 0.06,
         // Into a stroke from anything else (a landing, a powerslide): the body turns, not in a snap.
@@ -443,7 +447,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             } else if s.grab != 0 {
                 // The engine's grab style picks the clip; an unknown one falls back by hand.
                 let style = match s.grab_style as usize {
-                    n @ 1..=15 => n,
+                    n @ 1..=17 => n,
                     _ if s.grab == 3 => 9,
                     _ if s.grab & 1 != 0 => 5,
                     _ => 1,
@@ -452,6 +456,8 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
                     13 => Clip::GrabChrist,
                     14 => Clip::GrabMethod,
                     15 => Clip::GrabRocket,
+                    16 => Clip::GrabSeatbelt,
+                    17 => Clip::GrabMute,
                     n => CLIP_ORDER[GRAB_FIRST + n - 1],
                 };
                 // from its first frame once it takes over at the pop's top (pressed earlier, it
@@ -630,7 +636,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::GrabChrist, Clip::GrabMethod, Clip::GrabRocket, Clip::PopNoComply, Clip::PopBoneless,
     Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
     Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper, Clip::JumpFoot, Clip::Switch,
-    Clip::BailFlail, Clip::BailBack, Clip::Rise, Clip::RiseBack,
+    Clip::BailFlail, Clip::BailBack, Clip::Rise, Clip::RiseBack, Clip::GrabSeatbelt, Clip::GrabMute,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

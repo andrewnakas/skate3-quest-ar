@@ -73,6 +73,8 @@ const PLANT_IN: f32 = 0.07;
 const LIFT_TIME: f32 = 0.14;
 const LIFT_HEIGHT: f32 = 0.05;
 const PLANT_REACH: f32 = 0.96;
+/// Crouched this far (a pop coming) the pushing foot leaves the ground.
+const CROUCH_LIFT: f32 = 0.25;
 
 /// The pushing foot's hold on the ground.
 #[derive(Default, Clone, Copy)]
@@ -564,11 +566,12 @@ pub(crate) fn layer(
         let inv = rider_rot.inverse();
         let lift_from = |at: Vec3| Ground::Lifting { rel: inv * (at - rider_at), vel: -(inv * vel), t: 0.0 };
         motion.ground = match motion.ground {
-            Ground::Off if in_drive && !motion.planted && dt > 0.0 => {
+            // (crouching for a pop mid-stroke: the foot comes up off the ground to get ready)
+            Ground::Off if in_drive && !motion.planted && dt > 0.0 && s.crouch < CROUCH_LIFT => {
                 motion.planted = true;
                 Ground::Planted { at: ground_at(ankle), w: 0.0 }
             }
-            Ground::Planted { at, .. } if !in_drive || hip.distance(at) > reach => lift_from(at),
+            Ground::Planted { at, .. } if !in_drive || hip.distance(at) > reach || s.crouch >= CROUCH_LIFT => lift_from(at),
             Ground::Planted { at, w } => Ground::Planted { at, w: (w + dt / PLANT_IN).min(1.0) },
             Ground::Lifting { t, .. } if t >= LIFT_TIME => Ground::Off,
             Ground::Lifting { rel, vel, t } => {

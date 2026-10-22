@@ -20,7 +20,8 @@ const GrabDef kGrabs[] = {
 	{"Indy", 150},      {"Crail", 220},     {"Tail Grab", 180}, {"Stalefish", 240},
 	{"Melon", 150},     {"Nose Grab", 180}, {"Tuck Knee", 200}, {"Judo", 260},
 	{"Double Grab", 200}, {"Superman", 320}, {"No Foot", 300},  {"Stiffy", 260},
-	{"Christ Air", 340},  {"Method", 240},   {"Rocket Air", 300},
+	{"Christ Air", 340},  {"Method", 240},   {"Rocket Air", 300}, {"Seatbelt", 220},
+	{"Mute", 180},
 };
 
 const GrabDef &grab_def(int style)
@@ -83,14 +84,27 @@ int grind_kind_for(bool slide, float x, float y, bool crouched)
 // hands: 1 front (left trigger), 2 back (right trigger), 3 both. Stick y up is toward the nose.
 int grab_style_for(int hands, float x, float y)
 {
-	int dir = 0; // 0 centre, 1 nose, 2 tail, 3 sideways
-	if (x * x + y * y > 0.25f)
-		dir = std::fabs(y) >= std::fabs(x) ? (y > 0 ? 1 : 2) : 3;
-	// sideways the other way (stick left): one more style per hand
-	if (dir == 3 && x < 0)
-		return hands == 2 ? SK8_GRAB_CHRIST : hands == 1 ? SK8_GRAB_METHOD : SK8_GRAB_ROCKET;
-	int base = hands == 2 ? SK8_GRAB_INDY : hands == 1 ? SK8_GRAB_MELON : SK8_GRAB_DOUBLE;
-	return base + dir;
+	// the right stick's direction: centre, up (and up-right), up-left, left, down-left, down,
+	// down-right, right
+	enum { C, U, UL, L, DL, D, DR, R };
+	int dir = C;
+	if (x * x + y * y > 0.25f) {
+		float a = std::atan2(x, y) * (180.0f / 3.14159265f); // degrees: 0 up, 90 right
+		dir = a > -22.5f && a <= 67.5f ? U : a > 67.5f && a <= 112.5f ? R : a > 112.5f && a <= 157.5f ? DR
+			: a > -67.5f && a <= -22.5f ? UL : a > -112.5f && a <= -67.5f ? L : a > -157.5f && a <= -112.5f ? DL : D;
+	}
+	// [direction][left, right, both]
+	static const int kTable[8][3] = {
+		{SK8_GRAB_MELON, SK8_GRAB_INDY, SK8_GRAB_DOUBLE},           // C
+		{SK8_GRAB_TAIL, SK8_GRAB_SEATBELT, SK8_GRAB_TAIL},          // U
+		{SK8_GRAB_JUDO, SK8_GRAB_CHRIST, SK8_GRAB_SUPERMAN},        // UL
+		{SK8_GRAB_STIFFY, SK8_GRAB_TUCK_KNEE, SK8_GRAB_DOUBLE},     // L
+		{SK8_GRAB_STIFFY, SK8_GRAB_TUCK_KNEE, SK8_GRAB_NO_FOOT},    // DL
+		{SK8_GRAB_CRAIL, SK8_GRAB_NOSE, SK8_GRAB_ROCKET},           // D
+		{SK8_GRAB_STALEFISH, SK8_GRAB_METHOD, SK8_GRAB_METHOD},     // DR
+		{SK8_GRAB_STALEFISH, SK8_GRAB_MUTE, SK8_GRAB_MUTE},         // R
+	};
+	return kTable[dir][hands == 3 ? 2 : hands == 2 ? 1 : 0];
 }
 } // namespace
 
@@ -814,11 +828,14 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 			extend_flip();
 	}
 
-	// grabs: the hands come from the triggers, the style from where the left stick points when the
-	// grab starts (it keeps spinning the board after that)
-	int hands = ((in.buttons & SK8_GRAB_LEFT) ? 1 : 0) | ((in.buttons & SK8_GRAB_RIGHT) ? 2 : 0);
+	// grabs: the triggers (swapped in switch) and where the right stick is held as one goes down
+	// pick the style, like the port (the stick first, then the trigger)
+	bool lt = in.buttons & SK8_GRAB_LEFT, rt = in.buttons & SK8_GRAB_RIGHT;
+	if (switch_)
+		std::swap(lt, rt);
+	int hands = (lt ? 1 : 0) | (rt ? 2 : 0);
 	if (hands && hands != grab_)
-		grab_style_ = grab_style_for(hands, in.steer[0], in.steer[1]);
+		grab_style_ = grab_style_for(hands, in.flick[0], in.flick[1]);
 	grab_ = hands;
 	if (grab_) {
 		grab_time_ += kDt;

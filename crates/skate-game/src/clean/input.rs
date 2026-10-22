@@ -83,17 +83,38 @@ pub(crate) fn read_touch(
     };
 }
 
-/// `SK8_DEMO=grabs`: push, then an ollie into each of the fifteen grab styles in turn (trigger(s)
-/// plus the left stick's direction at the start of the grab).
+/// `SK8_DEMO=grabs`: push, then an ollie into each of the seventeen grab styles in turn, the port's
+/// way: the right stick held first, then the trigger(s) (sk8_grab_style order).
 fn demo_grabs(t: f32) -> Input {
     const START: f32 = 3.0;
     const EACH: f32 = 2.6;
+    const L: u32 = buttons::GRAB_LEFT;
+    const R: u32 = buttons::GRAB_RIGHT;
+    const GRABS: [(u32, [f32; 2]); 17] = [
+        (R, [0.0, 0.0]),    // indy
+        (L, [0.0, -1.0]),   // crail
+        (L, [0.0, 1.0]),    // tail
+        (L, [0.7, -0.7]),   // stalefish
+        (L, [0.0, 0.0]),    // melon
+        (R, [0.0, -1.0]),   // nose
+        (R, [-1.0, 0.0]),   // tuck knee
+        (L, [-0.7, 0.7]),   // judo
+        (L | R, [0.0, 0.0]), // double
+        (L | R, [-0.7, 0.7]), // superman
+        (L | R, [-0.7, -0.7]), // no foot
+        (L, [-1.0, 0.0]),   // stiffy
+        (R, [-0.7, 0.7]),   // christ air
+        (R, [0.7, -0.7]),   // method
+        (L | R, [0.0, -1.0]), // rocket air
+        (R, [0.0, 1.0]),    // seatbelt
+        (R, [1.0, 0.0]),    // mute
+    ];
     let mut i = Input::default();
     if t < START {
         i.buttons |= buttons::PUSH;
         return i;
     }
-    let n = ((t - START) / EACH) as usize % 15;
+    let n = ((t - START) / EACH) as usize % GRABS.len();
     let d = (t - START) % EACH;
     // A short push between airs keeps the speed up.
     if d > 2.0 {
@@ -106,13 +127,12 @@ fn demo_grabs(t: f32) -> Input {
     } else if d < 0.5 {
         i.flick = [0.0, 1.0];
     }
-    // twelve hand x direction styles, then the stick-left ones (Christ air, method, rocket)
-    let (hand, dir) = if n < 12 { (n / 4, n % 4) } else { (n - 12, 4) };
-    if (0.55..1.15).contains(&d) {
-        i.buttons |= [buttons::GRAB_RIGHT, buttons::GRAB_LEFT, buttons::GRAB_LEFT | buttons::GRAB_RIGHT][hand];
-        if d < 0.58 {
-            i.steer = [[0.0, 0.0], [0.0, 1.0], [0.0, -1.0], [1.0, 0.0], [-1.0, 0.0]][dir];
-        }
+    let (hands, stick) = GRABS[n];
+    if (0.56..0.7).contains(&d) {
+        i.flick = stick;
+    }
+    if (0.62..1.15).contains(&d) {
+        i.buttons |= hands;
     }
     i
 }
@@ -471,7 +491,7 @@ fn demo_primo(t: f32) -> Input {
 
 /// `SK8_DEMO=1`: a scripted run through the move set (looping), for checking animation by eye or
 /// with `SK8_ANIM_TRACE` without hand-driving the game.
-fn demo_input(t: f32) -> Input {
+fn demo_input(t: f32, s: &skate_lite_sys::State) -> Input {
     const LOOP: f32 = 26.0;
     let t = t % LOOP;
     let mut i = Input::default();
@@ -503,6 +523,10 @@ fn demo_input(t: f32) -> Input {
         i.steer[0] = 1.0;
     } else if (4.5..6.0).contains(&t) {
         i.steer[0] = -1.0;
+    } else if (6.6..20.0).contains(&t) && s.mode == skate_lite_sys::Mode::Ride {
+        // a gentle carve between the tricks (on the ground: in the air it would spin): round in a
+        // wide circle, not off the edge of the park
+        i.steer[0] = 0.35;
     }
     if (16.95..17.6).contains(&t) {
         i.buttons |= buttons::GRAB_RIGHT;
@@ -626,7 +650,7 @@ pub(crate) fn read_desktop(
             Ok("varial") => demo_varial(*t, &sim.current),
             Ok("primo") => demo_primo(*t),
             Ok("bail") => demo_bail(*t),
-            _ => demo_input(*t),
+            _ => demo_input(*t, &sim.current),
         };
         return;
     }

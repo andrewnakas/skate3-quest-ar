@@ -189,26 +189,29 @@ typedef enum sk8_grind_kind
 	SK8_GRIND_SUSKI,       /* back truck, nose turned in over the near side (crouched, up + sideways) */
 } sk8_grind_kind;
 
-/* Grab styles: the trigger(s) held pick the hand, the left stick's direction when the grab starts
- * picks the style (centre, toward the nose, toward the tail, sideways right, sideways left). */
+/* Grab styles: picked when a trigger goes down, by where the right stick is held (like the port:
+ * the stick first, then the trigger) and which trigger(s): see grab_style_for in rider.cpp. Each
+ * style's own pose decides which hand grabs where. In switch the triggers swap. */
 typedef enum sk8_grab_style
 {
 	SK8_GRAB_NONE = 0,
-	SK8_GRAB_INDY,        /* back hand, centre */
-	SK8_GRAB_CRAIL,       /* back hand, nose */
-	SK8_GRAB_TAIL,        /* back hand, tail */
-	SK8_GRAB_STALEFISH,   /* back hand, sideways right */
-	SK8_GRAB_MELON,       /* front hand, centre */
-	SK8_GRAB_NOSE,        /* front hand, nose */
-	SK8_GRAB_TUCK_KNEE,   /* front hand, tail */
-	SK8_GRAB_JUDO,        /* front hand, sideways right */
-	SK8_GRAB_DOUBLE,      /* both, centre */
-	SK8_GRAB_SUPERMAN,    /* both, nose */
-	SK8_GRAB_NO_FOOT,     /* both, tail */
-	SK8_GRAB_STIFFY,      /* both, sideways right */
-	SK8_GRAB_CHRIST,      /* back hand, sideways left: board held out, arms spread */
-	SK8_GRAB_METHOD,      /* front hand, sideways left: heel edge, board arched up behind */
-	SK8_GRAB_ROCKET,      /* both, sideways left: both hands on the nose, feet on the tail */
+	SK8_GRAB_INDY,        /* right trigger, stick centred */
+	SK8_GRAB_CRAIL,       /* left trigger, stick down */
+	SK8_GRAB_TAIL,        /* left (or both), stick up */
+	SK8_GRAB_STALEFISH,   /* left, stick right / down-right */
+	SK8_GRAB_MELON,       /* left, stick centred */
+	SK8_GRAB_NOSE,        /* right, stick down */
+	SK8_GRAB_TUCK_KNEE,   /* right, stick left / down-left */
+	SK8_GRAB_JUDO,        /* left, stick up-left */
+	SK8_GRAB_DOUBLE,      /* both, stick centred or left */
+	SK8_GRAB_SUPERMAN,    /* both, stick up-left */
+	SK8_GRAB_NO_FOOT,     /* both, stick down-left */
+	SK8_GRAB_STIFFY,      /* left, stick left / down-left */
+	SK8_GRAB_CHRIST,      /* right, stick up-left: board held out, arms spread */
+	SK8_GRAB_METHOD,      /* right or both, stick down-right: heel edge, board arched up behind */
+	SK8_GRAB_ROCKET,      /* both, stick down: both hands on the nose, feet on the tail */
+	SK8_GRAB_SEATBELT,    /* right, stick up: the back hand across the body to the nose */
+	SK8_GRAB_MUTE,        /* right or both, stick right: the front hand to the toe edge, in front */
 } sk8_grab_style;
 
 sk8_rider *sk8_rider_new(void);

@@ -141,6 +141,13 @@ GRAB_POSES = {
                         lf=foot(FRONT_X + 0.04, 0.0, 0.2, yaw=15), rf=foot(BACK_X - 0.04, 0.0, 0.19, yaw=0),
                         lh=(0.12, -0.12, 0.19), rh=(-0.12, -0.12, 0.19), knee_out=0.2),  # legs near straight
 }
+# the back hand across the front of the body to the nose (the trunk turned to it), the free front
+# hand up and back behind
+GRAB_POSES["seatbelt"] = grab_pose(rh=(0.36, -0.1, D + 0.02), spine=(42, 0, 26), head=(-18, 0, 62),
+                                   lf=foot(FRONT_X - 0.02, 0.0, GRAB_DECK + 0.03, yaw=15),
+                                   lh=(0.02, 0.3, 1.06))
+# the front hand to the toe edge between the feet, the back arm out for balance
+GRAB_POSES["mute"] = grab_pose(lh=(0.05, -0.12, D), spine=(40, 0, 12), head=(-16, 0, 48), rh=(-0.52, -0.24, 0.98))
 # Tilted grabs: the runtime turns the deck by these (skater.rs METHOD_ROLL / ROCKET_PITCH, degrees)
 # about its centre at GRAB_DECK, and the feet are authored on the turned deck.
 METHOD_ROLL, ROCKET_PITCH = 38.0, 42.0

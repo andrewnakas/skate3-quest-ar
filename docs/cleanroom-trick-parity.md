@@ -13,9 +13,11 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 - Held flicks like the port: the stick kept at a flick's end adds turns (double, triple, quad),
   only when the air can fit them (port: the second flip ~21 ticks after the pop when held);
   shove-its held at the sweep's sideways end: 360, 540
-- 15 grabs: indy, crail, tail, stalefish, melon, nose, tuck knee, judo, double, superman,
-  no foot, stiffy, Christ air, method, rocket air (triggers + left stick: centre / nose / tail /
-  right / left)
+- 17 grabs picked the port's way (s3trace-probed): the right stick held, then the trigger(s).
+  Centre: melon / indy / double; up: tail / seatbelt / tail; up-left: judo / Christ / superman;
+  left: stiffy / tuck knee / double; down-left: stiffy / tuck knee / no foot; down: crail / nose /
+  rocket; down-right: stalefish / method / method; right: stalefish / mute / mute (left / right /
+  both triggers; swapped in switch). Not matched: the port's tweak-while-held variants (Japan...)
 - Controller = the port's layout (measured with s3trace): A push, X mongo push, B brake, Y off the
   board; RB (Touch: right grip) powerslide / revert; manuals on the right stick part-way;
   left stick click old school (our own: the port's stick clicks do nothing while rolling)
@@ -73,8 +75,7 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
 
 ## Next (in order)
 1. Animation fidelity: grind/manual/powerslide poses vs port captures; open polish below
-2. Grab input like the port (right stick held into the trigger)
-3. Quest APK + headset test
+2. Quest APK + headset test
 
 ## Open polish
 - Deep bends (noseblunt) show skin through the shirt (mesh interpenetration)

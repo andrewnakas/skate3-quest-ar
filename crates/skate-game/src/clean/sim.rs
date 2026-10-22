@@ -35,11 +35,27 @@ pub(crate) struct CleanSkate {
     /// Where the rider was last put down (for "reset").
     pub spawn: ([f32; 3], f32),
     pub collision_triangles: usize,
+    /// Placed by the host since the last step (sent on as a Respawn event).
+    placed: bool,
 }
 
 impl CleanSkate {
     pub(crate) fn new() -> Self {
         let mut rider = Rider::new();
+        // SK8_PARAMS=key=value,key=value: engine values for this run (tuning, A/B traces)
+        if let Ok(list) = std::env::var("SK8_PARAMS") {
+            let params = skate_lite_sys::params();
+            for kv in list.split(',').filter(|kv| !kv.is_empty()) {
+                let found = kv.split_once('=').and_then(|(k, v)| {
+                    let p = params.iter().find(|p| p.key == k)?;
+                    Some((p.index, v.parse::<f32>().ok()?))
+                });
+                match found {
+                    Some((i, v)) => rider.set_param(i, v),
+                    None => warn!("SK8_PARAMS: unknown or bad {kv}"),
+                }
+            }
+        }
         rider.place([0.0, 0.0, 0.0], 0.0, 0.0);
         let state = rider.state();
         Self {
@@ -56,6 +72,7 @@ impl CleanSkate {
             events: Vec::new(),
             spawn: ([0.0; 3], 0.0),
             collision_triangles: 0,
+            placed: false,
         }
     }
 
@@ -73,6 +90,7 @@ impl CleanSkate {
         self.spawn = (position.to_array(), facing);
         self.current = self.rider.state();
         self.previous = self.current;
+        self.placed = true;
     }
 
     pub(crate) fn set_collision(&mut self, grid: Grid, rails: &[Vec<Vec3>]) {
@@ -105,6 +123,11 @@ pub(crate) fn facing_of(dir: Vec3) -> f32 {
 
 pub(crate) fn step(time: Res<Time<Real>>, mut sim: ResMut<CleanSkate>) {
     sim.events.clear();
+    // put somewhere by the host (spawn, a demo slot, the teleport): a respawn for the animation, so
+    // blends cut instead of sweeping the body across from where it was
+    if std::mem::take(&mut sim.placed) {
+        sim.events.push(Event { kind: EventKind::Respawn, name: String::new(), points: 0, value: 0, surface: 0 });
+    }
     let dt = time.delta_secs().min(0.1);
     if sim.paused {
         sim.accum = 0.0;

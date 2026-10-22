@@ -243,8 +243,8 @@ impl From<RawState> for State {
     }
 }
 
-/// Grab styles (`sk8_grab_style`): the trigger(s) pick the hand, the left stick's direction when
-/// the grab starts picks the style.
+/// Grab styles (`sk8_grab_style`): picked as a trigger goes down by which trigger(s) and where the
+/// right stick is held (the stick first, then the trigger, like the port).
 pub mod grab_style {
     pub const NONE: u32 = 0;
     pub const INDY: u32 = 1;
@@ -262,6 +262,8 @@ pub mod grab_style {
     pub const CHRIST: u32 = 13;
     pub const METHOD: u32 = 14;
     pub const ROCKET: u32 = 15;
+    pub const SEATBELT: u32 = 16;
+    pub const MUTE: u32 = 17;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
