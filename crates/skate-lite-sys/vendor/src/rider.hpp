@@ -43,7 +43,7 @@ private:
 	void start_flip(int trick);
 	void land(const Hit &h);
 	bool try_grind(World &w);
-	void leave_grind(V3 velocity, bool popped);
+	void leave_grind(V3 velocity, bool popped, bool off_end = false);
 	void move_on_ground(World &w, V3 delta);
 	void follow_ground(World &w);
 
@@ -124,6 +124,8 @@ private:
 	float seg_u_ = 0, rail_speed_ = 0;
 	int rail_dir_ = 1;
 	int grind_kind_ = 0;
+	float brake_held_ = 0, brake_up_ = 0, push_gain_ = 0, skid_ = 0, skid_time_ = 0;
+	bool grind_tip_ = false; // a 50-50 near the rail's end, the front truck past it: tipped onto the tail
 	float grind_time_ = 0;
 	float grind_cooldown_ = 0;
 	std::string grind_name_;

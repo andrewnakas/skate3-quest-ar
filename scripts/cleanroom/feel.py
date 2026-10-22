@@ -49,9 +49,18 @@ HEELFLIP = [(0, -1)] * 30 + [(0, 0), (0.707, 0.707), (0.707, 0.707), (0.707, 0.7
 # the flick's end kept there through the air (held: more turns)
 KICKFLIP_HELD = KICKFLIP + [(-0.707, 0.707)] * 45
 
-# name -> (action script relative to the action start, ticks to run, metric function name)
+# The port's test world has rails: the low one runs along z at x -7, 0.45 m over the floor. The rail
+# scenarios steer round on the long flat and come back down it (sidestep, U-turn, straighten), then
+# start at tick 434 there; sk8 starts at the port's spot and speed on its floor with the same rail.
+FLOOR_Y = -1.535  # the port's floor height (sk8's floor is y 0)
+RAIL_PREFIX = PREFIX + "245 263 -1 0 0 0 0\n264 286 1 0 0 0 0\n290 412 1 0 0 0 0\n413 425 -1 0 0 0 0\n"
+LOW_RAIL = (-7.0, FLOOR_Y + 0.45, 7.0, -7.0, FLOOR_Y + 0.45, 15.0)
+# (the port is still easing out of the turn at t0: sk8 takes its heading a few ticks on, settled)
+ON_RAIL = {"prefix": RAIL_PREFIX, "t0": 434, "rails": [LOW_RAIL], "facing_at": 10}
+
+# name -> (action script relative to the action start, ticks to run, metric function name[, setup])
 SCENARIOS = {
-    "coast": ("", 180, "coast"),
+    "coast": ("", 150, "coast"),  # (the port rolls off the world past ~170)
     # A held from rolling: when the speed starts to come on, gain per second, cadence
     # (braked down first: both start above the top pushing speed)
     "push_hold": ("0 89 0 0 0 0 0x2000\n90 240 0 0 0 0 0x1000\n", 240, "push"),
@@ -65,6 +74,14 @@ SCENARIOS = {
     "flip_held": (flick_path(KICKFLIP_HELD, 0), 160, "flip"),
     "carve_right": ("0 90 1 0 0 0 0\n", 100, "carve"),
     "spin_air": (ollie(30, "37 100 -1 0 0 0 0\n"), 130, "air"),
+    # the left stick held back to a diagonal: a powerslide from full speed (speed kept at 0.25/0.5/1/2 s)
+    "powerslide": ("0 120 0.7 -0.7 0 0 0\n", 122, "slide"),
+    # the right stick part-way down / up and held still: a manual / nose manual, no balancing
+    # (the port's last ~2.6 s before it rolls off the world's end; time held and the slow-down)
+    "manual_hold": ("0 150 0 0 0 -0.5 0\n", 155, "manual"),
+    "manual_nose": ("0 150 0 0 0 0.5 0\n", 155, "manual"),
+    # an ollie onto the low rail: a 50-50 down its length, rolling off the end
+    "grind_low": ("0 8 0 0 0 -1 0\n9 15 0 0 0 1 0\n", 160, "grind", ON_RAIL),
 }
 
 
@@ -98,13 +115,20 @@ def series(rows, port):
             air = r["mode"] == "Air"
         qx, qy, qz, qw = (float(r.get(k) or 0) for k in ("deck_qx", "deck_qy", "deck_qz", "deck_qw"))
         board_up_y = 1 - 2 * (qx * qx + qz * qz)  # the deck's up axis, its height part
-        out.append((int(r["tick"]), float(r["deck_py"]), math.hypot(vx, vz), vy, yaw, air, r.get("events", ""), board_up_y))
+        grind = r["phys_state"].startswith("Grind") if port else r["mode"] == "Grind"
+        if not port:
+            air = air or r["mode"] == "Grind"
+        manual = "Manual" in r["motion_state"] if port else r["mode"] == "Manual"
+        out.append((int(r["tick"]), float(r["deck_py"]), math.hypot(vx, vz), vy, yaw, air, r.get("events", ""),
+                    board_up_y, grind, manual))
     return out
 
 
 def m_coast(s):
-    v0, v1 = s[0][2], s[-1][2]
-    return {"speed_start": v0, "decel_mps2": (v0 - v1) / ((len(s) - 1) * DT)}
+    # averaged over the first / last 20 ticks: the port's deck speed jitters a little
+    v0 = sum(x[2] for x in s[:20]) / 20
+    v1 = sum(x[2] for x in s[-20:]) / 20
+    return {"speed_start": s[0][2], "decel_mps2": (v0 - v1) / ((len(s) - 20) * DT)}
 
 
 def m_air(s):
@@ -132,18 +156,29 @@ def m_air(s):
 
 
 def m_push(s):
+    """From the push press (tick 90, after braking): when the first stroke's speed comes on, what
+    the first two strokes give, and the time between them."""
     s = s[90:]
     v0 = s[0][2]
-    rise = [b[2] - a[2] for a, b in zip(s, s[1:])]
-    start = next((i for i, d in enumerate(rise) if d > 0.004), len(rise))
-    # strokes = separate runs of speeding up
-    strokes, on = 0, False
-    for d in rise:
-        if d > 0.004 and not on:
-            strokes += 1
-        on = d > 0.004
-    return {"speed_start": v0, "lag_s": start * DT, "gain_mps": max(x[2] for x in s) - v0,
-            "strokes": strokes, "gain_per_s": (s[-1][2] - v0) / ((len(s) - 1) * DT)}
+    bursts, i = [], 1
+    while i < len(s):
+        if s[i][2] - s[i - 1][2] > 0.02:
+            j = i
+            while j + 1 < len(s) and s[j + 1][2] - s[j][2] > 0.005:
+                j += 1
+            if bursts and i - bursts[-1][3] < 12:  # the same stroke biting on
+                bursts[-1] = (bursts[-1][0], bursts[-1][1], s[j][2], j)
+            else:
+                bursts.append((i, s[i - 1][2], s[j][2], j))
+            i = j + 1
+        else:
+            i += 1
+    out = {"speed_start": v0, "first_s": bursts[0][0] * DT if bursts else float("nan")}
+    for k, (t, a, b, _) in enumerate(bursts[:2]):
+        out[f"gain{k + 1}"] = b - a
+    if len(bursts) > 1:
+        out["stroke_s"] = (bursts[1][0] - bursts[0][0]) * DT
+    return out
 
 
 def m_flip(s):
@@ -166,6 +201,35 @@ def m_flip(s):
             "flips": flips}
 
 
+def m_grind(s):
+    """Speed kept catching the rail, the slow-down along it, time on it, and the speed kept rolling
+    off its end and landing (on the ground 20 ticks later)."""
+    on = [i for i, x in enumerate(s) if x[8]]
+    if not on:
+        return {"grinding": 0}
+    a, b = on[0], on[-1]
+    land = next((i for i in range(b + 1, len(s)) if not s[i][5] and not s[i][8]), None)
+    after = s[min(land + 20, len(s) - 1)][2] if land is not None else float("nan")
+    return {"catch_keep": s[a + 2][2] / s[a - 2][2],
+            "rail_decel": (s[a + 3][2] - s[b - 3][2]) / ((b - a - 6) * DT),
+            "rail_s": (b - a + 1) * DT,
+            "off_keep": after / s[b][2]}
+
+
+def m_manual(s):
+    on = [i for i, x in enumerate(s) if x[9]]
+    if not on:
+        return {"manual_s": 0}
+    a, b = on[0], on[-1]
+    return {"engage_ticks": a, "manual_s": (b - a + 1) * DT,
+            "decel_mps2": (s[a][2] - s[b][2]) / (max(b - a, 1) * DT)}
+
+
+def m_slide(s):
+    v0 = s[0][2]
+    return {f"keep_{t}": s[t][2] / v0 for t in (15, 30, 60, 120)}
+
+
 def m_carve(s):
     turn = 0.0
     for a, b in zip(s[:60], s[1:61]):
@@ -184,17 +248,29 @@ def main():
     extra = [x for p in a.param for x in ("--param", p)]
     tmp = Path(tempfile.mkdtemp())
     print(f"{'scenario':<12} {'metric':<14} {'port':>9} {'sk8':>9} {'ratio':>7}")
-    for name, (action, ticks, metric) in SCENARIOS.items():
+    for name, (action, ticks, metric, *setup) in SCENARIOS.items():
         if a.only and a.only != name:
             continue
+        setup = setup[0] if setup else {}
+        prefix, t0 = setup.get("prefix", PREFIX), setup.get("t0", T0)
         port_script = tmp / f"{name}.port.txt"
-        port_script.write_text(PREFIX + (shift(action, T0) if action.strip() else ""))
-        port = series(run([str(a.s3trace), str(a.pack), "test-world", str(port_script), str(T0 + ticks)]), True)
-        port = port[T0:]
+        port_script.write_text(prefix + (shift(action, t0) if action.strip() else ""))
+        rows = run([str(a.s3trace), str(a.pack), "test-world", str(port_script), str(t0 + ticks)])
+        port = series(rows, True)[t0:]
         speed = port[0][2]
+        place = []
+        if setup.get("rails"):
+            r0, rf = rows[t0], rows[t0 + setup.get("facing_at", 0)]
+            vx, vz = float(rf["deck_vx"]), float(rf["deck_vz"])
+            place = ["--pos", f"{float(r0['deck_px']):.4f},0,{float(r0['deck_pz']):.4f}",
+                     "--facing", f"{math.atan2(vx, vz):.5f}"]
+            for rail in setup["rails"]:
+                x0, y0, z0, x1, y1, z1 = rail
+                place += ["--rail", f"{x0},{y0 - FLOOR_Y:.4f},{z0},{x1},{y1 - FLOOR_Y:.4f},{z1}"]
         sk8_script = tmp / f"{name}.sk8.txt"
         sk8_script.write_text(shift(action, 1) if action.strip() else "")
-        sk8 = series(run([str(a.sk8trace), str(sk8_script), str(ticks + 1), "--speed", f"{speed:.4f}", *extra]), False)
+        sk8 = series(run([str(a.sk8trace), str(sk8_script), str(ticks + 1), "--speed", f"{speed:.4f}", *place,
+                          *extra]), False)
         sk8 = sk8[1:]
         f = globals()[f"m_{metric}"]
         mp, ms = f(port), f(sk8)

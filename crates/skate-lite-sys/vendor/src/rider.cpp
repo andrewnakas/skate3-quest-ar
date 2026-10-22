@@ -97,6 +97,9 @@ int grab_style_for(int hands, float x, float y)
 
 namespace {
 
+constexpr float kPushBite = 0.12f; // s: how long a stroke's foot takes to give its speed
+constexpr float kSkidTime = 0.3f;  // s: a crooked landing scrubs its speed off over this
+
 constexpr float kDt = SK8_DT;
 constexpr float kDeg = kPi / 180.0f;
 constexpr float kBoardHeight = 0.18f; // wall probes run this far above the wheels
@@ -146,6 +149,7 @@ void Rider::place(V3 position, float facing, float speed)
 	switching_ = -1;
 	fakie_time_ = 0;
 	push_queued_ = false;
+	skid_time_ = 0;
 	flick_.reset();
 	crouch_ = crouch_time_ = 0;
 	flip_ = -1;
@@ -459,9 +463,14 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	if (push_time_ >= 0) {
 		float period = std::max(p[PushPeriod], 0.01f);
 		float t0 = push_lead_ + SK8_PUSH_PLANT * period, t1 = push_lead_ + SK8_PUSH_RELEASE * period;
+		// the speed comes on in a burst as the foot bites (the first part of the plant): a share of
+		// what's left to top speed, so strokes give less and less as it gets going
+		t1 = std::min(t1, t0 + kPushBite);
 		float drive = std::min(push_time_ + kDt, t1) - std::max(push_time_, t0);
-		if (mode_ == SK8_MODE_RIDE && drive > 0 && std::fabs(dot(vel_, travel)) < p[PushTop])
-			vel_ += travel * (p[PushKick] * drive / (t1 - t0));
+		if (push_time_ <= t0)
+			push_gain_ = std::max(0.0f, p[PushTop] - std::fabs(dot(vel_, travel))) * p[PushKick];
+		if (mode_ == SK8_MODE_RIDE && drive > 0)
+			vel_ += travel * (push_gain_ * drive / (t1 - t0));
 		push_time_ += kDt;
 		if (push_time_ > push_lead_ + period || mode_ != SK8_MODE_RIDE) {
 			push_time_ = -1;
@@ -478,7 +487,13 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	}
 	if (mode_ != SK8_MODE_RIDE)
 		push_queued_ = false;
+	// after a brake the foot comes back up onto the board first
+	if (in.buttons & SK8_BRAKE)
+		brake_up_ = brake_held_ > p[BrakeLead] ? p[BrakeOut] : 0;
+	else if (brake_up_ > 0)
+		brake_up_ -= kDt;
 	if (push_button && switching_ < 0 && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 &&
+		brake_up_ <= 0 && !(in.buttons & SK8_BRAKE) &&
 		std::fabs(dot(vel_, travel)) < p[PushTop]) {
 		push_queued_ = false;
 		bool mongo = (in.buttons & SK8_PUSH_MONGO) || p[PushMongo] > 0.5f;
@@ -493,12 +508,18 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	// drag and brake
 	speed = len(vel_);
 	float dec = p[RollDrag] * kDt + p[AirDrag] * speed * speed * kDt;
-	if (in.buttons & SK8_BRAKE)
+	// the foot goes down to the ground first, then drags
+	brake_held_ = (in.buttons & SK8_BRAKE) ? brake_held_ + kDt : 0;
+	if (brake_held_ > p[BrakeLead])
 		dec += p[Brake] * kDt;
-	if (mode_ == SK8_MODE_SLIDE)
-		dec += p[SlideDrag] * kDt;
-	if (mode_ == SK8_MODE_MANUAL && manual_style_ == 1)
-		dec += 2.7f * kDt; // a primo scrapes along on the board's edge
+	if (skid_time_ > 0) {
+		dec += skid_ * kDt;
+		skid_time_ -= kDt;
+	}
+	if (mode_ == SK8_MODE_SLIDE) // bites in as the board turns across, eases off as it slows
+		dec += p[SlideDrag] * slide_amount_ * slide_amount_ * std::min(1.0f, speed / p[SlideSoft]) * kDt;
+	if (mode_ == SK8_MODE_MANUAL)
+		dec += (manual_style_ == 1 ? 2.7f : p[ManualDrag]) * kDt; // two wheels rolling; a primo scrapes its edge
 	vel_ = speed > dec ? vel_ * ((speed - dec) / speed) : V3{};
 
 	// a revert turns the board half way round in kRevertTime, easing in and out; the motion carries
@@ -622,6 +643,7 @@ void Rider::pop(const TrickDef &def, float share)
 	float v = (p[PopLow] + (p[PopHigh] - p[PopLow]) * charge) * share;
 	pop_y_ = pos_.y;
 	push_time_ = -1; // a stroke ends at the pop
+	skid_time_ = 0;
 	push_cooldown_ = 0;
 	vel_ += up_ * v;
 	pos_ += up_ * 0.02f;
@@ -871,8 +893,9 @@ void Rider::land(const Hit &h)
 	fakie_ = fakie;
 	// line the wheels up with the motion
 	V3 travel = fakie ? -fwd_ : fwd_;
-	float along = dot(vflat, travel);
-	vel_ = travel * along + (vflat - travel * along) * 0.15f;
+	// landing off the line of travel skids: the further round, the more speed it scrubs off
+	float keep = std::max(0.0f, 1 - std::pow(side / (p[LandSkid] * kDeg), 1.6f));
+	vel_ = travel * len(vflat);
 	bool clean = tilt < p[LandClean] * kDeg && side < 20 * kDeg;
 
 	if (vhalves > 0) {
@@ -883,9 +906,12 @@ void Rider::land(const Hit &h)
 	}
 	varial_ = 0;
 	int halves = int(std::lround(std::fabs(spin_total_) / kPi));
-	// landing out of a body spin costs speed (each half turn more)
+	// landing out of a body spin costs speed (each half turn more); the speed lost skids off over
+	// kSkidTime, not all at once
 	if (halves > 0)
-		vel_ *= std::max(0.5f, 1.0f - 0.2f * float(halves));
+		keep *= std::max(0.5f, 1.0f - 0.15f * float(halves));
+	skid_time_ = kSkidTime;
+	skid_ = len(vel_) * (1 - keep) / kSkidTime;
 	if (halves > 0) {
 		char name[24];
 		std::snprintf(name, sizeof name, "%d Spin", halves * 180);
@@ -1056,6 +1082,17 @@ bool Rider::try_grind(World &w)
 	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0;
 	if (std::fabs(vt) < 0.8f && !plant)
 		return false;
+	// over the rail: coming down, the board is drawn onto it over a few ticks (no snap from high up)
+	float gap = pos_.y - s.point.y;
+	if (gap > 0.09f && !plant) {
+		if (vel_.y < 0) {
+			vel_.y = std::min(vel_.y, -gap * 10.7f);
+			V3 lat = flatten(s.point - pos_, kUp);
+			lat = lat - s.tangent * dot(lat, s.tangent);
+			vel_ += lat * (9.0f * kDt);
+		}
+		return false;
+	}
 	// half way round a flip, across the rail: it lands upside down on it (a darkslide)
 	bool dark = false;
 	if (flip_ >= 0 && trick_table()[size_t(flip_)].roll != 0 && flip_frac() > 0.3f && flip_frac() < 0.75f) {
@@ -1072,7 +1109,7 @@ bool Rider::try_grind(World &w)
 	seg_ = s.seg;
 	seg_u_ = s.u;
 	rail_dir_ = vt >= 0 ? 1 : -1;
-	rail_speed_ = std::fabs(vt) * 0.95f;
+	rail_speed_ = std::fabs(vt) * p[GrindKeep];
 	pos_ = s.point;
 	up_ = kUp;
 	fwd_ = unit(flatten(fwd_, kUp), fwd_);
@@ -1104,7 +1141,7 @@ bool Rider::try_grind(World &w)
 	return true;
 }
 
-void Rider::leave_grind(V3 velocity, bool popped)
+void Rider::leave_grind(V3 velocity, bool popped, bool off_end)
 {
 	add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
 	unslide_ = grind_kind_ == SK8_GRIND_BOARDSLIDE || grind_kind_ == SK8_GRIND_DARKSLIDE ||
@@ -1112,11 +1149,14 @@ void Rider::leave_grind(V3 velocity, bool popped)
 	emit(SK8_EV_GRIND_END, grind_name_.c_str());
 	mode_ = SK8_MODE_AIR;
 	vel_ = velocity;
-	if (!popped)
+	if (off_end) // the tail drags over the end as it tips off: no hop, some speed lost
+		vel_ = vel_ * p[GrindOffKeep];
+	else if (!popped)
 		vel_ += V3{0, 0.6f, 0};
 	up_ = kUp;
 	rail_ = -1;
 	grind_kind_ = 0;
+	grind_tip_ = false;
 	grind_cooldown_ = 0.35f;
 	air_time_ = 0;
 	spin_total_ = 0;
@@ -1178,7 +1218,7 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 				continue;
 			}
 			pos_ = r.back();
-			leave_grind(t * rail_speed_, false);
+			leave_grind(t * rail_speed_, false, true);
 			return;
 		}
 		if (nu < 0) {
@@ -1189,7 +1229,7 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 				continue;
 			}
 			pos_ = r.front();
-			leave_grind(t * rail_speed_, false);
+			leave_grind(t * rail_speed_, false, true);
 			return;
 		}
 		seg_u_ = nu;
@@ -1198,6 +1238,9 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 	V3 a = r[size_t(seg_)], b = r[size_t(seg_) + 1];
 	V3 tan = unit(b - a);
 	pos_ = a + tan * seg_u_;
+	float to_end = rail_dir_ > 0 ? (size_t(seg_) + 2 == r.size() ? w.segment_length(rail_, seg_) - seg_u_ : 1e9f)
+	                             : (seg_ == 0 ? seg_u_ : 1e9f);
+	grind_tip_ = grind_kind_ == SK8_GRIND_50_50 && to_end < 0.3f;
 	vel_ = tan * (rail_speed_ * float(rail_dir_));
 	trick_ = grind_name_;
 }
@@ -1213,6 +1256,7 @@ void Rider::bail(const char *reason)
 	lose_combo();
 	mode_ = SK8_MODE_BAIL;
 	bail_time_ = 0;
+	skid_time_ = 0;
 	flip_ = -1;
 	rail_ = -1;
 	grind_kind_ = 0;
@@ -1290,7 +1334,7 @@ void Rider::state(sk8_state &s) const
 	if (mode_ == SK8_MODE_GRIND && grind_kind_ > 0) {
 		// the board sits on the rail the way this grind holds it, the rail under the part it
 		// rides on (local x right = heel edge, y up, z the nose)
-		const GrindDef &g = kGrindDefs[grind_kind_];
+		const GrindDef &g = kGrindDefs[grind_tip_ ? SK8_GRIND_5_0 : grind_kind_];
 		float side = switch_ ? -1.0f : 1.0f; // the heel edge is on the other side in switch
 		board = board * Q::axis_angle({0, 1, 0}, -g.yaw * side * kDeg) * Q::axis_angle({1, 0, 0}, -g.pitch * kDeg) *
 			Q::axis_angle({0, 0, 1}, g.roll * side * kDeg);
@@ -1313,7 +1357,7 @@ void Rider::state(sk8_state &s) const
 	s.balance = clampf(balance_, -1, 1);
 	s.air_time = air_time_;
 	s.bail_time = mode_ == SK8_MODE_BAIL ? bail_time_ : -1;
-	s.grind_kind = grind_kind_;
+	s.grind_kind = grind_tip_ ? SK8_GRIND_5_0 : grind_kind_;
 	s.combo_points = combo_points_;
 	s.combo_count = unsigned(combo_names_.size());
 	s.score = score_;

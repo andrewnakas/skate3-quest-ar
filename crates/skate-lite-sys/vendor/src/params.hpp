@@ -10,18 +10,18 @@ enum Param : int
 	// Pop & Jump
 	PopLow, PopHigh, CrouchCharge, NolliePop, GrindPop,
 	// Gravity & Speed
-	Gravity, PushKick, PushPeriod, PushTop, PushLead, PushMongo, PopWait, RollDrag, AirDrag, Brake, Carve, Grip, SlideDrag, GroundSnap,
+	Gravity, PushKick, PushPeriod, PushTop, PushLead, PushMongo, PopWait, RollDrag, AirDrag, Brake, BrakeLead, BrakeOut, Carve, Grip, SlideDrag, SlideSoft, GroundSnap,
 	SwitchWait, SwitchTime,
 	// Spin
 	SpinRate, SpinEase, AirLevel,
 	// Flips
 	FlipBase, FlipPerRev, AirFlick, FlipLenience,
 	// Bails
-	LandClean, LandMax, SideMax, WallBail, ImpactBail, BailTime,
+	LandClean, LandMax, SideMax, LandSkid, WallBail, ImpactBail, BailTime,
 	// Grinds
-	GrindCatch, GrindDrag, GrindBalance,
+	GrindCatch, GrindDrag, GrindBalance, GrindKeep, GrindOffKeep,
 	// Manuals
-	ManualWobble, ManualCorrect, ManualHold,
+	ManualWobble, ManualCorrect, ManualHold, ManualDrag,
 	// Scoring
 	ScoreScale, BankWait, GrindRate, ManualRate,
 	ParamCount
