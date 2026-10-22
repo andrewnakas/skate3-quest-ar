@@ -118,7 +118,7 @@ typedef struct sk8_state
 	float push_phase;    /* 0..1 through a stroke (foot plants at SK8_PUSH_PLANT, lifts at
 	                      * SK8_PUSH_RELEASE), -1 otherwise */
 	int grab;            /* 0 none, 1 left, 2 right, 3 both */
-	float flip_progress; /* 0..1 during a flip trick, -1 otherwise */
+	float flip_progress; /* 0..1 during a flip trick (and while a flip landed short settles), -1 otherwise */
 	float balance;       /* -1..1 manual / grind balance */
 	float air_time;
 	float bail_time;     /* seconds since the bail started, -1 when riding */

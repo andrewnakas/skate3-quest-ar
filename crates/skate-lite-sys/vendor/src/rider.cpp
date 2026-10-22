@@ -134,7 +134,8 @@ int grab_tweak_for(int style, float x, float y)
 namespace {
 
 constexpr float kPushBite = 0.12f; // s: how long a stroke's foot takes to give its speed
-constexpr float kSkidTime = 0.3f;  // s: a crooked landing scrubs its speed off over this
+constexpr float kSkidTime = 0.3f;
+constexpr float kSettleFlip = 0.45f; // s for a whole flip's worth of settling (the last bit: a few ticks)  // s: a crooked landing scrubs its speed off over this
 constexpr float kSettleClean = 0.8f, kSettleSketchy = 1.26f; // s: riding away from a landing before it's settled
 
 constexpr float kDt = SK8_DT;
@@ -247,6 +248,11 @@ void Rider::lose_combo()
 
 void Rider::step(World &w, const sk8_input &in)
 {
+	if (settle_trick_ >= 0) {
+		settle_e_ += kDt / (kSettleFlip * std::max(settle_mult_, 1.0f));
+		if (settle_e_ >= 1 || !ground_mode(mode_))
+			settle_trick_ = -1;
+	}
 	step_count_++;
 	Flick::Result f;
 	if (mode_ != SK8_MODE_BAIL)
@@ -983,6 +989,11 @@ void Rider::land(const Hit &h)
 		emit(SK8_EV_LAND, "sketchy", 0, 1, h.surface);
 	else
 		emit(SK8_EV_LAND, "clean", 0, 2, h.surface);
+	// landed a little short of the flip's end: the board finishes the last of its turn under the
+	// feet over a moment instead of snapping level
+	settle_trick_ = flip_ >= 0 && flip_frac() < 1 ? flip_ : -1;
+	settle_e_ = flip_ >= 0 ? flip_frac() : 1;
+	settle_mult_ = flip_mult_;
 	flip_ = -1;
 	spin_total_ = spin_speed_ = 0;
 	air_time_ = 0;
@@ -1426,6 +1437,12 @@ void Rider::state(sk8_state &s) const
 		board = board * Q::axis_angle({0, 1, 0}, -def.shove * g * m * 2 * kPi * e) *
 			Q::axis_angle({0, 0, 1}, def.roll * g * m * 2 * kPi * e) * Q::axis_angle({1, 0, 0}, -def.wrap * m * 2 * kPi * e);
 	}
+	else if (settle_trick_ >= 0) { // the flip's last bit of roll / wrap (the shove-it's yaw is symmetric)
+		const TrickDef &def = trick_table()[size_t(settle_trick_)];
+		float e = std::min(settle_e_, 1.0f), m = settle_mult_, g = switch_ ? -1.0f : 1.0f;
+		board = board * Q::axis_angle({0, 0, 1}, def.roll * g * m * 2 * kPi * e) *
+			Q::axis_angle({1, 0, 0}, -def.wrap * m * 2 * kPi * e);
+	}
 	if (slide_amount_ > 0)
 		board = board * Q::axis_angle({0, 1, 0}, (lean_ >= 0 ? -1.0f : 1.0f) * slide_amount_ * 1.4f);
 	if (mode_ == SK8_MODE_MANUAL && manual_style_ == 1)
@@ -1458,7 +1475,8 @@ void Rider::state(sk8_state &s) const
 	s.revert = revert_time_ >= 0 ? clampf(revert_time_ / 0.34f, 0, 1) : -1;
 	s.grab = grab_;
 	s.grab_style = grab_style_;
-	s.flip_progress = flip_ >= 0 ? flip_frac() : -1;
+	// (still settling after landing short: the board finishing its turn under the feet)
+	s.flip_progress = flip_ >= 0 ? flip_frac() : settle_trick_ >= 0 ? std::min(settle_e_, 1.0f) : -1;
 	s.balance = clampf(balance_, -1, 1);
 	s.air_time = air_time_;
 	s.bail_time = mode_ == SK8_MODE_BAIL ? bail_time_ : -1;

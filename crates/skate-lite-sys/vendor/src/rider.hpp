@@ -129,6 +129,8 @@ private:
 	float seg_u_ = 0, rail_speed_ = 0;
 	int rail_dir_ = 1;
 	int grind_kind_ = 0;
+	int settle_trick_ = -1; // a flip landed short: the board finishing its turn
+	float settle_e_ = 1, settle_mult_ = 1;
 	float brake_held_ = 0, brake_up_ = 0, push_gain_ = 0, skid_ = 0, skid_time_ = 0, land_settle_ = 0.8f;
 	bool grind_tip_ = false; // a 50-50 near the rail's end, the front truck past it: tipped onto the tail
 	float grind_time_ = 0;
