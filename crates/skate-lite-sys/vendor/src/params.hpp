@@ -15,7 +15,7 @@ enum Param : int
 	// Spin
 	SpinRate, SpinEase, AirLevel,
 	// Flips
-	FlipBase, FlipPerRev, AirFlick, FlipLenience,
+	FlipBase, FlipPerRev, AirFlick, FlipLenience, HeldReach,
 	// Bails
 	LandClean, LandMax, SideMax, LandSkid, WallBail, ImpactBail, BailTime, BailSlide, Rise,
 	// Grinds

@@ -342,6 +342,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             info_row("Old school: hold F (pad: left stick click) and flick: no comply, boneless..."),
             info_row("Grabs: point the right stick, then pull a trigger: up tail / seatbelt, down crail / nose,"),
             info_row("  sideways stalefish / mute / stiffy, both triggers double, centred melon / indy."),
+            info_row("  Trigger first, then push the stick: tweaks (nosebone, tailbone, japan, cross bone...)."),
         ],
         1 => {
             let mut rows = vec![info_row("Hold the right stick down to crouch, then:")];

@@ -157,6 +157,7 @@ GRAB_POSES["mute"] = grab_pose(lh=(0.05, -0.12, D), spine=(40, 0, 12), head=(-16
 # Tilted grabs: the runtime turns the deck by these (skater.rs METHOD_ROLL / ROCKET_PITCH, degrees)
 # about its centre at GRAB_DECK, and the feet are authored on the turned deck.
 METHOD_ROLL, ROCKET_PITCH = 38.0, 42.0
+BONE_PITCH = 22.0  # boned grabs: the board tipped that much toward the straight leg (skater.rs)
 
 
 def on_deck(x, y=0.0, roll=0.0, pitch=0.0, yaw=0.0, foot_pitch=0.0):
@@ -188,6 +189,26 @@ GRAB_POSES["rocket"] = P(hips=(-0.18, 0.02, 0.62), hips_rot=(30, 0, 0), spine=(3
 # The old names, kept for the poses other code refers to.
 GRAB_TOE = GRAB_POSES["indy"]
 GRAB_HEEL = GRAB_POSES["melon"]
+
+# Tweaked grabs (a grab started with the stick centred, the stick then pushed out). Boned: one leg
+# kicked out straight, which tips the board that way (the runtime turns the deck by BONE_PITCH,
+# skater.rs; nose down for the nosebone, tail down for the tailbone and cross bone).
+GRAB_POSES["nosebone"] = P(hips=(0.04, 0.03, 0.86), hips_rot=(14, 0, 0), spine=(18, 0, 8), head=(-18, 0, 50),
+                           lf=on_deck(FRONT_X, pitch=-BONE_PITCH, yaw=15), rf=on_deck(BACK_X + 0.04, pitch=-BONE_PITCH, yaw=0),
+                           lh=(0.3, 0.12, GRAB_DECK + 0.3 * math.sin(math.radians(-BONE_PITCH)) - 0.01),
+                           rh=(-0.5, -0.2, 1.18), knee_out=0.45)
+GRAB_POSES["tailbone"] = P(hips=(-0.04, 0.03, 0.84), hips_rot=(16, 0, 0), spine=(22, 0, 6), head=(-18, 0, 45),
+                           lf=on_deck(FRONT_X - 0.02, pitch=BONE_PITCH, yaw=15), rf=on_deck(BACK_X + 0.02, pitch=BONE_PITCH, yaw=0),
+                           lh=(-0.04, -0.12, GRAB_DECK - 0.04 * math.sin(math.radians(BONE_PITCH)) - 0.01),
+                           rh=(-0.52, -0.22, 1.16), knee_out=0.5)
+GRAB_POSES["cross_bone"] = P(hips=(-0.04, 0.02, 0.8), hips_rot=(20, 0, 8), spine=(36, 0, 26), head=(-20, 0, 60),
+                             lf=on_deck(FRONT_X - 0.02, pitch=BONE_PITCH, yaw=15), rf=on_deck(BACK_X + 0.02, pitch=BONE_PITCH, yaw=0),
+                             rh=(0.1, 0.13, GRAB_DECK + 0.1 * math.sin(math.radians(BONE_PITCH)) - 0.01),
+                             lh=(0.5, -0.26, 1.12), knee_out=0.5)
+# Japan: the front hand on the toe edge by the front truck, the front knee tucked down behind it
+GRAB_POSES["japan"] = grab_pose(hips=(0.0, -0.02, 0.56), spine=(44, 0, 10), head=(-24, 0, 40),
+                                lh=(0.12, -0.12, D + 0.02), lf=foot(FRONT_X - 0.04, 0.02, GRAB_DECK + 0.05, yaw=15, pitch=20),
+                                rh=(-0.5, -0.3, 1.0), knee_out=0.15)
 
 
 # Breakdowns between the key poses (motion reads smooth when the in-betweens are designed, not left

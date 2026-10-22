@@ -212,6 +212,11 @@ typedef enum sk8_grab_style
 	SK8_GRAB_ROCKET,      /* both, stick down: both hands on the nose, feet on the tail */
 	SK8_GRAB_SEATBELT,    /* right, stick up: the back hand across the body to the nose */
 	SK8_GRAB_MUTE,        /* right or both, stick right: the front hand to the toe edge, in front */
+	/* tweaked: a grab started with the stick centred, the stick then pushed out while held */
+	SK8_GRAB_JAPAN,       /* right, then down: the front knee tucked behind, board pulled up */
+	SK8_GRAB_NOSEBONE,    /* left, then up: the front leg boned straight, nose pulled up */
+	SK8_GRAB_TAILBONE,    /* left, then down: the back leg boned straight, tail pulled up */
+	SK8_GRAB_CROSS_BONE,  /* right, then left: the hand reaching across, back leg boned */
 } sk8_grab_style;
 
 sk8_rider *sk8_rider_new(void);

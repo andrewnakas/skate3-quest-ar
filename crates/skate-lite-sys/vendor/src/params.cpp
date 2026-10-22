@@ -51,6 +51,7 @@ const sk8_param kTable[ParamCount] = {
 	{"flip_per_rev", "Time per turn, s", kFlips, 0.1f, 2.0f, 0.41f, 0.005f},
 	{"late_flips", "Flick in the air (0 off, 1 on)", kFlips, 0.0f, 1.0f, 1.0f, 1.0f},
 	{"flip_lenience", "Flip done enough to land", kFlips, 0.3f, 1.0f, 0.83f, 0.01f},
+	{"held_reach", "Held flick: how hopefully it judges the air for one more turn", kFlips, 0.5f, 3.0f, 1.3f, 0.01f},
 
 	{"land_clean", "Clean landing, degrees", kBails, 1.0f, 89.0f, 22.0f, 0.5f},
 	{"land_max", "Worst landing, degrees", kBails, 5.0f, 170.0f, 58.0f, 0.5f},

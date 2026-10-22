@@ -16,6 +16,8 @@ use super::board::{TRUCK_Z, WHEEL_R};
 /// Grabs that turn the deck (skater_anims.py METHOD_ROLL / ROCKET_PITCH, degrees).
 pub(crate) const METHOD_ROLL: f32 = 38.0;
 pub(crate) const ROCKET_PITCH: f32 = 42.0;
+/// Boned grabs tip the board toward the straight leg (skater_anims.py BONE_PITCH, degrees).
+pub(crate) const BONE_PITCH: f32 = 22.0;
 /// Ankle height above the sole in the authored clips.
 pub(crate) const ANKLE: f32 = 0.075;
 /// Where the pop clip reaches its full extension (the flip clips start from that pose).
@@ -102,9 +104,13 @@ enum Clip {
     RiseBack,
     GrabSeatbelt,
     GrabMute,
+    GrabJapan,
+    GrabNosebone,
+    GrabTailbone,
+    GrabCrossBone,
 }
 
-const CLIPS: usize = 67;
+const CLIPS: usize = 71;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -117,7 +123,8 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_grind_nose", "sk8_grind_crooked", "sk8_grind_overcrook", "sk8_grind_smith", "sk8_grind_feeble", "sk8_slide_nose", "sk8_slide_tail", "sk8_slide_lip", "sk8_slide_noseblunt", "sk8_slide_blunt", "sk8_wallride",
     "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant", "sk8_primo", "sk8_casper", "sk8_jump_foot",
     "sk8_switch", "sk8_bail_flail", "sk8_bail_back", "sk8_get_up", "sk8_get_up_back",
-    "sk8_grab_seatbelt", "sk8_grab_mute",
+    "sk8_grab_seatbelt", "sk8_grab_mute", "sk8_grab_japan", "sk8_grab_nosebone", "sk8_grab_tailbone",
+    "sk8_grab_cross_bone",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
 const LOOPED: [Clip; 27] = [
@@ -379,6 +386,8 @@ fn blend_time(clip: Clip) -> f32 {
         // both arms cross to the nose: given time, so the back arm doesn't whip round
         Clip::GrabRocket => 0.18,
         Clip::GrabSeatbelt | Clip::GrabMute => 0.13,
+        // tweaked out of a grab already held: the body shifts into it, not a snap
+        Clip::GrabJapan | Clip::GrabNosebone | Clip::GrabTailbone | Clip::GrabCrossBone => 0.14,
         // The step-off clips do the turn to face down the board themselves.
         Clip::StepOff | Clip::StepOffMongo => 0.06,
         // Into a stroke from anything else (a landing, a powerslide): the body turns, not in a snap.
@@ -447,7 +456,7 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             } else if s.grab != 0 {
                 // The engine's grab style picks the clip; an unknown one falls back by hand.
                 let style = match s.grab_style as usize {
-                    n @ 1..=17 => n,
+                    n @ 1..=21 => n,
                     _ if s.grab == 3 => 9,
                     _ if s.grab & 1 != 0 => 5,
                     _ => 1,
@@ -458,6 +467,10 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
                     15 => Clip::GrabRocket,
                     16 => Clip::GrabSeatbelt,
                     17 => Clip::GrabMute,
+                    18 => Clip::GrabJapan,
+                    19 => Clip::GrabNosebone,
+                    20 => Clip::GrabTailbone,
+                    21 => Clip::GrabCrossBone,
                     n => CLIP_ORDER[GRAB_FIRST + n - 1],
                 };
                 // from its first frame once it takes over at the pop's top (pressed earlier, it
@@ -637,6 +650,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
     Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper, Clip::JumpFoot, Clip::Switch,
     Clip::BailFlail, Clip::BailBack, Clip::Rise, Clip::RiseBack, Clip::GrabSeatbelt, Clip::GrabMute,
+    Clip::GrabJapan, Clip::GrabNosebone, Clip::GrabTailbone, Clip::GrabCrossBone,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

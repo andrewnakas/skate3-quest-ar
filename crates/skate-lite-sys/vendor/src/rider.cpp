@@ -21,7 +21,8 @@ const GrabDef kGrabs[] = {
 	{"Melon", 150},     {"Nose Grab", 180}, {"Tuck Knee", 200}, {"Judo", 260},
 	{"Double Grab", 200}, {"Superman", 320}, {"No Foot", 300},  {"Stiffy", 260},
 	{"Christ Air", 340},  {"Method", 240},   {"Rocket Air", 300}, {"Seatbelt", 220},
-	{"Mute", 180},
+	{"Mute", 180},       {"Japan", 260},      {"Nosebone", 240},  {"Tailbone", 240},
+	{"Cross Bone", 250},
 };
 
 const GrabDef &grab_def(int style)
@@ -106,6 +107,26 @@ int grab_style_for(int hands, float x, float y)
 		{SK8_GRAB_STALEFISH, SK8_GRAB_MUTE, SK8_GRAB_MUTE},         // R
 	};
 	return kTable[dir][hands == 3 ? 2 : hands == 2 ? 1 : 0];
+}
+
+// A one-hand grab started with the stick centred, the stick pushed out while it's held: tweaked
+// into a variant (like the port); 0 = no tweak that way
+int grab_tweak_for(int style, float x, float y)
+{
+	if (x * x + y * y <= 0.25f)
+		return 0;
+	int oct = int(std::floor(std::atan2(x, y) * (4.0f / 3.14159265f) + 0.5f)) & 7; // 0 up, 2 right
+	if (style == SK8_GRAB_MELON) {
+		static const int k[8] = {SK8_GRAB_NOSEBONE, SK8_GRAB_NOSEBONE, SK8_GRAB_TUCK_KNEE, SK8_GRAB_TAILBONE,
+			SK8_GRAB_TAILBONE, SK8_GRAB_STIFFY, SK8_GRAB_STIFFY, SK8_GRAB_STIFFY};
+		return k[oct];
+	}
+	if (style == SK8_GRAB_INDY) {
+		static const int k[8] = {SK8_GRAB_MELON, SK8_GRAB_MELON, SK8_GRAB_METHOD, SK8_GRAB_JAPAN,
+			SK8_GRAB_JAPAN, SK8_GRAB_CROSS_BONE, SK8_GRAB_CROSS_BONE, SK8_GRAB_CROSS_BONE};
+		return k[oct];
+	}
+	return 0;
 }
 } // namespace
 
@@ -743,11 +764,11 @@ void Rider::extend_flip()
 	int now = int(std::lround(main * flip_mult_));
 	float mult = float(now + 1) / main;
 	float turns = flip_base_turns_ * mult;
-	// only if it can get round before coming back down to where it left from (a held flick in a
-	// small air stays at what fits instead of under-flipping)
+	// held, it goes for the next turn if the air looks long enough for it, judged hopefully (like
+	// the port: a just-too-small air still tries it and comes down under-flipped)
 	float h = std::max(pos_.y - pop_y_, 0.0f), g = p[Gravity];
 	float to_land = (vel_.y + std::sqrt(std::max(vel_.y * vel_.y + 2 * g * h, 0.0f))) / g;
-	if ((turns * p[FlipLenience] - flip_angle_) * p[FlipPerRev] > to_land)
+	if ((turns - flip_angle_) * p[FlipPerRev] > to_land * p[HeldReach])
 		return;
 	flip_turns_ = turns;
 	flip_mult_ = mult;
@@ -809,7 +830,8 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	}
 
 	// flick a trick late
-	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat)
+	// (not while grabbing: the stick then tweaks the grab)
+	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && !grab_ && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat)
 		start_flip(f.trick);
 	if (flip_ >= 0) {
 		flip_time_ += kDt;
@@ -835,8 +857,15 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	if (switch_)
 		std::swap(lt, rt);
 	int hands = (lt ? 1 : 0) | (rt ? 2 : 0);
-	if (hands && hands != grab_)
+	if (hands && hands != grab_) {
 		grab_style_ = grab_style_for(hands, in.flick[0], in.flick[1]);
+		grab_tweakable_ = in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1] <= 0.25f;
+	} else if (hands && grab_tweakable_ && !grab_scored_) {
+		if (int t = grab_tweak_for(grab_style_, in.flick[0], in.flick[1])) {
+			grab_style_ = t;
+			grab_tweakable_ = false;
+		}
+	}
 	grab_ = hands;
 	if (grab_) {
 		grab_time_ += kDt;
@@ -882,7 +911,7 @@ void Rider::land(const Hit &h)
 	}
 	V3 n = h.normal;
 	float tilt = angle_between(up_, n);
-	bool flip_done = flip_ < 0 || flip_frac() >= p[FlipLenience];
+	bool flip_done = flip_landable();
 	V3 vflat = flatten(vel_, n);
 	V3 fflat = unit(flatten(fwd_, n), fwd_);
 	float side = 0;
@@ -1018,7 +1047,7 @@ bool Rider::try_wallride(const Hit &h)
 		n = -n;
 	V3 along = flatten(vel_, n);
 	float into = -dot(vel_, n);
-	bool flip_done = flip_ < 0 || flip_frac() >= p[FlipLenience];
+	bool flip_done = flip_landable();
 	// a glancing hit at speed rolls on along it; head-on is a slam
 	if (len(along) < 3.0f || into > len(along) * 1.1f || !flip_done || grab_)
 		return false;
@@ -1127,7 +1156,7 @@ bool Rider::try_grind(World &w)
 		aa = std::min(aa, kPi - aa);
 		dark = aa > 55 * kDeg;
 	}
-	if (!dark && flip_ >= 0 && flip_frac() < p[FlipLenience] && !never_bail()) {
+	if (!dark && flip_ >= 0 && !flip_landable() && !never_bail()) {
 		bail("Under-flipped");
 		return true;
 	}

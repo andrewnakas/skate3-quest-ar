@@ -83,31 +83,37 @@ pub(crate) fn read_touch(
     };
 }
 
-/// `SK8_DEMO=grabs`: push, then an ollie into each of the seventeen grab styles in turn, the port's
-/// way: the right stick held first, then the trigger(s) (sk8_grab_style order).
+/// `SK8_DEMO=grabs`: push, then an ollie into each of the twenty-one grab styles in turn, the port's
+/// way: the right stick held first, then the trigger(s); the last four tweaked (trigger first, then
+/// the stick pushed out while held).
 fn demo_grabs(t: f32) -> Input {
     const START: f32 = 3.0;
     const EACH: f32 = 2.6;
     const L: u32 = buttons::GRAB_LEFT;
     const R: u32 = buttons::GRAB_RIGHT;
-    const GRABS: [(u32, [f32; 2]); 17] = [
-        (R, [0.0, 0.0]),    // indy
-        (L, [0.0, -1.0]),   // crail
-        (L, [0.0, 1.0]),    // tail
-        (L, [0.7, -0.7]),   // stalefish
-        (L, [0.0, 0.0]),    // melon
-        (R, [0.0, -1.0]),   // nose
-        (R, [-1.0, 0.0]),   // tuck knee
-        (L, [-0.7, 0.7]),   // judo
-        (L | R, [0.0, 0.0]), // double
-        (L | R, [-0.7, 0.7]), // superman
-        (L | R, [-0.7, -0.7]), // no foot
-        (L, [-1.0, 0.0]),   // stiffy
-        (R, [-0.7, 0.7]),   // christ air
-        (R, [0.7, -0.7]),   // method
-        (L | R, [0.0, -1.0]), // rocket air
-        (R, [0.0, 1.0]),    // seatbelt
-        (R, [1.0, 0.0]),    // mute
+    // (triggers, right stick held before them, right stick pushed out while held: a tweak)
+    const GRABS: [(u32, [f32; 2], [f32; 2]); 21] = [
+        (R, [0.0, 0.0], [0.0, 0.0]), // indy
+        (L, [0.0, -1.0], [0.0, 0.0]), // crail
+        (L, [0.0, 1.0], [0.0, 0.0]), // tail
+        (L, [0.7, -0.7], [0.0, 0.0]), // stalefish
+        (L, [0.0, 0.0], [0.0, 0.0]), // melon
+        (R, [0.0, -1.0], [0.0, 0.0]), // nose
+        (R, [-1.0, 0.0], [0.0, 0.0]), // tuck knee
+        (L, [-0.7, 0.7], [0.0, 0.0]), // judo
+        (L | R, [0.0, 0.0], [0.0, 0.0]), // double
+        (L | R, [-0.7, 0.7], [0.0, 0.0]), // superman
+        (L | R, [-0.7, -0.7], [0.0, 0.0]), // no foot
+        (L, [-1.0, 0.0], [0.0, 0.0]), // stiffy
+        (R, [-0.7, 0.7], [0.0, 0.0]), // christ air
+        (R, [0.7, -0.7], [0.0, 0.0]), // method
+        (L | R, [0.0, -1.0], [0.0, 0.0]), // rocket air
+        (R, [0.0, 1.0], [0.0, 0.0]), // seatbelt
+        (R, [1.0, 0.0], [0.0, 0.0]), // mute
+        (L, [0.0, 0.0], [0.0, 1.0]), // nosebone (melon tweaked up)
+        (L, [0.0, 0.0], [0.0, -1.0]), // tailbone (melon tweaked down)
+        (R, [0.0, 0.0], [0.0, -1.0]), // japan (indy tweaked down)
+        (R, [0.0, 0.0], [-1.0, 0.0]), // cross bone (indy tweaked left)
     ];
     let mut i = Input::default();
     if t < START {
@@ -127,9 +133,11 @@ fn demo_grabs(t: f32) -> Input {
     } else if d < 0.5 {
         i.flick = [0.0, 1.0];
     }
-    let (hands, stick) = GRABS[n];
+    let (hands, stick, tweak) = GRABS[n];
     if (0.56..0.7).contains(&d) {
         i.flick = stick;
+    } else if (0.8..1.1).contains(&d) {
+        i.flick = tweak;
     }
     if (0.62..1.15).contains(&d) {
         i.buttons |= hands;

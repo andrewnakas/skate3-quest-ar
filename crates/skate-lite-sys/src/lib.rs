@@ -264,6 +264,11 @@ pub mod grab_style {
     pub const ROCKET: u32 = 15;
     pub const SEATBELT: u32 = 16;
     pub const MUTE: u32 = 17;
+    /// Tweaked: a grab started with the stick centred, the stick then pushed out while held.
+    pub const JAPAN: u32 = 18;
+    pub const NOSEBONE: u32 = 19;
+    pub const TAILBONE: u32 = 20;
+    pub const CROSS_BONE: u32 = 21;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

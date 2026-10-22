@@ -359,7 +359,7 @@ pub(crate) fn layer(
     // In the air the board rides up under the feet (a tuck brings it with them); while it flips it
     // keeps a little room to turn. The height springs, so a flip starting or ending never snaps it.
     use skate_lite_sys::grab_style as gs;
-    let tilting = s.mode == Mode::Air && matches!(s.grab_style, gs::METHOD | gs::ROCKET);
+    let tilting = s.mode == Mode::Air && matches!(s.grab_style, gs::METHOD | gs::ROCKET | gs::NOSEBONE | gs::TAILBONE | gs::CROSS_BONE);
     if tilting {
         motion.tilt_style = s.grab_style;
     }
@@ -436,6 +436,10 @@ pub(crate) fn layer(
             // the heel edge is the deck's other side in switch (the engine's frame turned round)
             let side = if s.switch { -1.0 } else { 1.0 };
             Quat::from_rotation_z(side * skater::METHOD_ROLL.to_radians() * motion.tilt)
+        } else if motion.tilt_style == gs::NOSEBONE {
+            Quat::from_rotation_x(skater::BONE_PITCH.to_radians() * motion.tilt) // nose down
+        } else if matches!(motion.tilt_style, gs::TAILBONE | gs::CROSS_BONE) {
+            Quat::from_rotation_x(-skater::BONE_PITCH.to_radians() * motion.tilt) // tail down
         } else {
             Quat::from_rotation_x(-skater::ROCKET_PITCH.to_radians() * motion.tilt)
         };

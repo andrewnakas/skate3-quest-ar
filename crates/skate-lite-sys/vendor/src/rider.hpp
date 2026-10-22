@@ -89,6 +89,7 @@ private:
 	int grab_ = 0, grab_style_ = 0;
 	float grab_time_ = 0;
 	bool grab_scored_ = false;
+	bool grab_tweakable_ = false; // started with the stick centred: the stick can still tweak it
 
 	// air
 	int flip_ = -1;
@@ -108,6 +109,8 @@ private:
 	bool foot_air_ = false; // jumped on foot: lands back on its feet, the board in hand // body varial: how far the body has turned on its own, the board staying
 	std::string flip_name_;
 	void extend_flip();
+	// round far enough to land on: at most (1 - lenience) of a turn left, however many turns
+	bool flip_landable() const { return flip_ < 0 || flip_turns_ - flip_angle_ <= (1 - p[FlipLenience]) * flip_base_turns_ + 1e-4f; }
 	float spin_speed_ = 0, spin_total_ = 0;
 	float air_time_ = 0;
 
