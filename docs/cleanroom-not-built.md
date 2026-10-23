@@ -78,6 +78,15 @@ recorded stick path through s3trace and sk8, both regular stance). The park is K
     replays drift on the carve before the pop; the controlled feel.py scenario is the reference.
   - Open: which side is the "lip" side in the port's slide names (6310's up-left at ~80 deg is a
     tailslide), and the stick-down angled catch (57 deg, down = 5-0, not salad).
+- Handplant parity on the blue quarter pipe (KenneyPark's 2.4 m coping at x 30.9, s3trace vs
+  sk8trace --mesh from the same straight approach at 8.5 m/s, RB held from the lip): the port's plant
+  is a fixed ~1.33 s move (board up ~1.5 m over the coping, back in on its own; RB released early or
+  held long changes nothing) and rolls away at 9.9 m/s; side by the drift along the coping (straight
+  in = frontside); the stick's variant named at once, exact diagonals left = Left, right = Up / Down.
+  Built: catch tick, length (364-443 vs 363-442), names and sides for all 9 stick ways, exit 9.2 m/s.
+  Animation: the board stays on the feet and the free hand holds it (tucked invert poses).
+  Not matched: the engine's deck stays on the coping during the plant (the port's board goes up
+  with the body) - only the drawn board goes up.
 - Point values: the port's per-trick points vary with the air (a heelflip 48-125 in one session) and
   copying its table would be its data; ours keep their own scale (about 4-10x the port's).
 - Replay: the browser's logged position is a presentation snapshot (a step either side of the

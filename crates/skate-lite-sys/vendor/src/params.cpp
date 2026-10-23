@@ -72,7 +72,7 @@ const sk8_param kTable[ParamCount] = {
 	{"grind_balance", "Rail balance (0 off)", kGrinds, 0.0f, 3.0f, 0.0f, 0.05f},
 	{"grind_keep", "Speed kept catching a rail", kGrinds, 0.5f, 1.5f, 1.027f, 0.005f},
 	{"grind_off_keep", "Speed kept rolling off a rail's end", kGrinds, 0.5f, 1.0f, 0.89f, 0.01f},
-	{"plant_stall", "Longest handplant held, s", kGrinds, 0.2f, 5.0f, 1.28f, 0.01f},
+	{"plant_stall", "How long a handplant lasts, s", kGrinds, 0.2f, 5.0f, 1.32f, 0.01f},
 	{"grind_assist", "Pull onto a rail in the air, m/s^2", kGrinds, 0.0f, 30.0f, 11.15f, 0.1f},
 
 	{"manual_wobble", "Manual wobble", kManuals, 0.0f, 5.0f, 0.38f, 0.02f},

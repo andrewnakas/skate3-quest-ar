@@ -178,6 +178,7 @@ constexpr float kOllieHangTap = 0.16f;  // s longer, a quick flick's
 constexpr float kOllieHangPull = 0.45f; // times gravity, hanging
 constexpr float kOllieDrop = 3.0f;      // times gravity, pushed back down
 constexpr float kOllieDropTo = 4.2f;    // m/s down, then falling as any air
+constexpr float kPlantDropIn = 6.2f; // m/s down the wall dropping back in off a handplant (the port's fall from ~1.5 m over the coping)
 constexpr float kSlideAngle = 1.2f;  // rad (~69 deg) off the rail: a slide, not a grind
 constexpr float kSpinCoast = 0.42f;  // s: a spin let go slows over about this long
 constexpr float kAngledGrind = 0.44f; // rad (~25 deg): a board landing this far off the rail is a turned grind (19 off was still a nosegrind, recorded)
@@ -1713,12 +1714,17 @@ int Rider::plant_bits(const sk8_input &in)
 		: front && !back       ? SK8_PLANT_FRONT_FOOT
 		: back && !front       ? SK8_PLANT_BACK_FOOT
 							   : 0;
-	if (in.flick[1] < -0.6f)
-		bits |= SK8_PLANT_DOWN;
-	else if (in.flick[1] > 0.6f)
-		bits |= SK8_PLANT_UP;
-	else if (std::fabs(in.flick[0]) > 0.6f)
-		bits |= in.flick[0] > 0 ? SK8_PLANT_RIGHT : SK8_PLANT_LEFT;
+	// the right stick's way, as the port's (probed on a quarter pipe): nearer an axis, that one; an
+	// exact diagonal to the left is left, to the right up / down
+	float x = in.flick[0], y = in.flick[1];
+	if (x * x + y * y > 0.36f) {
+		if (x < 0 && -x >= std::fabs(y))
+			bits |= SK8_PLANT_LEFT;
+		else if (x > 0 && x > std::fabs(y))
+			bits |= SK8_PLANT_RIGHT;
+		else
+			bits |= y < 0 ? SK8_PLANT_DOWN : SK8_PLANT_UP;
+	}
 	return bits;
 }
 
@@ -1902,9 +1908,15 @@ bool Rider::try_grind(World &w)
 	if (plant) {
 		grind_kind_ = hand || (last_buttons_ & (SK8_GRAB_LEFT | SK8_GRAB_RIGHT)) ? SK8_GRIND_HANDPLANT : SK8_GRIND_FOOTPLANT;
 		plant_hold_ = hand ? SK8_SLIDE : SK8_FOOT_OFF;
-		plant_side_ = hand ? (plant_lateral > 0.5f ? "Frontside " : "Backside ") : "";
-		plant_want_ = 0;
-		plant_pose_ = 0;
+		// (as the port, probed: going straight in, or drifting toward the toes, frontside; drifting
+		// toward the heels, backside)
+		plant_side_ = hand ? (plant_lateral > -0.3f ? "Frontside " : "Backside ") : "";
+		// the stick already held for a variant: straight into it (as the port names it)
+		sk8_input held{};
+		held.buttons = last_buttons_;
+		held.flick[0] = last_flick_[0];
+		held.flick[1] = last_flick_[1];
+		plant_want_ = plant_pose_ = hand ? plant_bits(held) : 0;
 		plant_want_time_ = 0;
 		plant_time_ = 0;
 		// (off a ramp's lip going up: the way up the wall, so it comes back down into the ramp)
@@ -1937,7 +1949,7 @@ bool Rider::try_grind(World &w)
 	grind_grab_time_ = 0;
 	grind_name_ = grind_full_name();
 	if (plant && hand)
-		grind_name_ = plant_side_ + kGrindDefs[grind_kind_].name;
+		grind_name_ = plant_pose_ ? plant_variant(plant_pose_) : plant_side_ + kGrindDefs[grind_kind_].name;
 	fakie_ = backwards && !slide;
 	grind_time_ = 0;
 	balance_ = 0;
@@ -1994,12 +2006,17 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 				grind_time_ = 0;
 			}
 		}
-		float stall = grind_kind_ == SK8_GRIND_HANDPLANT ? p[PlantStall] : 0.65f;
-		if (f.trick >= 0 || plant_time_ > stall || (plant_time_ > 0.15f && !(in.buttons & plant_hold_))) {
+		bool handplant = grind_kind_ == SK8_GRIND_HANDPLANT;
+		float stall = handplant ? p[PlantStall] : 0.65f;
+		// (a handplant, once caught, is the whole move - up over the coping and back down - however
+		// long the button's held, as the port's; a footplant stalls while it's held)
+		bool let_go = !handplant && plant_time_ > 0.15f && !(in.buttons & plant_hold_);
+		if (f.trick >= 0 || plant_time_ > stall || let_go) {
 			if (wall_off_ && f.trick < 0) {
 				// on a ramp's lip: the body swings back over and it drops straight in, nose first,
 				// onto the wall it came up (comes down along it, as a vert air does)
-				leave_grind(kUp * -1.6f + vert_in_ * 0.3f, true);
+				// (off a handplant, falling back from up over the coping: as fast as that drop)
+				leave_grind(kUp * -(handplant ? kPlantDropIn : 1.6f) + vert_in_ * 0.3f, true);
 				up_ = vert_in_;
 				fwd_ = fakie_ ? kUp : kUp * -1.0f;
 				vert_air_ = true;
