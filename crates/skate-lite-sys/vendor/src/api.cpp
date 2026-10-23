@@ -60,6 +60,11 @@ void sk8_rider_launch(sk8_rider *rider, const float position[3], const float vel
 	rider->r.launch(sk8::V3(position), sk8::V3(velocity), facing);
 }
 
+void sk8_rider_set_stance(sk8_rider *rider, int switch_stance, int fakie)
+{
+	rider->r.set_stance(switch_stance != 0, fakie != 0);
+}
+
 void sk8_rider_step(sk8_rider *rider, sk8_world *world, const sk8_input *input)
 {
 	rider->r.step(world->w, *input);

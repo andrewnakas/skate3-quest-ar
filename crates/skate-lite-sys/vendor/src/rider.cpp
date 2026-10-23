@@ -153,6 +153,9 @@ constexpr float kPlantWind = 0.605f;
 constexpr float kFootOffHold = 0.1f;
 constexpr double kLineMultiplier = 1.5; // a line's points banked at this (the port's never went higher)
 constexpr float kFingerFlipSpeed = 2.3f;
+constexpr float kSpinCommit = 0.13f; // s the left stick is held over before an air spin starts
+constexpr float kSpinCoast = 0.6f;   // s: a spin let go slows over about this long
+constexpr float kAngledGrind = 0.33f; // rad (~19 deg): a board landing this far off the rail is a turned grind
 constexpr float kAssistReach = 1.8f; // m: how far to the side a rail pulls an air onto it
 constexpr float kBackfootHold = 0.1f, kBackfootSnap = 0.14f; // s held up, s to get down from there
 constexpr float kKickturnTop = 4.6f;  // m/s: slower than this, the stick hard over is a kickturn
@@ -213,6 +216,16 @@ void Rider::launch(V3 position, V3 velocity, float facing)
 	pop_y_ = position.y;
 	launch_ = position;
 	peak_ = position.y;
+}
+
+// Test harnesses: ride switch and / or fakie from here (the facing given is the way it's going).
+void Rider::set_stance(bool switch_stance, bool fakie)
+{
+	switch_ = switch_stance;
+	fakie_ = fakie;
+	if (fakie)
+		fwd_ = fwd_ * -1.0f;
+	stance_pre_ = switch_ ? "Switch " : fakie_ ? "Fakie " : "";
 }
 
 void Rider::place(V3 position, float facing, float speed)
@@ -867,6 +880,7 @@ void Rider::pop(const TrickDef &def, float share)
 	mode_ = SK8_MODE_AIR;
 	air_time_ = 0;
 	spin_total_ = 0;
+	spin_hold_ = 0;
 	crouch_ = crouch_time_ = 0;
 	grab_scored_ = false;
 	grab_time_ = 0;
@@ -1035,8 +1049,19 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		w.nearest_rail(pos_, 1.0f).rail >= 0;
 	// (grabbing with the right stick down, the left stick is a shifty, not a spin)
 	bool shifting = grab_ && in.flick[1] < -0.5f;
-	float target = by_rail || shifting ? 0.0f : -clampf(in.steer[0], -1, 1) * p[SpinRate];
-	spin_speed_ = approach(spin_speed_, target, p[SpinEase] * p[SpinRate] * kDt);
+	// as the port (probed): the stick has to be held over a moment before a spin starts (a tap
+	// does nothing), then it comes up to speed quickly, and let go it carries on, slowing gradually
+	float stick = by_rail || shifting ? 0.0f : clampf(in.steer[0], -1, 1);
+	bool over = std::fabs(stick) > 0.3f;
+	spin_hold_ = over && (spin_hold_ == 0 || (stick > 0) == (spin_dir_ > 0)) ? spin_hold_ + kDt : 0;
+	if (over)
+		spin_dir_ = stick > 0 ? 1.0f : -1.0f;
+	// (a body varial - ours, the foot-off button held - turns at once)
+	float commit = (in.buttons & SK8_FOOT_OFF) ? 0.0f : kSpinCommit;
+	float target = over && spin_hold_ > commit ? -stick * p[SpinRate] : 0.0f;
+	bool speeding = std::fabs(target) > std::fabs(spin_speed_) || target * spin_speed_ < 0;
+	float tau = speeding || commit == 0 ? 1.0f / std::max(p[SpinEase], 0.1f) : kSpinCoast;
+	spin_speed_ += (target - spin_speed_) * (1 - std::exp(-kDt / tau));
 	float a = spin_speed_ * kDt;
 	fwd_ = unit(rotate(fwd_, up_, a), fwd_);
 	// Off a slide the board is still across the way it's going: turn it back (to whichever end is
@@ -1745,14 +1770,25 @@ bool Rider::try_grind(World &w)
 	bool crouched = crouch_ > 0.5f || last_steer_[1] < -0.6f; // loaded, or the left stick held back
 	grind_slide_ = slide;
 	grind_transfer_ = 0;
-	grind_kind_ = grind_kind_for(slide, last_flick_[0], last_flick_[1], crouched);
+	// (in switch the stick's sides swap, as the port reads a switch flick mirrored)
+	const float gx = switch_ ? -last_flick_[0] : last_flick_[0], gy = last_flick_[1];
+	grind_kind_ = grind_kind_for(slide, gx, gy, crouched);
 	// a slide with the right stick centred, down or up: which family by which way the board was
 	// turned onto the rail (as the port, probed: turned with the left stick left, the lip side - lipslide,
 	// tailslide, noseblunt; right, the board side - boardslide, bluntslide, noseslide)
 	// (measured from the rail's way along it, so a straight crossing counts by the side it came from)
-	grind_lip_ = dot(cross(unit(flatten(t, kUp), t), fwd_), kUp) > 0;
-	if (slide && slide_family_stick(grind_lip_, last_flick_[0], last_flick_[1]))
-		grind_kind_ = slide_kind(grind_lip_, last_flick_[0], last_flick_[1]);
+	grind_lip_ = (dot(cross(unit(flatten(t, kUp), t), fwd_), kUp) > 0) != switch_;
+	if (slide && slide_family_stick(grind_lip_, gx, gy))
+		grind_kind_ = slide_kind(grind_lip_, gx, gy);
+	// landed on it turned part way (not square across): the nose over one side - the board side,
+	// stick up a crooked, else a salad; the lip side, stick up an overcrook (as the port, probed)
+	if (!slide && !crouched && a > kAngledGrind && std::fabs(gx) < 0.45f) {
+		bool up = gy > 0.45f;
+		if (up)
+			grind_kind_ = grind_lip_ ? SK8_GRIND_OVERCROOK : SK8_GRIND_CROOKED;
+		else if (!grind_lip_)
+			grind_kind_ = SK8_GRIND_SALAD;
+	}
 	if (dark)
 		grind_kind_ = SK8_GRIND_DARKSLIDE;
 	if (plant) {
@@ -1936,9 +1972,10 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 	// boardslide)
 	bool held = in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1] > 0.2f;
 	if (grind_kind_ != SK8_GRIND_DARKSLIDE && held) {
-		int want = grind_kind_for(grind_slide_, in.flick[0], in.flick[1], in.steer[1] < -0.6f);
-		if (grind_slide_ && slide_family_stick(grind_lip_, in.flick[0], in.flick[1]))
-			want = slide_kind(grind_lip_, in.flick[0], in.flick[1]);
+		const float fx = switch_ ? -in.flick[0] : in.flick[0];
+		int want = grind_kind_for(grind_slide_, fx, in.flick[1], in.steer[1] < -0.6f);
+		if (grind_slide_ && slide_family_stick(grind_lip_, fx, in.flick[1]))
+			want = slide_kind(grind_lip_, fx, in.flick[1]);
 		if (want == SK8_GRIND_CROOKED && grind_kind_ == SK8_GRIND_CROOKED && grind_time_ >= kCrookToBoard)
 			want = SK8_GRIND_BOARDSLIDE;
 		else if (want == SK8_GRIND_CROOKED && grind_kind_ == SK8_GRIND_BOARDSLIDE)

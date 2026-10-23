@@ -15,6 +15,7 @@ public:
 	Rider();
 	void place(V3 position, float facing, float speed);
 	void launch(V3 position, V3 velocity, float facing);
+	void set_stance(bool switch_stance, bool fakie);
 	void step(World &w, const sk8_input &in);
 	void bail(const char *reason);
 	void state(sk8_state &s) const;
@@ -144,6 +145,7 @@ private:
 	std::string slide_name_;
 	float lean_time_ = 0;      // the left stick held over on a tail grind
 	float air_up_ = 0, air_down_in_ = 0; // in the air: the right stick held up, and since it left up
+	float spin_hold_ = 0, spin_dir_ = 0;  // the left stick held over for a spin (s), and which way
 	// a grab on a rail (0 none, 1 front hand, 2 back hand): held, asked for and how long
 	int grind_grab_ = 0, grind_grab_want_ = 0;
 	float grind_grab_time_ = 0;

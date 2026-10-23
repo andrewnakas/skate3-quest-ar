@@ -47,8 +47,8 @@ const sk8_param kTable[ParamCount] = {
 	{"switch_wait", "Rolling fakie before going switch, s (0 never)", kSpeed, 0.0f, 5.0f, 0.6f, 0.05f},
 	{"switch_time", "Shuffling round to switch, s", kSpeed, 0.1f, 2.0f, 0.7f, 0.05f},
 
-	{"spin_rate", "Air spin, rad/s", kSpin, 0.0f, 25.0f, 7.08f, 0.05f},
-	{"spin_ease", "Spin response", kSpin, 0.5f, 40.0f, 9.5f, 0.1f},
+	{"spin_rate", "Air spin, rad/s", kSpin, 0.0f, 25.0f, 7.95f, 0.05f},
+	{"spin_ease", "Spin response (1/s to come up to speed)", kSpin, 0.5f, 60.0f, 28.0f, 0.5f},
 	{"air_level", "Auto-level in the air, rad/s", kSpin, 0.0f, 10.0f, 1.14f, 0.01f},
 
 	{"flip_base", "Flip spin-up, s", kFlips, 0.02f, 1.0f, 0.12f, 0.005f},
