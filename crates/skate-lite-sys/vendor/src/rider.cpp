@@ -82,8 +82,8 @@ int grind_kind_for(bool slide, float x, float y, bool crouched)
 	bool right = x > 0.45f, left = x < -0.45f;
 	if (crouched && side)
 		return up ? SK8_GRIND_SUSKI : down ? SK8_GRIND_SALAD : right ? SK8_GRIND_FEEBLE : SK8_GRIND_SMITH;
-	if (up)
-		return left ? SK8_GRIND_OVERCROOK : SK8_GRIND_NOSEGRIND;
+	if (up) // (up-right: a crooked, as the port's)
+		return left ? SK8_GRIND_OVERCROOK : right ? SK8_GRIND_CROOKED : SK8_GRIND_NOSEGRIND;
 	if (down)
 		return left ? SK8_GRIND_WILLY : SK8_GRIND_5_0;
 	if (right)
@@ -153,13 +153,14 @@ constexpr float kPlantWind = 0.605f;
 constexpr float kFootOffHold = 0.1f;
 constexpr double kLineMultiplier = 1.5; // a line's points banked at this (the port's never went higher)
 constexpr float kFingerFlipSpeed = 2.3f;
-constexpr float kAssistReach = 1.3f; // m: how far to the side a rail pulls an air onto it
+constexpr float kAssistReach = 1.8f; // m: how far to the side a rail pulls an air onto it
 constexpr float kBackfootHold = 0.1f, kBackfootSnap = 0.14f; // s held up, s to get down from there
 constexpr float kKickturnTop = 4.6f;  // m/s: slower than this, the stick hard over is a kickturn
 constexpr float kKickturnRate = 3.1f; // rad/s once it's turning (it eases in over kKickturnEase)
 constexpr float kKickturnEase = 0.45f;
 constexpr float kBigAir = 1.4f, kLongAir = 9.5f; // m: an air this high (above its lower end) / long scores  // s a foot held off in the air before it counts
-constexpr float kAdjustYaw = 0.5f, kAdjustPitch = 0.38f; // rad: a board adjust at full stick
+constexpr float kAdjustYaw = 1.1f, kAdjustPitch = 0.38f; // rad: a board adjust at full stick
+constexpr float kAdjustCatch = 1.57f; // rad: how far a full sideways adjust turns the board for a rail
 constexpr float kUnderTurn = 0.34f;   // turns an underflip goes its first way before it turns back
 constexpr float kUnderWindow = 0.11f; // s into a flip the opposite flick still turns it into an underflip   // s: a boneless's wind-up, push pressed to the pop
 constexpr float kPlantVariant = 0.15f; // s a handplant variant's buttons / stick hold before it changes
@@ -1620,12 +1621,24 @@ std::string Rider::plant_variant(int bits) const
 	return name;
 }
 
-// A slide by the right stick centred / up / down, in the family the board was turned into.
-static int slide_kind(bool lip, float y)
+// A slide by the right stick centred / up / down (and the diagonals the port reads as the same
+// family: on the lip side up-right is a noseblunt, down-right a lipslide; on the board side up-left a
+// noseslide), in the family the board was turned into.
+static int slide_kind(bool lip, float x, float y)
 {
 	bool up = y > 0.45f, down = y < -0.45f;
-	return lip ? (up ? SK8_GRIND_NOSEBLUNT : down ? SK8_GRIND_TAILSLIDE : SK8_GRIND_LIPSLIDE)
-			   : (up ? SK8_GRIND_NOSESLIDE : down ? SK8_GRIND_BLUNTSLIDE : SK8_GRIND_BOARDSLIDE);
+	if (lip)
+		return up ? SK8_GRIND_NOSEBLUNT : down && x < 0.45f ? SK8_GRIND_TAILSLIDE : SK8_GRIND_LIPSLIDE;
+	return up ? SK8_GRIND_NOSESLIDE : down ? SK8_GRIND_BLUNTSLIDE : SK8_GRIND_BOARDSLIDE;
+}
+
+// Does the stick pick within a slide's family (else, sideways, the grind table: the port turns the
+// board back along the rail)?
+static bool slide_family_stick(bool lip, float x, float y)
+{
+	if (std::fabs(x) < 0.45f)
+		return true;
+	return lip ? x > 0 && std::fabs(y) > 0.45f : x < 0 && y > 0.45f;
 }
 
 // Which grab a trigger makes on a rail: the free end of the board, or the edge by that hand.
@@ -1664,7 +1677,8 @@ std::string Rider::grind_full_name() const
 bool Rider::try_grind(World &w)
 {
 	// the slide button held going up off a ramp: a handplant on its edge (the port's way in)
-	bool hand = (last_buttons_ & SK8_SLIDE) && (wall_off_ || vel_.y > 0.5f);
+	// (off the top of a ramp only: RB held through an ollie by a ledge is a darkcatch, not a plant)
+	bool hand = (last_buttons_ & SK8_SLIDE) && wall_off_;
 	if (grind_cooldown_ > 0 || w.rails.empty() || (vel_.y > 2.5f && !hand))
 		return false;
 	RailSpot s = w.nearest_rail(pos_, p[GrindCatch]);
@@ -1708,6 +1722,11 @@ bool Rider::try_grind(World &w)
 		return true;
 	}
 	V3 pre_pos = pos_, pre_vel = vel_;
+	// a board adjust held into the catch (the right stick turning the board under the body, as the
+	// port's): the board lands turned that way on the rail - a slide set up without spinning the body
+	// (not with the left stick held back: then the right stick sideways picks a crouched grind)
+	if (std::fabs(adjust_[0]) > 0.3f && last_steer_[1] > -0.6f)
+		fwd_ = unit(flatten(rotate(fwd_, up_, -adjust_[0] * kAdjustCatch), kUp), fwd_);
 	rail_ = s.rail;
 	seg_ = s.seg;
 	seg_u_ = s.u;
@@ -1732,8 +1751,8 @@ bool Rider::try_grind(World &w)
 	// tailslide, noseblunt; right, the board side - boardslide, bluntslide, noseslide)
 	// (measured from the rail's way along it, so a straight crossing counts by the side it came from)
 	grind_lip_ = dot(cross(unit(flatten(t, kUp), t), fwd_), kUp) > 0;
-	if (slide && std::fabs(last_flick_[0]) < 0.45f)
-		grind_kind_ = slide_kind(grind_lip_, last_flick_[1]);
+	if (slide && slide_family_stick(grind_lip_, last_flick_[0], last_flick_[1]))
+		grind_kind_ = slide_kind(grind_lip_, last_flick_[0], last_flick_[1]);
 	if (dark)
 		grind_kind_ = SK8_GRIND_DARKSLIDE;
 	if (plant) {
@@ -1756,9 +1775,11 @@ bool Rider::try_grind(World &w)
 	{
 		V3 travel = fakie_ ? fwd_ * -1.0f : fwd_;
 		V3 right = cross(travel, kUp);
-		float off = dot(flatten(s.point - pre_pos, kUp), right);
-		if (std::fabs(off) < 0.04f)
-			off = dot(flatten(pre_vel, kUp), right);
+		// (by the way it's drifting onto the rail - pulled or steered toward it - and, coming
+		// straight at it, by where the rail is)
+		float off = dot(flatten(pre_vel, kUp), right);
+		if (std::fabs(off) < 0.3f)
+			off = dot(flatten(s.point - pre_pos, kUp), right);
 		bool on_right = off >= 0;
 		grind_side_ = on_right != (fakie_ != switch_) ? "Backside " : "Frontside ";
 	}
@@ -1916,8 +1937,8 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 	bool held = in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1] > 0.2f;
 	if (grind_kind_ != SK8_GRIND_DARKSLIDE && held) {
 		int want = grind_kind_for(grind_slide_, in.flick[0], in.flick[1], in.steer[1] < -0.6f);
-		if (grind_slide_ && std::fabs(in.flick[0]) < 0.45f)
-			want = slide_kind(grind_lip_, in.flick[1]);
+		if (grind_slide_ && slide_family_stick(grind_lip_, in.flick[0], in.flick[1]))
+			want = slide_kind(grind_lip_, in.flick[0], in.flick[1]);
 		if (want == SK8_GRIND_CROOKED && grind_kind_ == SK8_GRIND_CROOKED && grind_time_ >= kCrookToBoard)
 			want = SK8_GRIND_BOARDSLIDE;
 		else if (want == SK8_GRIND_CROOKED && grind_kind_ == SK8_GRIND_BOARDSLIDE)

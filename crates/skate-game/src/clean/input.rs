@@ -249,7 +249,7 @@ const GRIND_EACH: f32 = 4.5;
 const GRIND_SLOTS: [(bool, f32, f32); 17] = [
     // grinds by the right stick at the catch, as the port: 50-50, nosegrind, 5-0, crooked (held on
     // into a boardslide), overcrook, lipslide, willy
-    (false, 0.0, 0.0), (false, 0.0, 1.0), (false, 0.0, -1.0), (false, 1.0, 0.0), (false, -0.8, 0.8),
+    (false, 0.0, 0.0), (false, 0.0, 1.0), (false, 0.0, -1.0), (false, 0.8, 0.8), (false, -0.8, 0.8),
     (false, -1.0, 0.0), (false, -0.8, -0.8),
     // slides (the rail across the path): boardslide, noseslide, tailslide, lipslide, noseblunt, bluntslide
     (true, 0.0, 0.0), (true, 0.0, 1.0), (true, 0.0, -1.0), (true, 1.0, 0.0), (true, 0.8, 0.8), (true, 0.8, -0.8),
