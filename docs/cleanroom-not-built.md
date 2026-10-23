@@ -39,6 +39,17 @@ recorded stick path through s3trace and sk8, both regular stance). The park is K
   left: lipslide (centre) / tailslide (down) / noseblunt (up); right: boardslide / bluntslide /
   noseslide; past ~45 deg off square it's a grind again. Frontside / backside of a slide comes from
   the rail's side, as for grinds (every slide on the port's test rail was backside either way).
+- Second recorded session (2026-10-23, 17,880 ticks, rec.jsonl; first archived as rec_session1.jsonl):
+  stance per tick from the action states (".../Regular" / ".../Switch") and fakie from the rider's
+  facing vs its velocity (rfwd . rv). The user: the left stick turns body and board, the right stick
+  turns the board alone - built: a board adjust held into a rail catch turns the board up to 90 deg
+  (slides set up without spinning). Also from it: up-right is a crooked (sideways turns the board
+  instead), the grind assist pulls from 1.8 m (port: 1.6 m off the ledge, pulled on in 0.5 s),
+  frontside / backside by which way it's drifting onto the rail, handplants only off a ramp's top.
+  Grind replay (grinds2.py, launched at the port's true takeoff velocity): 2/12 named alike with the
+  side; the misses are darkslides (their flip starts on the ground, before the launch), switch /
+  fakie ones, and catches the replay doesn't reach. Wasm vs native float differences make the port's
+  own replay drift (identical inputs, mm per second), so whole-session replay isn't exact.
 - Replay: the browser's logged position is a presentation snapshot (a step either side of the
   simulation), and an s3trace replay of the same inputs splits off at a wipeout ~tick 3500. The
   recorder now also logs the simulation's own rider position / velocity, the rider's frame and the
