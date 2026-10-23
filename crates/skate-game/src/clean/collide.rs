@@ -21,7 +21,7 @@ struct Tri {
     surface: i32,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct Grid {
     tris: Vec<Tri>,
     cells: HashMap<(i32, i32), Vec<u32>>,

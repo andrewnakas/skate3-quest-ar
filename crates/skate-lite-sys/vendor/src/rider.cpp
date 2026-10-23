@@ -1,3 +1,4 @@
+#include <algorithm>
 // The rider state machine (written from scratch; see rider.hpp).
 #include "rider.hpp"
 #include <cmath>
@@ -147,7 +148,8 @@ constexpr float kVertIn = 0.15f; // m: a vert air comes back down this far insid
 constexpr float kSettleFlip = 0.45f;
 constexpr float kCrookToBoard = 0.13f;  // s a crooked holds before turning across into a boardslide
 constexpr float kPlantWind = 0.605f;
-constexpr float kFootOffHold = 0.1f;  // s a foot held off in the air before it counts
+constexpr float kFootOffHold = 0.1f;
+constexpr float kBigAir = 1.4f, kLongAir = 9.5f; // m: an air this high (above its lower end) / long scores  // s a foot held off in the air before it counts
 constexpr float kAdjustYaw = 0.5f, kAdjustPitch = 0.38f; // rad: a board adjust at full stick
 constexpr float kUnderTurn = 0.34f;   // turns an underflip goes its first way before it turns back
 constexpr float kUnderWindow = 0.11f; // s into a flip the opposite flick still turns it into an underflip   // s: a boneless's wind-up, push pressed to the pop
@@ -229,6 +231,14 @@ void Rider::place(V3 position, float facing, float speed)
 
 void Rider::add_trick(const std::string &name, unsigned points)
 {
+	// the same trick again in one line is worth less each time (as the port: grinds keep their
+	// value, rails being what a line is made of)
+	bool exempt = mode_ == SK8_MODE_GRIND && grind_kind_ != SK8_GRIND_FOOTPLANT && grind_kind_ != SK8_GRIND_HANDPLANT;
+	if (!exempt) {
+		size_t again = size_t(std::count(combo_names_.begin(), combo_names_.end(), name));
+		static const float kRepeat[] = {1.0f, 0.7f, 0.5f, 0.35f, 0.25f, 0.15f};
+		points = unsigned(float(points) * kRepeat[std::min(again, size_t(5))] + 0.5f);
+	}
 	combo_names_.push_back(name);
 	combo_points_ += points;
 	bank_timer_ = 0;
@@ -250,9 +260,41 @@ void Rider::bank()
 	auto pts = (unsigned long long)(total + 0.5);
 	score_ += pts;
 	emit(SK8_EV_BANK, "", unsigned(pts));
+	best(best_line_, float(pts), "Line score", 1);
+	best(best_tricks_, float(combo_names_.size()), "Tricks in a line", 1);
 	combo_names_.clear();
 	combo_points_ = 0;
 	bank_timer_ = 0;
+}
+
+// A personal best: kept, and announced when it beats one there already was (value in the unit
+// times `scale`: points, centimetres, hundredths of a second).
+void Rider::best(float &record, float value, const char *what, float scale)
+{
+	if (value <= record)
+		return;
+	bool beaten = record > 0;
+	record = value;
+	if (beaten)
+		emit(SK8_EV_BEST, what, unsigned(value * scale + 0.5f));
+}
+
+// Lengths ridden on a rail or a manual, kept as bests when they end.
+void Rider::track_runs()
+{
+	float sp = len(vel_);
+	if (mode_ == SK8_MODE_GRIND && grind_kind_ != SK8_GRIND_FOOTPLANT && grind_kind_ != SK8_GRIND_HANDPLANT)
+		grind_run_ += rail_speed_ * kDt;
+	else if (grind_run_ > 0) {
+		best(best_grind_, grind_run_, "Grind length", 100);
+		grind_run_ = 0;
+	}
+	if (mode_ == SK8_MODE_MANUAL)
+		manual_run_ += sp * kDt;
+	else if (manual_run_ > 0) {
+		best(best_manual_, manual_run_, "Manual length", 100);
+		manual_run_ = 0;
+	}
 }
 
 void Rider::lose_combo()
@@ -671,6 +713,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			safe_facing_ = std::atan2(fwd_.x, fwd_.z);
 		}
 	}
+	track_runs();
 	if (mode_ == SK8_MODE_RIDE && !combo_names_.empty()) {
 		bank_timer_ += kDt;
 		if (bank_timer_ >= p[BankWait])
@@ -927,7 +970,12 @@ void Rider::extend_flip()
 
 void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 {
+	if (air_time_ <= 0) { // into the air: where from, for the air's height and length
+		launch_ = pos_;
+		peak_ = pos_.y;
+	}
 	air_time_ += kDt;
+	peak_ = std::max(peak_, pos_.y);
 	vel_ += V3{0, -p[Gravity], 0} * kDt;
 	float sp = len(vel_);
 	if (sp > 0)
@@ -1120,6 +1168,15 @@ void Rider::land(const Hit &h)
 	if (bad && !never_bail()) {
 		bail(bad);
 		return;
+	}
+	// a big air (high, or long) scores for itself, on top of what was done in it
+	if (!foot_air_ && air_time_ > 0.3f) {
+		float hgt = peak_ - std::max(launch_.y, h.point.y), dist = len(flatten(h.point - launch_, kUp));
+		if (hgt >= kBigAir)
+			pending_.push_back({"Big Air", unsigned(60 * hgt * hgt)});
+		if (dist >= kLongAir)
+			pending_.push_back({"Long Air", unsigned(22 * dist)});
+		best(best_air_, air_time_, "Air time", 100);
 	}
 	up_ = n;
 	fwd_ = fflat;
@@ -1854,6 +1911,11 @@ void Rider::state(sk8_state &s) const
 	s.combo_points = combo_points_;
 	s.combo_count = unsigned(combo_names_.size());
 	s.score = score_;
+	s.best_line = unsigned(best_line_);
+	s.best_air = best_air_;
+	s.best_grind = best_grind_;
+	s.best_manual = best_manual_;
+	s.best_tricks = unsigned(best_tricks_);
 	s.manual_dir = mode_ == SK8_MODE_MANUAL ? manual_dir_ : 0;
 	s.manual_style = mode_ == SK8_MODE_MANUAL ? manual_style_ : 0;
 	s.on_foot = mode_ == SK8_MODE_WALK || foot_air_;

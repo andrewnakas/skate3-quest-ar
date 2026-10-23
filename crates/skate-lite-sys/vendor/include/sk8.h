@@ -92,6 +92,9 @@ typedef enum sk8_event_kind
 	SK8_EV_BANK,     /* points banked */
 	SK8_EV_PUSH,
 	SK8_EV_RESPAWN,
+	SK8_EV_BEST,     /* a personal best beaten: name = what ("Line score", "Air time", "Grind length",
+	                  * "Manual length", "Tricks in a line"), points = the new best: points / hundredths
+	                  * (of a second, a metre) / a count */
 } sk8_event_kind;
 
 typedef struct sk8_event
@@ -148,6 +151,12 @@ typedef struct sk8_state
 	int plant_pose;        /* on a handplant: sk8_plant_pose bits (feet off, body dropped / swung) */
 	int air_feet;          /* in the air: a foot held off the board (sk8_plant_pose foot bits) */
 	int grind_grab;        /* on a rail: a hand on the board (1 front hand, 2 back hand), 0 none */
+	/* personal bests this session */
+	unsigned best_line;    /* points banked in one line */
+	float best_air;        /* seconds in one air (landed) */
+	float best_grind;      /* metres on one rail */
+	float best_manual;     /* metres in one manual */
+	unsigned best_tricks;  /* tricks in one line */
 } sk8_state;
 
 typedef enum sk8_plant_pose

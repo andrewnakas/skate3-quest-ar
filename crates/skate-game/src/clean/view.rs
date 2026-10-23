@@ -140,25 +140,185 @@ pub(crate) fn desktop_world(
     info!("SK8 desktop park: {} triangles, {} rails", sim.collision_triangles, rails.len());
 }
 
-/// Follow behind the skater's travel direction.
+/// Which kind of shot the camera is taking (our own set, after the way the port picks one by what the
+/// skater is doing: riding, crouched for a pop, a manual, a low or a big air, back into a ramp, a
+/// rail, a plant, off the board, a bail).
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+enum Shot {
+    #[default]
+    Chase,
+    Crouch,
+    Manual,
+    /// Riding up a steep transition: held low, looking up the wall (so it doesn't climb with the rider).
+    Wall,
+    LowAir,
+    BigAir,
+    Reentry,
+    Grind,
+    GrindSlow,
+    Plant,
+    OffBoard,
+    Bail,
+}
+
+/// (distance back, height, how far ahead it looks, look height, sideways toward the heel side,
+/// share of the rider's rise it follows) for a shot, metres.
+fn framing(shot: Shot) -> (f32, f32, f32, f32, f32, f32) {
+    match shot {
+        Shot::Chase => (3.7, 1.55, 0.7, 0.8, 0.0, 1.0),
+        Shot::Crouch => (3.4, 1.2, 0.6, 0.65, 0.0, 1.0),
+        Shot::Manual => (3.1, 1.05, 0.5, 0.6, 0.15, 1.0),
+        // a small air: framed as on the ground, the camera barely rising with the pop
+        Shot::Wall => (3.9, 1.3, 0.0, 1.0, 0.0, 0.3),
+        Shot::LowAir => (3.7, 1.55, 0.7, 0.85, 0.0, 0.25),
+        // a big air: pulled back and up, following most of the rise
+        Shot::BigAir => (4.6, 1.9, 0.3, 0.9, 0.0, 0.65),
+        Shot::Reentry => (4.2, 1.1, 0.0, 1.0, 0.0, 0.2),
+        Shot::Grind => (3.3, 1.35, 0.8, 0.75, 0.75, 1.0),
+        Shot::GrindSlow => (2.7, 1.2, 0.4, 0.7, 0.6, 1.0),
+        Shot::Plant => (4.0, 1.4, 0.0, 1.0, 1.2, 0.5),
+        Shot::OffBoard => (2.9, 1.75, 0.4, 1.25, 0.0, 1.0),
+        Shot::Bail => (4.4, 2.3, 0.0, 0.4, 0.0, 1.0),
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct CameraState {
+    heading: Option<Vec3>,
+    shot: Shot,
+    /// Ground height the rider took off from (the air shots frame against it).
+    base_y: f32,
+    /// Where it sat and looked last frame (smoothed), and a landing's shake.
+    at: Option<Vec3>,
+    look: Vec3,
+    shake: f32,
+    shake_t: f32,
+    /// A shot held still (plant, re-entry, bail): where it stays.
+    hold: Option<Vec3>,
+}
+
+/// On ground steeper than this (the up vector's height) the camera stops climbing with the rider.
+const STEEP_UP: f32 = 0.85;
+
+fn pick_shot(s: &skate_lite_sys::State, previous: Shot, base_y: f32) -> Shot {
+    use skate_lite_sys::Mode;
+    let v = Vec3::from_array(s.velocity);
+    let flat = v.with_y(0.0).length();
+    let up = Quat::from_array(s.rider_rot) * Vec3::Y;
+    match s.mode {
+        Mode::Ride | Mode::Slide | Mode::Manual if up.y < STEEP_UP => Shot::Wall,
+        Mode::Bail => Shot::Bail,
+        Mode::Walk => Shot::OffBoard,
+        Mode::Grind if s.grind_kind == 15 || s.grind_kind == 16 => Shot::Plant,
+        Mode::Grind if s.speed < 2.0 => Shot::GrindSlow,
+        Mode::Grind => Shot::Grind,
+        Mode::Manual => Shot::Manual,
+        Mode::Air if s.on_foot => Shot::OffBoard,
+        Mode::Air => {
+            // going up or coming down nearly straight (out of a ramp and back in): held below
+            if v.y.abs() > 2.5 * flat.max(0.5) {
+                return Shot::Reentry;
+            }
+            // how high the air will go above where it left: a low one keeps the ground framing
+            let peak = s.position[1] + (v.y.max(0.0)).powi(2) / (2.0 * 12.0) - base_y;
+            if previous == Shot::BigAir || peak > 1.4 {
+                Shot::BigAir
+            } else if previous == Shot::Reentry {
+                Shot::Reentry
+            } else {
+                Shot::LowAir
+            }
+        }
+        _ if s.crouch > 0.5 => Shot::Crouch,
+        _ => Shot::Chase,
+    }
+}
+
+/// The desktop camera: a shot picked by what the skater is doing, eased between, pulled in where a
+/// wall is in the way, with a little shake on a hard landing.
 pub(crate) fn chase(
     time: Res<Time<Real>>,
     sim: Res<CleanSkate>,
     mut camera: Query<&mut Transform, With<ChaseCamera>>,
-    mut heading: Local<Option<Vec3>>,
+    mut st: Local<CameraState>,
 ) {
+    use skate_lite_sys::{EventKind, Mode};
     let Ok(mut cam) = camera.single_mut() else { return };
+    let dt = time.delta_secs().min(0.1);
     let s = &sim.current;
     let pos = Vec3::from_array(s.position);
     let vel = Vec3::from_array(s.velocity).with_y(0.0);
     let facing = Quat::from_array(s.rider_rot) * Vec3::Z;
+    for e in &sim.events {
+        match e.kind {
+            EventKind::Respawn => *st = CameraState::default(),
+            // the harder it comes down, the more the camera jolts
+            EventKind::Land if e.value == 1 || Vec3::from_array(s.velocity).length() > 7.0 => {
+                st.shake = if e.value == 1 { 0.09 } else { 0.05 };
+                st.shake_t = 0.0;
+            }
+            _ => {}
+        }
+    }
+    let flat_ground = (Quat::from_array(s.rider_rot) * Vec3::Y).y >= STEEP_UP;
+    if matches!(s.mode, Mode::Walk | Mode::Grind) || (matches!(s.mode, Mode::Ride | Mode::Manual | Mode::Slide) && flat_ground) {
+        st.base_y = pos.y;
+    }
+    let shot = pick_shot(s, st.shot, st.base_y);
+    if shot != st.shot {
+        st.hold = None;
+    }
+    st.shot = shot;
+    // the line it follows: the way it's going, eased (slower in a turn, so the shot swings wide)
     let want = if vel.length() > 0.8 { vel.normalize() } else { facing.with_y(0.0).normalize_or(Vec3::Z) };
-    let k = 1.0 - (-3.0 * time.delta_secs()).exp();
-    let h = heading.get_or_insert(want);
-    *h = h.lerp(want, k).normalize_or(want);
-    let target = pos - *h * 4.2 + Vec3::Y * 1.9;
-    cam.translation = cam.translation.lerp(target, 1.0 - (-6.0 * time.delta_secs()).exp());
-    cam.look_at(pos + Vec3::Y * 0.8, Vec3::Y);
+    let h0 = *st.heading.get_or_insert(want);
+    let turn_rate = if matches!(shot, Shot::Grind | Shot::GrindSlow) { 2.0 } else { 3.0 };
+    let heading = h0.lerp(want, 1.0 - (-turn_rate * dt).exp()).normalize_or(want);
+    if !matches!(shot, Shot::Bail | Shot::Reentry | Shot::Plant | Shot::Wall) {
+        st.heading = Some(heading);
+    }
+    let heading = st.heading.unwrap_or(heading);
+    let (back, height, ahead, look_h, side, rise) = framing(shot);
+    // the heel side (away from the chest) for rails: the rail and the feet in view
+    let chest = (super::skater::body_rot(s) * Vec3::NEG_X).with_y(0.0).normalize_or(Vec3::X);
+    let lateral = -chest * side;
+    let y = st.base_y + (pos.y - st.base_y) * rise;
+    let mut target = Vec3::new(pos.x, y, pos.z) - heading * back + lateral + Vec3::Y * height;
+    // held shots: where the camera was as it started, watching from there
+    if matches!(shot, Shot::Bail | Shot::Reentry | Shot::Plant) {
+        let at = st.at.unwrap_or(target);
+        let hold = *st.hold.get_or_insert(at.lerp(target, 0.5));
+        target = hold;
+    }
+    let look_target = pos + heading * ahead + Vec3::Y * look_h;
+    // eased: quick to follow riding, slower into the held / air shots
+    let stiff = match shot {
+        Shot::Bail | Shot::Plant | Shot::Reentry | Shot::Wall => 2.5,
+        Shot::BigAir => 4.0,
+        _ => 6.0,
+    };
+    let at = st.at.get_or_insert(target);
+    *at = at.lerp(target, 1.0 - (-stiff * dt).exp());
+    let mut at = *at;
+    st.look = if st.look == Vec3::ZERO { look_target } else { st.look.lerp(look_target, 1.0 - (-9.0 * dt).exp()) };
+    // a wall between the rider and the camera: in front of it instead
+    if let Some(grid) = &sim.camera_grid {
+        let from = pos + Vec3::Y * 1.0;
+        if let Some((f, ..)) = grid.cast(from, at - from) {
+            at = from + (at - from) * (f - 0.05).max(0.1);
+        }
+    }
+    // landing shake: a quick damped bob
+    if st.shake > 0.0 {
+        st.shake_t += dt;
+        let k = (-st.shake_t / 0.12).exp();
+        at.y -= st.shake * k * (st.shake_t * 40.0).cos();
+        if k < 0.01 {
+            st.shake = 0.0;
+        }
+    }
+    cam.translation = at;
+    cam.look_at(st.look, Vec3::Y);
 }
 
 /// Split the window three ways and aim the fixed cameras: they follow the line of travel (the body
@@ -171,6 +331,10 @@ pub(crate) fn views(
     mut fixed: Query<(&ViewCamera, &mut Camera, &mut Transform), Without<ChaseCamera>>,
     mut dir: Local<Option<Vec3>>,
 ) {
+    // (only with SK8_VIEWS=3: otherwise the chase camera keeps the whole window)
+    if !three_views() {
+        return;
+    }
     let Ok(window) = windows.single() else { return };
     let (w, h) = (window.physical_width() / 3, window.physical_height());
     if w == 0 || h == 0 {

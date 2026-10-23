@@ -116,6 +116,11 @@ struct RawState {
     plant_pose: c_int,
     air_feet: c_int,
     grind_grab: c_int,
+    best_line: u32,
+    best_air: f32,
+    best_grind: f32,
+    best_manual: f32,
+    best_tricks: u32,
 }
 
 /// A bail's stages (`sk8_bail_stage`).
@@ -204,6 +209,13 @@ pub struct State {
     pub air_feet: u32,
     /// On a rail: a hand on the board (1 front hand, 2 back hand), 0 none.
     pub grind_grab: u32,
+    /// Personal bests this session: points in one line, seconds in one air, metres on one rail and
+    /// in one manual, tricks in one line.
+    pub best_line: u32,
+    pub best_air: f32,
+    pub best_grind: f32,
+    pub best_manual: f32,
+    pub best_tricks: u32,
     /// 0 none, 1 axle, 2 board slide, 3 nose, 4 tail.
     pub grind_kind: u32,
     pub combo_points: u32,
@@ -249,6 +261,11 @@ impl From<RawState> for State {
             plant_pose: r.plant_pose as u32,
             air_feet: r.air_feet as u32,
             grind_grab: r.grind_grab as u32,
+            best_line: r.best_line,
+            best_air: r.best_air,
+            best_grind: r.best_grind,
+            best_manual: r.best_manual,
+            best_tricks: r.best_tricks,
             grind_kind: r.grind_kind as u32,
             combo_points: r.combo_points,
             combo_count: r.combo_count,
@@ -307,6 +324,9 @@ pub enum EventKind {
     Bank,
     Push,
     Respawn,
+    /// A personal best beaten: `name` says which, `points` the new best (points, hundredths of a
+    /// second or a metre, or a count).
+    Best,
 }
 
 #[repr(C)]
@@ -567,6 +587,7 @@ impl Rider {
             5 => EventKind::GrindEnd,
             6 => EventKind::Bank,
             7 => EventKind::Push,
+            9 => EventKind::Best,
             _ => EventKind::Respawn,
         };
         Some(Event {

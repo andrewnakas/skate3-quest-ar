@@ -35,6 +35,8 @@ pub(crate) struct CleanSkate {
     /// Where the rider was last put down (for "reset").
     pub spawn: ([f32; 3], f32),
     pub collision_triangles: usize,
+    /// The world's surfaces, kept for the camera (it pulls in rather than look through a wall).
+    pub camera_grid: Option<super::collide::Grid>,
     /// Placed by the host since the last step (sent on as a Respawn event).
     placed: bool,
 }
@@ -72,6 +74,7 @@ impl CleanSkate {
             events: Vec::new(),
             spawn: ([0.0; 3], 0.0),
             collision_triangles: 0,
+            camera_grid: None,
             placed: false,
         }
     }
@@ -95,6 +98,7 @@ impl CleanSkate {
 
     pub(crate) fn set_collision(&mut self, grid: Grid, rails: &[Vec<Vec3>]) {
         self.collision_triangles = grid.len();
+        self.camera_grid = Some(grid.clone());
         self.world.set_collision(Box::new(grid));
         self.world.clear_rails();
         for rail in rails {

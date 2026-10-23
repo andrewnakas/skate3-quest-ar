@@ -44,6 +44,8 @@ private:
 	bool opposite_flick(const float dir[2]) const;
 	void start_underflip();
 	std::string grind_full_name() const;
+	void best(float &record, float value, const char *what, float scale);
+	void track_runs();
 	static int plant_bits(const sk8_input &in);
 	std::string plant_variant(int bits) const;
 	void start_flip(int trick);
@@ -136,6 +138,11 @@ private:
 	int grind_grab_ = 0, grind_grab_want_ = 0;
 	float grind_grab_time_ = 0;
 	std::string grind_side_; // "Backside " / "Frontside "
+	// scoring: where the air began and its top; lengths ridden on the current rail / manual (m);
+	// personal bests (line points, air seconds, rail and manual metres, tricks in a line)
+	V3 launch_;
+	float peak_ = 0, grind_run_ = 0, manual_run_ = 0;
+	float best_line_ = 0, best_air_ = 0, best_grind_ = 0, best_manual_ = 0, best_tricks_ = 0;
 	float pop_y_ = 0; // height the last pop left from
 	float varial_ = 0;
 	bool foot_air_ = false; // jumped on foot: lands back on its feet, the board in hand // body varial: how far the body has turned on its own, the board staying

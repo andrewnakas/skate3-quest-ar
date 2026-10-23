@@ -13,6 +13,7 @@
 use super::UiCapture;
 use super::sim::CleanSkate;
 use bevy::prelude::*;
+use skate_lite_sys::EventKind;
 use serde::{Deserialize, Serialize};
 use skate_lite_sys::{Mode, Param, flags};
 use std::path::PathBuf;
@@ -287,6 +288,16 @@ pub(crate) fn keyboard_nav(
 struct Row {
     text: String,
     dim: bool,
+}
+
+/// A best's value as the engine gives it (points, hundredths of a second or metre, a count).
+fn best_text(what: &str, v: u32) -> String {
+    match what {
+        "Air time" => format!("{:.2} s", v as f32 / 100.0),
+        "Grind length" | "Manual length" => format!("{:.1} m", v as f32 / 100.0),
+        "Line score" => format!("{v} points"),
+        _ => v.to_string(),
+    }
 }
 
 fn row(text: impl Into<String>) -> Row {
@@ -910,12 +921,21 @@ pub(crate) fn draw(
     mut row_nodes: Query<(&RowNode, &mut BackgroundColor, &mut Node), Without<MenuRoot>>,
     mut footer: Query<&mut Text, (With<FooterText>, Without<TitleText>, Without<TabsText>, Without<RowText>, Without<HudText>)>,
     mut hud: Query<&mut Text, (With<HudText>, Without<TitleText>, Without<TabsText>, Without<RowText>, Without<FooterText>)>,
+    time: Res<Time<Real>>,
+    mut news: Local<(String, f32)>,
 ) {
+    // a personal best beaten: said on the HUD for a few seconds
+    for e in sim.events.iter().filter(|e| e.kind == EventKind::Best) {
+        news.0 = format!("New best {}: {}", e.name.to_lowercase(), best_text(&e.name, e.points));
+        news.1 = 3.0;
+    }
+    news.1 -= time.delta_secs();
     if let Ok(mut hud) = hud.single_mut() {
         let s = &sim.current;
         let trick = sim.rider.trick();
         let combo = if s.combo_count > 0 { format!("  combo {} x{}", s.combo_points, s.combo_count) } else { String::new() };
-        **hud = format!("{}   {trick}{combo}", s.score);
+        let best = if news.1 > 0.0 { format!("\n{}", news.0) } else { String::new() };
+        **hud = format!("{}   {trick}{combo}{best}", s.score);
     }
     let Ok(mut node) = root.single_mut() else { return };
     let display = if menu.open { Display::Flex } else { Display::None };
