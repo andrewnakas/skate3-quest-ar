@@ -400,32 +400,33 @@ HANDPLANT_SWING = P(hips=(0.02, 0.06, 0.74), hips_rot=(70, 0, 6), spine=(26, 0, 
                     lf=foot(0.1, 0.46, 0.62, yaw=FRONT_YAW, pitch=-20), rf=foot(-0.14, 0.48, 0.6, yaw=BACK_YAW, pitch=-20),
                     lh=(0.06, -0.06, -0.08), rh=(-0.12, 0.06, 0.66), knee_out=0.4)
 HANDPLANT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
-              lf=foot(0.12, 0.08, 1.48, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.16, 0.1, 1.42, yaw=BACK_YAW, pitch=-70),
-              lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.2)
+              lf=foot(0.14, -0.08, 1.04, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.16, -0.06, 1.0, yaw=BACK_YAW, pitch=-70),
+              lh=(0.06, -0.06, -0.08), rh=(-0.1, -0.04, 0.9), knee_out=0.65)
 
 # Handplant variants, held over the plant: a leg kicked out off the board (back / front / both), the
-# body dropped low over the planted hand, or the legs swung to one side.
+# body dropped low over the planted hand, or the legs swung to one side. All tucked (knees to the
+# chest) with the free hand holding the board on the feet, as an invert is done.
 HANDPLANT_BACK_OFF = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
-                       lf=foot(0.12, 0.08, 1.48, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.56, 0.16, 1.22, yaw=BACK_YAW, pitch=-20),
-                       lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.15)
+                       lf=foot(0.14, -0.08, 1.04, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.56, 0.16, 1.22, yaw=BACK_YAW, pitch=-20),
+                       lh=(0.06, -0.06, -0.08), rh=(0.0, -0.04, 0.92), knee_out=0.55)
 HANDPLANT_FRONT_OFF = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
-                        lf=foot(0.56, 0.16, 1.26, yaw=FRONT_YAW, pitch=-20), rf=foot(-0.16, 0.1, 1.42, yaw=BACK_YAW, pitch=-70),
-                        lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.15)
+                        lf=foot(0.56, 0.16, 1.26, yaw=FRONT_YAW, pitch=-20), rf=foot(-0.16, -0.06, 1.0, yaw=BACK_YAW, pitch=-70),
+                        lh=(0.06, -0.06, -0.08), rh=(-0.16, -0.04, 0.88), knee_out=0.55)
 HANDPLANT_NO_FOOT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
                       lf=foot(0.5, 0.22, 1.28, yaw=FRONT_YAW, pitch=-20), rf=foot(-0.5, 0.22, 1.24, yaw=BACK_YAW, pitch=-20),
                       lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.1)
 HANDPLANT_DOWN = P(hips=(0.02, 0.1, 0.6), hips_rot=(140, 0, 6), spine=(22, 0, 6), head=(24, 0, 14),
-                   lf=foot(0.14, 0.34, 1.04, yaw=FRONT_YAW, pitch=-50), rf=foot(-0.18, 0.36, 1.0, yaw=BACK_YAW, pitch=-50),
-                   lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.14, 0.56), knee_out=0.35)
+                   lf=foot(0.14, 0.0, 0.86, yaw=FRONT_YAW, pitch=-50), rf=foot(-0.18, 0.02, 0.82, yaw=BACK_YAW, pitch=-50),
+                   lh=(0.06, -0.06, -0.08), rh=(-0.1, 0.0, 0.74), knee_out=0.7)
 HANDPLANT_UP = P(hips=(0.02, 0.04, 0.86), hips_rot=(172, 0, 6), spine=(8, 0, 6), head=(36, 0, 8),
-                 lf=foot(0.08, 0.04, 1.66, yaw=FRONT_YAW, pitch=-82), rf=foot(-0.12, 0.06, 1.62, yaw=BACK_YAW, pitch=-82),
-                 lh=(0.06, -0.06, -0.08), rh=(-0.06, 0.08, 0.74), knee_out=0.1)
+                 lf=foot(0.1, -0.06, 1.2, yaw=FRONT_YAW, pitch=-82), rf=foot(-0.12, -0.04, 1.16, yaw=BACK_YAW, pitch=-82),
+                 lh=(0.06, -0.06, -0.08), rh=(-0.08, -0.04, 1.02), knee_out=0.55)
 HANDPLANT_LEFT = P(hips=(0.06, 0.06, 0.74), hips_rot=(150, 14, 6), spine=(14, 8, 6), head=(30, 0, 10),
-                   lf=foot(0.42, 0.1, 1.38, yaw=FRONT_YAW, pitch=-60), rf=foot(0.12, 0.12, 1.4, yaw=BACK_YAW, pitch=-60),
-                   lh=(0.06, -0.06, -0.08), rh=(-0.02, 0.1, 0.66), knee_out=0.2)
+                   lf=foot(0.4, -0.04, 1.0, yaw=FRONT_YAW, pitch=-60), rf=foot(0.1, -0.02, 1.02, yaw=BACK_YAW, pitch=-60),
+                   lh=(0.06, -0.06, -0.08), rh=(0.2, -0.02, 0.88), knee_out=0.6)
 HANDPLANT_RIGHT = P(hips=(-0.06, 0.06, 0.74), hips_rot=(150, -14, 6), spine=(14, -8, 6), head=(30, 0, 10),
-                    lf=foot(-0.12, 0.1, 1.4, yaw=FRONT_YAW, pitch=-60), rf=foot(-0.44, 0.12, 1.36, yaw=BACK_YAW, pitch=-60),
-                    lh=(0.06, -0.06, -0.08), rh=(-0.12, 0.1, 0.66), knee_out=0.2)
+                    lf=foot(-0.1, -0.02, 1.02, yaw=FRONT_YAW, pitch=-60), rf=foot(-0.42, -0.04, 0.98, yaw=BACK_YAW, pitch=-60),
+                    lh=(0.06, -0.06, -0.08), rh=(-0.3, -0.02, 0.86), knee_out=0.6)
 
 # Primo: standing tall on the board's upturned edge (it's on its side), arms out to balance.
 # Casper: the board upside down with its tail up, the back foot on the raised tail, the front on

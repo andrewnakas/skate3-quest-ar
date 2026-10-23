@@ -19,6 +19,8 @@ pub(crate) struct Bones {
     /// leg, knee, ankle; front (left) foot first.
     legs: [[Entity; 3]; 2],
     wrists: [Entity; 2],
+    /// arm, elbow, wrist; left first.
+    arms: [[Entity; 3]; 2],
     /// Everything `SK8_ANIM_TRACE` watches, with names.
     watched: Vec<(Entity, &'static str)>,
 }
@@ -39,6 +41,10 @@ impl Bones {
                 [by("leg.R")?, by("knee.R")?, by("ankle.R")?],
             ],
             wrists: [by("wrist.L")?, by("wrist.R")?],
+            arms: [
+                [by("arm.L")?, by("elbow.L")?, by("wrist.L")?],
+                [by("arm.R")?, by("elbow.R")?, by("wrist.R")?],
+            ],
         })
     }
 }
@@ -49,6 +55,13 @@ const CARVE_ROLL: f32 = 0.2;
 const BOARD_ROLL: f32 = 0.06;
 /// A handplant with a foot off: the board's centre from the foot still on it, along the deck (m).
 const PLANT_HALF_STANCE: f32 = 0.21;
+/// The free hand's hold on a handplant's board: out at the edge (m from the centre line), just
+/// under the grip, and no further along than this from the middle.
+const PLANT_GRIP_X: f32 = 0.11;
+/// s the free hand takes to let go of the board after a handplant
+const GRIP_RELEASE: f32 = 0.3;
+const PLANT_GRIP_Y: f32 = -0.02;
+const PLANT_GRIP_Z: f32 = 0.24;
 /// Hips drop per m/s of landing speed (initial velocity of the spring), and the spring itself.
 const LAND_KICK: f32 = 0.13;
 const HIPS_HZ: f32 = 2.6;
@@ -115,6 +128,13 @@ pub(crate) struct Motion {
     /// foot to the front one (kept while a foot is off).
     on_feet: f32,
     plant_along: Vec3,
+    free_hand: Option<usize>,
+    plant_hold: Option<(Vec3, Quat)>,
+    grip: f32,
+    /// where the free hand holds it, on the board (deck space)
+    grip_at: Vec3,
+    /// the free hand's reach from the clip's hand to that hold (body frame)
+    grip_reach: Vec3,
     /// Where the ground was when a hippie jump left it (the board rolls on along it).
     hippie_ground: Option<f32>,
     /// 0..1: how far a tilted grab (method, rocket) has turned the deck, and which one.
@@ -250,8 +270,11 @@ fn two_bone(
     let to = target - a;
     let d = to.length().clamp(1e-3, (l1 + l2) * 0.999);
     let dir = to.normalize_or(Vec3::NEG_Y);
-    // The knee keeps bending the way it does now.
-    let bend = (b - a) - dir * (b - a).dot(dir);
+    // The knee keeps bending the way it does now: its side of the hip-ankle line as posed (stable
+    // even when the new reach lines up with the thigh), carried to the new reach
+    let line = (c - a).normalize_or(dir);
+    let posed = (b - a) - line * (b - a).dot(line);
+    let bend = if posed.length_squared() > 1e-6 { posed - dir * posed.dot(dir) } else { (b - a) - dir * (b - a).dot(dir) };
     let bend = if bend.length_squared() > 1e-8 { bend.normalize() } else { dir.any_orthonormal_vector() };
     let along = (l1 * l1 - l2 * l2 + d * d) / (2.0 * d);
     let knee_at = a + dir * along + bend * (l1 * l1 - along * along).max(0.0).sqrt();
@@ -476,6 +499,9 @@ pub(crate) fn layer(
     if dt > 0.0 {
         motion.on_feet += ((on_feet as u8 as f32) - motion.on_feet) * (1.0 - (-dt / 0.06).exp());
     }
+    if motion.on_feet <= 1e-3 {
+        motion.plant_hold = None;
+    }
     if motion.on_feet > 1e-3 && ankles.len() == 2 {
         let (fi, bi) = if mirrored { (1, 0) } else { (0, 1) };
         if s.plant_pose & feet_off == 0 {
@@ -491,8 +517,58 @@ pub(crate) fn layer(
         let grip = (body - along * body.dot(along)).normalize_or(up);
         let q = Quat::from_mat3(&Mat3::from_cols(grip.cross(along), grip, along));
         let want = soles - grip * (skater::ANKLE + skater::DECK_TOP - skater::DECK_CENTRE);
+        // (eased, from where it was relative to the feet: a foot coming off moves it across, not at once)
+        let (rel, rel_q) = (want - (ankles[0] + ankles[1]) * 0.5, q);
+        let (rel, rel_q) = match motion.plant_hold {
+            Some((r, rq)) if dt > 0.0 => {
+                let k = 1.0 - (-dt / 0.1).exp();
+                (r.lerp(rel, k), rq.slerp(rel_q, k))
+            }
+            Some(held) => held,
+            None => (rel, rel_q),
+        };
+        motion.plant_hold = Some((rel, rel_q));
+        let want = (ankles[0] + ankles[1]) * 0.5 + rel;
         at = at.lerp(want, motion.on_feet);
-        deck = deck.slerp(q, motion.on_feet);
+        deck = deck.slerp(rel_q, motion.on_feet);
+        // ...and the free hand holds it: the hand on the edge is the one nearer where the engine
+        // planted it; the other takes the board's nearer edge
+        let wrists: Vec<Vec3> = set.wrists.iter().filter_map(|e| in_space(*e, rider, &bones)).map(|m| m.translation.into()).collect();
+        if wrists.len() == 2 {
+            // (chosen as the plant starts and kept: the two can be about as near)
+            if motion.free_hand.is_none() {
+                motion.free_hand = Some(if wrists[0].distance(pos) < wrists[1].distance(pos) { 1 } else { 0 });
+            }
+            let free = motion.free_hand.unwrap_or(0);
+            let to_deck = Affine3A::from_rotation_translation(deck, at);
+            let local = to_deck.inverse().transform_point3(wrists[free]);
+            let edge = Vec3::new(
+                PLANT_GRIP_X.copysign(local.x),
+                PLANT_GRIP_Y,
+                local.z.clamp(-PLANT_GRIP_Z, PLANT_GRIP_Z),
+            );
+            motion.grip_at = edge;
+        }
+    }
+    // the free hand on the board, let go of over a moment once the plant's over (not snapped back)
+    if dt > 0.0 {
+        // (let go of steadily, eased at both ends, over GRIP_RELEASE)
+        motion.grip = if on_feet { motion.grip + (1.0 - motion.grip) * (1.0 - (-dt / 0.06).exp()) } else { (motion.grip - dt / GRIP_RELEASE).max(0.0) };
+    }
+    if let Some(free) = motion.free_hand.filter(|_| motion.grip > 1e-3) {
+        if let Some(wrist) = in_space(set.wrists[free], rider, &bones) {
+            let wrist: Vec3 = wrist.translation.into();
+            // holding: the reach to the board, kept in the body's frame; letting go, that reach
+            // shrinks back to the clip's hand (not chasing the board as it swings back under)
+            if on_feet {
+                let on_board = Affine3A::from_rotation_translation(deck, at).transform_point3(motion.grip_at);
+                motion.grip_reach = rider_rot.inverse() * (on_board - wrist);
+            }
+            let w = motion.grip * motion.grip * (3.0 - 2.0 * motion.grip);
+            two_bone(set.arms[free], wrist + rider_rot * motion.grip_reach * w, Quat::IDENTITY, rider, &mut bones);
+        }
+    } else if motion.on_feet <= 1e-3 {
+        motion.free_hand = None;
     }
     if s.mode == Mode::Bail {
         if motion.loose.is_none() {
