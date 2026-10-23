@@ -148,6 +148,7 @@ private:
 	int grind_grab_ = 0, grind_grab_want_ = 0;
 	float grind_grab_time_ = 0;
 	std::string grind_side_; // "Backside " / "Frontside "
+	bool grind_lip_ = false;  // a slide's family: the board turned onto the rail the lip way
 	// scoring: where the air began and its top; lengths ridden on the current rail / manual (m);
 	// personal bests (line points, air seconds, rail and manual metres, tricks in a line)
 	V3 launch_;

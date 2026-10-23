@@ -56,6 +56,7 @@ public:
 	Result feed(float x, float y);
 	void reset();
 	Result swept_shove();
+	Result crouch_arc();
 	// in the air after a pop: a new flick may start from wherever the stick is held (as the port:
 	// held up after the ollie, then flicked down, a late backfoot flip)
 	void rearm()
@@ -80,6 +81,10 @@ private:
 	// every rim sector the stick has passed through since the last reset (no dwell filtering),
 	// with how many steps it stayed in each: for quick sweeps round the rim
 	std::vector<std::pair<unsigned char, int>> raw_;
+	// the same since the stick left the centre, kept through the token resets (a crouch held off
+	// to a side and swept from: crouch_arc)
+	std::vector<std::pair<unsigned char, int>> arc_;
+	int arc_centre_ = 0;
 	bool on_rim_ = false;
 	bool spent_ = false;
 	// after a trick: a few more steps the stick may carry on (a sweep on round to the end) and the

@@ -205,7 +205,8 @@ int find_trick(const char *name)
 // heelflip. The other sectors stay 45 degrees, centred on their directions.
 constexpr float kUpHeelEdge = -18.5f, kUpKickEdge = 38.5f; // degrees from up
 
-constexpr int kRevise = 6; // steps after a trick the stick's carrying on can still change it
+constexpr int kRevise = 6;
+constexpr int kCrouchHeld = 12; // steps on one rim sector before a sweep: that's the crouch // steps after a trick the stick's carrying on can still change it
 
 int sector_of(float x, float y)
 {
@@ -352,11 +353,18 @@ Flick::Result Flick::feed(float x, float y)
 			raw_.back().second++;
 		else
 			raw_.push_back({(unsigned char)s, 1});
+		arc_centre_ = 0;
+		if (!arc_.empty() && arc_.back().first == s)
+			arc_.back().second++;
+		else
+			arc_.push_back({(unsigned char)s, 1});
 		push((unsigned char)s);
 		last_sector_ = s;
 		on_rim_ = true;
 		centre_steps_ = 0;
-		out = swept_shove();
+		out = crouch_arc();
+		if (out.trick < 0)
+			out = swept_shove();
 		if (out.trick < 0)
 			out = resolve(false);
 		// A shove-it's sweep held at its sideways end (instead of let go to the centre): it pops
@@ -374,6 +382,8 @@ Flick::Result Flick::feed(float x, float y)
 	} else if (r < kCentreIn) {
 		on_rim_ = false;
 		young_ = false;
+		if (++arc_centre_ >= 3) // let go (not just crossing the middle in a sweep)
+			arc_.clear();
 		if (!tokens_.empty()) {
 			push(TCentre);
 			last_sector_ = -1;
@@ -389,6 +399,7 @@ Flick::Result Flick::feed(float x, float y)
 		}
 	}
 	if (out.trick >= 0) {
+		arc_.clear();
 		if (r >= kRimIn) { // still on the rim: it may carry on round (read again for a few steps)
 			revise_steps_ = kRevise;
 			revise_trick_ = out.trick;
@@ -397,6 +408,67 @@ Flick::Result Flick::feed(float x, float y)
 			spent_ = r >= kCentreIn;
 		}
 	}
+	return out;
+}
+
+// A crouch held somewhere other than straight down (to the left, down-left, down-right, right), then
+// the stick swept round the rim from there: named by where it has swept to, the moment it gets there,
+// as the port names them (probed with the port on swept paths; the tre / varial kickflip / 360 inward
+// heelflip ones also from a recorded session, where the crouch was held to the left).
+Flick::Result Flick::crouch_arc()
+{
+	Result out;
+	const auto &raw = arc_;
+	if (raw.size() < 3 || raw[0].second < kCrouchHeld)
+		return out;
+	const unsigned char c = raw[0].first;
+	std::vector<unsigned char> path;
+	for (size_t i = 1; i < raw.size(); i++)
+		path.push_back(raw[i].first);
+	// `seq` passed through in order (others may come between)
+	auto went = [&](std::initializer_list<unsigned char> seq) {
+		size_t k = 0;
+		for (unsigned char x : path)
+			if (k < seq.size() && x == *(seq.begin() + k))
+				k++;
+		return k == seq.size();
+	};
+	unsigned char last = path.back();
+	const char *name = nullptr;
+	if (c == TLeft) {
+		if (went({TDownLeft, TDown, TDownRight, TDown}) && (last == TUp || last == TUpRight))
+			name = "360 Inward Heelflip";
+		else if (went({TDownLeft, TDown, TDownRight, TRight}) || went({TDownLeft, TDown, TDownRight, TUpRight}))
+			name = "Tre Flip"; // (on round the right, or across to up-right)
+		else if (went({TDownLeft, TDown}) && last == TUp)
+			name = "Varial Kickflip"; // (round to down, then across to straight up)
+		else if (went({TUpLeft, TUp, TUpRight, TRight}))
+			name = "Nollie 360 Shove-it";
+	} else if (c == TDownLeft) {
+		if (went({TDown, TDownRight, TRight}))
+			name = "360 Shove-it";
+		else if (went({TLeft, TUpLeft, TUp}))
+			name = "Ollie";
+	} else if (c == TDownRight) {
+		if (went({TDown, TDownLeft, TLeft}))
+			name = "Frontside Shove-it";
+		else if (went({TRight, TUpRight, TUp}))
+			name = "Ollie";
+	} else if (c == TRight) {
+		if (went({TDownRight, TDown, TDownLeft, TLeft}))
+			name = "Frontside Shove-it";
+		else if (went({TUpRight, TUp, TUpLeft, TLeft}))
+			name = "Nollie Frontside 360 Shove-it";
+	} else if (c == TDown) {
+		// swept (not held on the way) from down round the left past left and on up: a frontside
+		// shove-it (back down from left instead, it's on its way to a tre)
+		bool swept = raw.size() >= 4 && raw[1].first == TDownLeft && raw[1].second <= 3 && raw[2].first == TLeft &&
+			(raw[3].first == TUpLeft || raw[3].first == TUp);
+		if (swept)
+			name = "Frontside Shove-it";
+	}
+	if (name)
+		out.trick = find_trick(name);
 	return out;
 }
 
@@ -421,7 +493,10 @@ Flick::Result Flick::swept_shove()
 			break;
 		int d = ((raw_[size_t(i) + 1].first - s) + 8) % 8; // around from this sector to the next
 		int way = d == 1 ? 1 : d == 7 ? -1 : 0;
-		if (way == 0 || (dir != 0 && way != dir) || raw_[size_t(i)].second > kSweepDwell)
+		// (the sectors on the way passed in a step each - slower, the port reads a kickflip; the last
+		// one before the end may be held a moment)
+		int allow = i == n - 1 ? kSweepDwell : 1;
+		if (way == 0 || (dir != 0 && way != dir) || raw_[size_t(i)].second > allow)
 			return out;
 		dir = way;
 		steps++;

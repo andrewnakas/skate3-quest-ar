@@ -1620,6 +1620,14 @@ std::string Rider::plant_variant(int bits) const
 	return name;
 }
 
+// A slide by the right stick centred / up / down, in the family the board was turned into.
+static int slide_kind(bool lip, float y)
+{
+	bool up = y > 0.45f, down = y < -0.45f;
+	return lip ? (up ? SK8_GRIND_NOSEBLUNT : down ? SK8_GRIND_TAILSLIDE : SK8_GRIND_LIPSLIDE)
+			   : (up ? SK8_GRIND_NOSESLIDE : down ? SK8_GRIND_BLUNTSLIDE : SK8_GRIND_BOARDSLIDE);
+}
+
 // Which grab a trigger makes on a rail: the free end of the board, or the edge by that hand.
 static const char *grind_grab_name(int kind, int hands)
 {
@@ -1719,6 +1727,13 @@ bool Rider::try_grind(World &w)
 	grind_slide_ = slide;
 	grind_transfer_ = 0;
 	grind_kind_ = grind_kind_for(slide, last_flick_[0], last_flick_[1], crouched);
+	// a slide with the right stick centred, down or up: which family by which way the board was
+	// turned onto the rail (as the port, probed: turned with the left stick left, the lip side - lipslide,
+	// tailslide, noseblunt; right, the board side - boardslide, bluntslide, noseslide)
+	// (measured from the rail's way along it, so a straight crossing counts by the side it came from)
+	grind_lip_ = dot(cross(unit(flatten(t, kUp), t), fwd_), kUp) > 0;
+	if (slide && std::fabs(last_flick_[0]) < 0.45f)
+		grind_kind_ = slide_kind(grind_lip_, last_flick_[1]);
 	if (dark)
 		grind_kind_ = SK8_GRIND_DARKSLIDE;
 	if (plant) {
@@ -1901,6 +1916,8 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 	bool held = in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1] > 0.2f;
 	if (grind_kind_ != SK8_GRIND_DARKSLIDE && held) {
 		int want = grind_kind_for(grind_slide_, in.flick[0], in.flick[1], in.steer[1] < -0.6f);
+		if (grind_slide_ && std::fabs(in.flick[0]) < 0.45f)
+			want = slide_kind(grind_lip_, in.flick[1]);
 		if (want == SK8_GRIND_CROOKED && grind_kind_ == SK8_GRIND_CROOKED && grind_time_ >= kCrookToBoard)
 			want = SK8_GRIND_BOARDSLIDE;
 		else if (want == SK8_GRIND_CROOKED && grind_kind_ == SK8_GRIND_BOARDSLIDE)

@@ -24,8 +24,9 @@ recorded stick path through s3trace and sk8, both regular stance). The park is K
 - Flicks: 39/43 recorded ground flicks named as the port names them for the same stick path. Fixed from
   the session: the up sector is wider toward the kick side (-18.5..+38.5 deg: 27/27 ollies), quick
   sweeps round the rim are shove-its, a flick read on arrival can be re-read during the takeoff.
-  Open: the 3 flicks started from a crouch held LEFT (tre, varial kickflip, 360 inward heelflip from
-  L-L-DL-D-DR-...) - the port reads them, we don't; one kickflip flicked up then on to up-right.
+  Crouch held off to a side (2026-10-23, later): probed with swept paths from L / DL / D / DR / R and
+  built (crouch_arc): now 42/43 recorded and 46/47 probed sweeps named as the port names them. Open:
+  one kickflip flicked up, then on to up-right; D-DL-L stopped at left.
 - Air moves: late backfoot flips are "stick held up, then snapped down" (2/3 replayed), grab names now
   the port's (Backside / Frontside / Crail / Seatbelt / Mute Grab), spins named on the trick ("Ollie 180")
   or Frontside / Backside 180 with no trick (left stick left = backside, probed).
@@ -34,8 +35,14 @@ recorded stick path through s3trace and sk8, both regular stance). The park is K
   (how slides are set up) and changes a 50-50 with the left stick. 1/8 replayed catches named alike: the
   rest depend on the stance the recording doesn't hold (switch swaps sides), on ground-started flips
   (darkslides) and on rough launch velocities (the recorded position is the body root).
-- Open: slide kinds by the right stick (the port gave a boardslide where we give a tailslide with the
-  stick down) and the frontside / backside naming of slides.
+- Slides (probed, built): the family is which way the board was turned onto the rail - left stick
+  left: lipslide (centre) / tailslide (down) / noseblunt (up); right: boardslide / bluntslide /
+  noseslide; past ~45 deg off square it's a grind again. Frontside / backside of a slide comes from
+  the rail's side, as for grinds (every slide on the port's test rail was backside either way).
+- Replay: the browser's logged position is a presentation snapshot (a step either side of the
+  simulation), and an s3trace replay of the same inputs splits off at a wipeout ~tick 3500. The
+  recorder now also logs the simulation's own rider position / velocity, the rider's frame and the
+  deck's orientation (stance, true velocities) - a new recording is needed to use them.
 - Drop-ins: not doable in the port either (Y never dropped in for the user); dropped from the list.
 
 ## Moves
