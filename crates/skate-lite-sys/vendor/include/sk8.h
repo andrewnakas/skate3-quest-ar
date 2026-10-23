@@ -143,7 +143,18 @@ typedef struct sk8_state
 	int bail_stage;      /* sk8_bail_stage while bailing, 0 otherwise */
 	int bail_dir;        /* 1 thrown forward (over the toes / ahead), -1 slipped out backward */
 	float bail_stage_time; /* seconds into the bail stage */
+	float plant_wind;      /* 0..1 through a boneless's wind-up (front foot stepping down), -1 otherwise */
+	int plant_pose;        /* on a handplant: sk8_plant_pose bits (feet off, body dropped / swung) */
 } sk8_state;
+
+typedef enum sk8_plant_pose
+{
+	SK8_PLANT_BACK_FOOT = 1,  /* back foot off the board */
+	SK8_PLANT_FRONT_FOOT = 2, /* front foot off the board */
+	SK8_PLANT_DOWN = 4,       /* the body dropped low over the hand */
+	SK8_PLANT_LEFT = 8,       /* legs swung to the rider's left */
+	SK8_PLANT_RIGHT = 16,     /* ... to the right */
+} sk8_plant_pose;
 
 /* A bail goes through stages: thrown off (in the air, arms flailing), tumbling and sliding along the
  * ground, lying still, then getting up (only when it will respawn). */

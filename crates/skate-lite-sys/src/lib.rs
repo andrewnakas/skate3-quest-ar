@@ -112,6 +112,8 @@ struct RawState {
     bail_stage: c_int,
     bail_dir: c_int,
     bail_stage_time: f32,
+    plant_wind: f32,
+    plant_pose: c_int,
 }
 
 /// A bail's stages (`sk8_bail_stage`).
@@ -192,6 +194,10 @@ pub struct State {
     pub bail_stage: BailStage,
     pub bail_stage_time: f32,
     pub bail_back: bool,
+    /// 0..1 through a boneless's wind-up (the front foot stepping down before the pop).
+    pub plant_wind: Option<f32>,
+    /// On a handplant: [`plant_pose`] bits (feet off, body dropped / swung).
+    pub plant_pose: u32,
     /// 0 none, 1 axle, 2 board slide, 3 nose, 4 tail.
     pub grind_kind: u32,
     pub combo_points: u32,
@@ -233,6 +239,8 @@ impl From<RawState> for State {
             bail_stage: BailStage::from_raw(r.bail_stage),
             bail_stage_time: r.bail_stage_time,
             bail_back: r.bail_dir < 0,
+            plant_wind: (r.plant_wind >= 0.0).then_some(r.plant_wind),
+            plant_pose: r.plant_pose as u32,
             grind_kind: r.grind_kind as u32,
             combo_points: r.combo_points,
             combo_count: r.combo_count,
@@ -241,6 +249,15 @@ impl From<RawState> for State {
             grab_style: r.grab_style.max(0) as u32,
         }
     }
+}
+
+/// Handplant variants (`sk8_plant_pose` bits): feet off the board, the body dropped or swung.
+pub mod plant_pose {
+    pub const BACK_FOOT: u32 = 1;
+    pub const FRONT_FOOT: u32 = 2;
+    pub const DOWN: u32 = 4;
+    pub const LEFT: u32 = 8;
+    pub const RIGHT: u32 = 16;
 }
 
 /// Grab styles (`sk8_grab_style`): picked as a trigger goes down by which trigger(s) and where the

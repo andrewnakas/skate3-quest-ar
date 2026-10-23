@@ -445,22 +445,28 @@ fn demo_walk(t: f32) -> Input {
 
 /// `SK8_DEMO=plants`: an ollie at an edge across the path with the foot-off button held near it:
 /// a footplant, then (a grab held too) a handplant; then the port's way to a boneless (a trigger
-/// held, push pressed: the wind-up, then the pop) and a fastplant (the left stick up on the way).
+/// held, push pressed: the wind-up, then the pop) and a fastplant (X instead of A); then RB held up
+/// the desktop park's quarter pipe: a handplant on its coping, X taking the front foot off.
 const PLANT_EACH: f32 = 4.5;
+const PLANT_SLOTS: usize = 5;
 fn demo_plants(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> Input {
     let d = t % PLANT_EACH;
-    let slot = (t / PLANT_EACH) as usize % 4;
+    let slot = (t / PLANT_EACH) as usize % PLANT_SLOTS;
     let hand = slot == 1;
     let mut i = Input::default();
+    if slot == 4 {
+        i.buttons |= buttons::SLIDE;
+        if s.mode == skate_lite_sys::Mode::Grind {
+            i.buttons |= buttons::PUSH_MONGO;
+        }
+        return i;
+    }
     if slot >= 2 {
         if (0.1..1.2).contains(&d) {
             i.buttons |= buttons::GRAB_RIGHT;
         }
         if (0.2..0.9).contains(&d) {
-            i.buttons |= buttons::PUSH;
-            if slot == 3 && d < 0.5 {
-                i.steer = [0.0, 1.0];
-            }
+            i.buttons |= if slot == 3 { buttons::PUSH_MONGO } else { buttons::PUSH };
         }
         return i;
     }
@@ -623,7 +629,13 @@ pub(crate) fn read_desktop(
         if slot.is_some() && slot != *demo_at {
             *demo_at = slot;
             let demo_kind = std::env::var("SK8_DEMO").unwrap_or_default();
-            if demo_kind == "plants" {
+            if demo_kind == "plants" && slot.unwrap_or(0) % PLANT_SLOTS == 4 {
+                // up the desktop park's quarter pipe (at z = 40, facing +z; its coping 2.4 m up)
+                sim.place_rolling(Vec3::new(0.0, 0.0, 52.0), std::f32::consts::PI, 8.5);
+                sim.world.clear_rails();
+                sim.world.add_rail(&[[-2.0, 2.4, 39.3], [2.0, 2.4, 39.3]]);
+                sim.demo_rail = None;
+            } else if demo_kind == "plants" {
                 sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 7.5);
                 let s = sim.current;
                 let fwd = Quat::from_array(s.rider_rot) * Vec3::Z;
@@ -631,7 +643,7 @@ pub(crate) fn read_desktop(
                 let rail = demo_rail(7, Vec3::from_array(s.position), fwd);
                 sim.world.clear_rails();
                 // (the boneless slots, 2 and 3, on open ground)
-                if slot.unwrap_or(0) % 4 < 2 {
+                if slot.unwrap_or(0) % PLANT_SLOTS < 2 {
                     sim.world.add_rail(&[rail[0].to_array(), rail[1].to_array()]);
                 }
                 sim.demo_rail = Some(rail);

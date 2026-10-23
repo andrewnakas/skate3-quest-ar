@@ -553,7 +553,13 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		(((in.buttons & ~prev_buttons_) & push_bits) || !(prev_buttons_ & grab_bits));
 	if (plant_press && plant_wind_ < 0 && mode_ == SK8_MODE_RIDE && takeoff_trick_ < 0 && switching_ < 0) {
 		plant_wind_ = 0;
-		plant_fast_ = false;
+		// as the port: the mongo button (the front foot's, so the other one rolling fakie) is a
+		// fastplant; the left trigger frontside, the right backside (swapped riding the other way)
+		unsigned fresh = (in.buttons & ~prev_buttons_) & push_bits;
+		bool mongo = fresh ? (fresh & SK8_PUSH_MONGO) && !(fresh & SK8_PUSH) : !(in.buttons & SK8_PUSH);
+		plant_fast_ = mongo != fakie_;
+		bool left = (in.buttons & SK8_GRAB_LEFT) && (!(in.buttons & SK8_GRAB_RIGHT) || !(prev_buttons_ & SK8_GRAB_LEFT));
+		plant_side_ = left != (fakie_ != switch_) ? "Frontside " : "Backside ";
 		push_time_ = -1;
 		push_queued_ = false;
 	}
@@ -561,12 +567,11 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		plant_wind_ = -1;
 	if (plant_wind_ >= 0) {
 		plant_wind_ += kDt;
-		plant_fast_ = plant_fast_ || in.steer[1] > 0.5f;
 		crouch_ = std::min(0.85f, plant_wind_ / kPlantWind); // loads up as the foot goes down
 		if (plant_wind_ >= kPlantWind) {
 			const TrickDef &def = trick_table()[size_t(find_trick(plant_fast_ ? "Fastplant" : "Boneless"))];
 			pop(def, p[BonelessPop]);
-			pending_.push_back({staged(def.name), def.points});
+			pending_.push_back({staged((plant_side_ + def.name).c_str()), def.points});
 			return;
 		}
 	}
@@ -1208,16 +1213,33 @@ void Rider::wallride(World &w, const sk8_input &in, const Flick::Result &f)
 
 // ---------------------------------------------------------------- grind
 
-std::string Rider::plant_variant(const sk8_input &in) const
+int Rider::plant_bits(const sk8_input &in)
 {
 	unsigned b = in.buttons;
 	bool back = b & SK8_PUSH, front = b & SK8_PUSH_MONGO;
-	std::string name = (b & SK8_BRAKE) ? "No Foot " : front && !back ? "One Foot " : back && !front ? "Back Foot " : "";
-	name += "Handplant";
+	int bits = (b & SK8_BRAKE) ? SK8_PLANT_BACK_FOOT | SK8_PLANT_FRONT_FOOT
+		: front && !back       ? SK8_PLANT_FRONT_FOOT
+		: back && !front       ? SK8_PLANT_BACK_FOOT
+							   : 0;
 	if (in.flick[1] < -0.6f)
-		name += " Down";
+		bits |= SK8_PLANT_DOWN;
 	else if (std::fabs(in.flick[0]) > 0.6f)
-		name += in.flick[0] > 0 ? " Right" : " Left";
+		bits |= in.flick[0] > 0 ? SK8_PLANT_RIGHT : SK8_PLANT_LEFT;
+	return bits;
+}
+
+std::string Rider::plant_variant(int bits) const
+{
+	const int feet = SK8_PLANT_BACK_FOOT | SK8_PLANT_FRONT_FOOT;
+	std::string name = (bits & feet) == feet ? "No Foot "
+		: (bits & SK8_PLANT_FRONT_FOOT)      ? "One Foot "
+		: (bits & SK8_PLANT_BACK_FOOT)       ? "Back Foot "
+											 : "";
+	name = plant_side_ + name + "Handplant";
+	if (bits & SK8_PLANT_DOWN)
+		name += " Down";
+	else if (bits & (SK8_PLANT_LEFT | SK8_PLANT_RIGHT))
+		name += (bits & SK8_PLANT_RIGHT) ? " Right" : " Left";
 	return name;
 }
 
@@ -1233,6 +1255,10 @@ bool Rider::try_grind(World &w)
 	float vt = dot(vel_, s.tangent);
 	// a plant (foot-off held) catches the edge from any way, even straight at it
 	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0 || hand;
+	// a handplant's side: carried along the edge toward the toes, frontside; toward the heels (or
+	// straight in), backside (taken before the catch squares the board up)
+	V3 toe = cross(fwd_, up_) * (switch_ ? -1.0f : 1.0f);
+	float plant_lateral = dot(s.tangent, toe) * dot(vel_, s.tangent);
 	if (std::fabs(vt) < 0.8f && !plant)
 		return false;
 	// over the rail, along it: coming down, the board is drawn onto it over a few ticks (no snap
@@ -1284,7 +1310,9 @@ bool Rider::try_grind(World &w)
 	if (plant) {
 		grind_kind_ = hand || (last_buttons_ & (SK8_GRAB_LEFT | SK8_GRAB_RIGHT)) ? SK8_GRIND_HANDPLANT : SK8_GRIND_FOOTPLANT;
 		plant_hold_ = hand ? SK8_SLIDE : SK8_FOOT_OFF;
-		plant_want_.clear();
+		plant_side_ = hand ? (plant_lateral > 0.5f ? "Frontside " : "Backside ") : "";
+		plant_want_ = 0;
+		plant_pose_ = 0;
 		plant_want_time_ = 0;
 		plant_time_ = 0;
 		// (off a ramp's lip going up: the way up the wall, so it comes back down into the ramp)
@@ -1294,6 +1322,8 @@ bool Rider::try_grind(World &w)
 	// named for how it's ridden: switch stance, or riding the rail backwards (fakie)
 	grind_backwards_ = backwards && !slide;
 	grind_name_ = std::string(switch_ ? "Switch " : grind_backwards_ ? "Fakie " : "") + kGrindDefs[grind_kind_].name;
+	if (plant && hand)
+		grind_name_ = plant_side_ + kGrindDefs[grind_kind_].name;
 	fakie_ = backwards && !slide;
 	grind_time_ = 0;
 	balance_ = 0;
@@ -1340,12 +1370,13 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 		// held on a handplant: a foot (or both) off, or the body dropped / swung with the right
 		// stick, held a moment (the one left is scored)
 		if (grind_kind_ == SK8_GRIND_HANDPLANT && plant_hold_ == SK8_SLIDE) {
-			std::string want = plant_variant(in);
-			plant_want_time_ = want == plant_want_ ? plant_want_time_ + kDt : 0;
-			plant_want_ = want;
-			if (want != grind_name_ && plant_want_time_ >= kPlantVariant) {
+			int bits = plant_bits(in);
+			plant_want_time_ = bits == plant_want_ ? plant_want_time_ + kDt : 0;
+			plant_want_ = bits;
+			if (bits != plant_pose_ && plant_want_time_ >= kPlantVariant) {
 				add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
-				grind_name_ = trick_ = want;
+				plant_pose_ = bits;
+				grind_name_ = trick_ = plant_variant(bits);
 				grind_time_ = 0;
 			}
 		}
@@ -1639,6 +1670,8 @@ void Rider::state(sk8_state &s) const
 	s.bail_stage = mode_ == SK8_MODE_BAIL ? bail_stage_ : 0;
 	s.bail_dir = bail_dir_;
 	s.bail_stage_time = mode_ == SK8_MODE_BAIL ? bail_stage_time_ : 0;
+	s.plant_wind = plant_wind_ >= 0 ? clampf(plant_wind_ / kPlantWind, 0, 1) : -1;
+	s.plant_pose = mode_ == SK8_MODE_GRIND && grind_kind_ == SK8_GRIND_HANDPLANT ? plant_pose_ : 0;
 	s.grind_kind = grind_tip_ ? SK8_GRIND_5_0 : grind_kind_;
 	s.combo_points = combo_points_;
 	s.combo_count = unsigned(combo_names_.size());

@@ -27,11 +27,16 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   up a ramp plants a hand on the coping; it stays while RB is held (longest 1.28 s, the port's ~77
   ticks), comes off as soon as it's let go and drops straight back in nose first. While planted:
   A back foot off, X front foot off (both: plain), B no foot, right stick down / sideways (Handplant
-  Down / Left / Right), each held 0.15 s, the one left scored. Not matched: the port's FS / BS names.
-- Boneless / fastplant the port's way: a grab trigger held and A (or X) pressed on the ground: a
-  wind-up (36 ticks press to air, as the port), then the pop (41 ticks in the air, as the port);
-  the left stick up on the way: a fastplant. The trigger still held in the air also scores the grab
-  (the port does too). The wind-up shows only as a crouch (no step-down pose yet).
+  Down / Left / Right), each held 0.15 s, the one left scored, each with its own held pose; the
+  body swings back down over the hand as it drops in. Named Frontside / Backside by which way it's
+  carried along the coping (toward the toes: frontside; toward the heels or straight in: backside,
+  fitting all three plants in the recording; s3trace doesn't name the port's plants).
+- Boneless / fastplant the port's way (probed with s3trace): a grab trigger held and A pressed on
+  the ground: a wind-up (36 ticks press to air, as the port; the front foot lifts and steps down,
+  then the back hand reaches), then the pop (41 ticks in the air, as the port); X instead of A: a
+  fastplant (the left stick plays no part). The left trigger is frontside, the right backside; rolling
+  fakie both swap (the recording's FS ones were fakie). The trigger still held in the air also scores
+  the grab (the port does too). SK8_DEMO=plants slot 4: a handplant on the desktop park's quarter pipe.
 - Footplant / handplant (ours, kept): foot-off (+ a grab for the hand) held reaching an edge: a
   stall, then back off it
 - Grinds by the left stick at the catch (along the rail): 50-50, 5-0, nosegrind, crooked,

@@ -108,9 +108,18 @@ enum Clip {
     GrabNosebone,
     GrabTailbone,
     GrabCrossBone,
+    /// The boneless wind-up (driven by the engine's progress through it).
+    BonelessWind,
+    /// Handplant variants, blended over the plant.
+    HandplantBackOff,
+    HandplantFrontOff,
+    HandplantNoFoot,
+    HandplantDown,
+    HandplantLeft,
+    HandplantRight,
 }
 
-const CLIPS: usize = 71;
+const CLIPS: usize = 78;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -124,11 +133,18 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_stand", "sk8_walk", "sk8_run", "sk8_footplant", "sk8_handplant", "sk8_primo", "sk8_casper", "sk8_jump_foot",
     "sk8_switch", "sk8_bail_flail", "sk8_bail_back", "sk8_get_up", "sk8_get_up_back",
     "sk8_grab_seatbelt", "sk8_grab_mute", "sk8_grab_japan", "sk8_grab_nosebone", "sk8_grab_tailbone",
-    "sk8_grab_cross_bone",
+    "sk8_grab_cross_bone", "sk8_boneless_wind", "sk8_handplant_back_off", "sk8_handplant_front_off",
+    "sk8_handplant_no_foot", "sk8_handplant_down", "sk8_handplant_left", "sk8_handplant_right",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
-const LOOPED: [Clip; 27] = [
+const LOOPED: [Clip; 33] = [
     Clip::BailFlail,
+    Clip::HandplantBackOff,
+    Clip::HandplantFrontOff,
+    Clip::HandplantNoFoot,
+    Clip::HandplantDown,
+    Clip::HandplantLeft,
+    Clip::HandplantRight,
     Clip::Primo,
     Clip::Casper,
     Clip::Wallride,
@@ -281,12 +297,15 @@ pub(crate) struct Clock {
     grind_time: f32,
     /// Since a bail's body hit the ground (the tumble, then lying).
     down: f32,
+    /// Since coming off a handplant (the body swings back down over the hand as it drops in).
+    plant_out: f32,
+    was_plant: bool,
 }
 
 impl Default for Clock {
     fn default() -> Self {
         // Long ago, so nothing plays its "just happened" clip at spawn.
-        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, hippie: false, idle: 0.0, stride: 0.0, grind_time: 0.0, down: 0.0 }
+        Self { since_pop: 9.0, since_land: 9.0, since_grab: 0.0, since_push: 9.0, nollie: false, old_school: None, hippie: false, idle: 0.0, stride: 0.0, grind_time: 0.0, down: 0.0, plant_out: 9.0, was_plant: false }
     }
 }
 
@@ -362,6 +381,14 @@ fn blend_time(clip: Clip) -> f32 {
         // stepping off / walking speeds blend over a moment
         Clip::Stand | Clip::Walk | Clip::Run => 0.18,
         Clip::Footplant | Clip::Handplant => 0.08,
+        Clip::BonelessWind => 0.08,
+        // a leg kicked out / the body shifting on the planted hand: a moment, not a snap
+        Clip::HandplantBackOff
+        | Clip::HandplantFrontOff
+        | Clip::HandplantNoFoot
+        | Clip::HandplantDown
+        | Clip::HandplantLeft
+        | Clip::HandplantRight => 0.14,
         Clip::Primo | Clip::Casper => 0.12,
         Clip::JumpFoot => 0.08,
         Clip::Switch => 0.1,
@@ -396,6 +423,11 @@ fn blend_time(clip: Clip) -> f32 {
     }
 }
 
+/// The handplant clip's body is up over the hand by here (s), and back down to the reach this long
+/// after dropping back in.
+const HANDPLANT_UP: f32 = 0.52;
+const PLANT_OUT: f32 = 0.3;
+
 /// (target weight, time) per clip for this state; `None` time = the clip is not playing.
 fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Option<f32>); CLIPS] {
     let mut t = [(0.0, None); CLIPS];
@@ -422,7 +454,33 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             set(Clip::Run, walk * run, c.stride / 3.7);
         }
         Mode::Grind if s.grind_kind == 15 => set(Clip::Footplant, 1.0, c.grind_time),
-        Mode::Grind if s.grind_kind == 16 => set(Clip::Handplant, 1.0, c.grind_time),
+        Mode::Grind if s.grind_kind == 16 => {
+            // a variant held on the plant: the feet (one or both off) and the body (dropped or swung)
+            // each take a share over the plant itself
+            use skate_lite_sys::plant_pose as pp;
+            let feet = match s.plant_pose & (pp::BACK_FOOT | pp::FRONT_FOOT) {
+                pp::BACK_FOOT => Some(Clip::HandplantBackOff),
+                pp::FRONT_FOOT => Some(Clip::HandplantFrontOff),
+                0 => None,
+                _ => Some(Clip::HandplantNoFoot),
+            };
+            let body = if s.plant_pose & pp::DOWN != 0 {
+                Some(Clip::HandplantDown)
+            } else if s.plant_pose & pp::LEFT != 0 {
+                Some(Clip::HandplantLeft)
+            } else if s.plant_pose & pp::RIGHT != 0 {
+                Some(Clip::HandplantRight)
+            } else {
+                None
+            };
+            // (once the body is up over the hand: the plant's swing up plays out first)
+            let n = feet.is_some() as u32 + body.is_some() as u32;
+            let k = if n == 0 { 0.0 } else { smooth01((c.grind_time - 0.36) / 0.2) };
+            set(Clip::Handplant, 1.0 - k, c.grind_time);
+            for v in [feet, body].into_iter().flatten() {
+                set(v, k / n as f32, c.idle);
+            }
+        }
         Mode::Grind if s.grind_kind == 2 || s.grind_kind == 17 => set(Clip::Boardslide, 1.0, c.idle),
         Mode::Grind if s.grind_kind == 4 => set(Clip::Grind50, 1.0, c.idle),
         // sk8_grind_kind 5..14, in order
@@ -445,7 +503,8 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             // A flip or a grab takes over from the pop at full extension (a grab's reach then plays
             // from its start instead of the pose snapping to a grab already half done).
             let pop_until = if s.flip_progress.is_some() || s.grab != 0 { POP_TOP_AT } else { pop_len };
-            if let Some(old) = c.old_school.filter(|clip| c.since_pop < len[*clip as usize] && s.grab == 0) {
+            // (a boneless from a held trigger plays its pop before the grab takes over)
+            if let Some(old) = c.old_school.filter(|clip| c.since_pop < len[*clip as usize] && (s.grab == 0 || *clip == Clip::PopBoneless)) {
                 // the foot steps off and back on over the whole clip, a 180 turning the board under it
                 set(old, 1.0, c.since_pop);
             } else if c.since_pop < pop_until {
@@ -488,6 +547,14 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             let p = s.stance_change.unwrap_or(0.0);
             let k = if p < 0.5 { p * 2.0 } else { (1.0 - p) * 2.0 };
             set(Clip::Switch, 1.0, k * len[Clip::Switch as usize]);
+        }
+        // dropping back in off a handplant: the plant's swing up played back down, to the reach
+        Mode::Ride if c.plant_out < PLANT_OUT => {
+            set(Clip::Handplant, 1.0, (HANDPLANT_UP - c.plant_out).max(HANDPLANT_UP - PLANT_OUT));
+        }
+        Mode::Ride if s.plant_wind.is_some() => {
+            let k = s.plant_wind.unwrap_or(0.0);
+            set(Clip::BonelessWind, 1.0, k * len[Clip::BonelessWind as usize]);
         }
         Mode::Ride => {
             if c.since_land < len[Clip::Land as usize] {
@@ -541,6 +608,9 @@ pub(crate) fn animate(
     clock.stride += game_dt * b.speed;
     clock.grind_time = if b.mode == Mode::Grind { clock.grind_time + game_dt } else { 0.0 };
     clock.down = if matches!(b.bail_stage, BailStage::Tumble | BailStage::Lie) { clock.down + game_dt } else { 0.0 };
+    let planted = b.mode == Mode::Grind && b.grind_kind == 16;
+    clock.plant_out = if clock.was_plant && !planted { 0.0 } else { clock.plant_out + game_dt };
+    clock.was_plant = planted;
     for e in &sim.events {
         match e.kind {
             EventKind::Pop => {
@@ -650,7 +720,9 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::GrindNose, Clip::GrindCrooked, Clip::GrindOvercrook, Clip::GrindSmith, Clip::GrindFeeble, Clip::SlideNose, Clip::SlideTail, Clip::SlideLip, Clip::SlideNoseblunt, Clip::SlideBlunt, Clip::Wallride,
     Clip::Stand, Clip::Walk, Clip::Run, Clip::Footplant, Clip::Handplant, Clip::Primo, Clip::Casper, Clip::JumpFoot, Clip::Switch,
     Clip::BailFlail, Clip::BailBack, Clip::Rise, Clip::RiseBack, Clip::GrabSeatbelt, Clip::GrabMute,
-    Clip::GrabJapan, Clip::GrabNosebone, Clip::GrabTailbone, Clip::GrabCrossBone,
+    Clip::GrabJapan, Clip::GrabNosebone, Clip::GrabTailbone, Clip::GrabCrossBone, Clip::BonelessWind,
+    Clip::HandplantBackOff, Clip::HandplantFrontOff, Clip::HandplantNoFoot, Clip::HandplantDown,
+    Clip::HandplantLeft, Clip::HandplantRight,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

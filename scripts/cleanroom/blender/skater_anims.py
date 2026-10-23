@@ -366,6 +366,12 @@ STAND = walk_frame(0.25, 0.0, 0.0, 2.0, 0.0)
 JUMP_FOOT = dict(STAND, hips=(0.0, 0.0, 0.86), hips_rot=(10, 0, 90), lf=foot(0.08, 0.1 - FOOT_Y, 0.16, yaw=90, pitch=-10),
                  rf=foot(-0.1, -0.1 - FOOT_Y, 0.12, yaw=90, pitch=-10), lh=(0.12, 0.26, 0.86), knee_out=0.25)
 
+# The boneless wind-up (a trigger held and push pressed, before the pop): the front foot lifts off
+# the deck and steps down off the toe edge onto the ground, then the back hand reaches down for the
+# board (BL_REACH, where the pop starts).
+BL_LIFT = P(hips=(0.02, -0.03, 0.78), hips_rot=(20, 0, 9), spine=(26, 0, 14), head=(-16, 0, 50),
+            lf=foot(FRONT_X - 0.03, -0.16, 0.2, yaw=28, pitch=-10), rf=foot(BACK_X, 0.0, 0.0, yaw=BACK_YAW),
+            lh=(0.36, -0.22, 0.86), rh=(-0.26, -0.12, 0.62), knee_out=0.45)
 
 # Plants on an edge (the rider sits at the edge; the runtime puts the board in the back hand).
 # Footplant: the front foot planted on the edge, the back knee pulled up with the board in hand,
@@ -389,6 +395,26 @@ HANDPLANT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), h
               lf=foot(0.12, 0.08, 1.48, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.16, 0.1, 1.42, yaw=BACK_YAW, pitch=-70),
               lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.2)
 
+# Handplant variants, held over the plant: a leg kicked out off the board (back / front / both), the
+# body dropped low over the planted hand, or the legs swung to one side.
+HANDPLANT_BACK_OFF = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
+                       lf=foot(0.12, 0.08, 1.48, yaw=FRONT_YAW, pitch=-70), rf=foot(-0.56, 0.16, 1.22, yaw=BACK_YAW, pitch=-20),
+                       lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.15)
+HANDPLANT_FRONT_OFF = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
+                        lf=foot(0.56, 0.16, 1.26, yaw=FRONT_YAW, pitch=-20), rf=foot(-0.16, 0.1, 1.42, yaw=BACK_YAW, pitch=-70),
+                        lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.15)
+HANDPLANT_NO_FOOT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 0, 6), head=(30, 0, 10),
+                      lf=foot(0.5, 0.22, 1.28, yaw=FRONT_YAW, pitch=-20), rf=foot(-0.5, 0.22, 1.24, yaw=BACK_YAW, pitch=-20),
+                      lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.1, 0.66), knee_out=0.1)
+HANDPLANT_DOWN = P(hips=(0.02, 0.1, 0.6), hips_rot=(140, 0, 6), spine=(22, 0, 6), head=(24, 0, 14),
+                   lf=foot(0.14, 0.34, 1.04, yaw=FRONT_YAW, pitch=-50), rf=foot(-0.18, 0.36, 1.0, yaw=BACK_YAW, pitch=-50),
+                   lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.14, 0.56), knee_out=0.35)
+HANDPLANT_LEFT = P(hips=(0.06, 0.06, 0.74), hips_rot=(150, 14, 6), spine=(14, 8, 6), head=(30, 0, 10),
+                   lf=foot(0.42, 0.1, 1.38, yaw=FRONT_YAW, pitch=-60), rf=foot(0.12, 0.12, 1.4, yaw=BACK_YAW, pitch=-60),
+                   lh=(0.06, -0.06, -0.08), rh=(-0.02, 0.1, 0.66), knee_out=0.2)
+HANDPLANT_RIGHT = P(hips=(-0.06, 0.06, 0.74), hips_rot=(150, -14, 6), spine=(14, -8, 6), head=(30, 0, 10),
+                    lf=foot(-0.12, 0.1, 1.4, yaw=FRONT_YAW, pitch=-60), rf=foot(-0.44, 0.12, 1.36, yaw=BACK_YAW, pitch=-60),
+                    lh=(0.06, -0.06, -0.08), rh=(-0.12, 0.1, 0.66), knee_out=0.2)
 
 # Primo: standing tall on the board's upturned edge (it's on its side), arms out to balance.
 # Casper: the board upside down with its tail up, the back foot on the raised tail, the front on
@@ -657,6 +683,14 @@ CLIPS = {
     # the hand goes down to the edge first, still upright, then the body tips over it
     "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT_REACH), (0.29, HANDPLANT_SWING), (0.36, HANDPLANT_TIP), (0.52, HANDPLANT),
                           (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
+    # driven by the engine's wind-up progress (0.6 s long, as the wind-up), ending where the pop starts
+    "boneless_wind": (False, [(0.0, STANCE), (0.22, BL_LIFT), (0.42, NC_STEP), (0.6, BL_REACH)]),
+    "handplant_back_off": (True, loop(lambda t: idle(HANDPLANT_BACK_OFF, t, 0.01, 0.0), IDLE_LEN)),
+    "handplant_front_off": (True, loop(lambda t: idle(HANDPLANT_FRONT_OFF, t, 0.01, 0.0), IDLE_LEN)),
+    "handplant_no_foot": (True, loop(lambda t: idle(HANDPLANT_NO_FOOT, t, 0.01, 0.0), IDLE_LEN)),
+    "handplant_down": (True, loop(lambda t: idle(HANDPLANT_DOWN, t, 0.01, 0.0), IDLE_LEN)),
+    "handplant_left": (True, loop(lambda t: idle(HANDPLANT_LEFT, t, 0.01, 0.0), IDLE_LEN)),
+    "handplant_right": (True, loop(lambda t: idle(HANDPLANT_RIGHT, t, 0.01, 0.0), IDLE_LEN)),
     "primo": (True, loop(lambda t: idle(PRIMO, t, 0.016, 0.05), IDLE_LEN)),
     "casper": (True, loop(lambda t: idle(CASPER, t, 0.012, 0.04), IDLE_LEN)),
     "jump_foot": (False, [(0.0, STAND), (0.12, JUMP_FOOT), (0.5, JUMP_FOOT)]),
@@ -782,7 +816,7 @@ ARM_REACH_MAX = 0.41
 # The bail's hands reach for the ground and are left alone; in a grab only the free hand (above the
 # board) relaxes.
 REACHING = ("bail", "get_up", "powerslide")  # (the powerslide: arms spread wide on purpose)
-GRABBING = ("grab_", "pop_boneless", "footplant", "handplant")
+GRABBING = ("grab_", "pop_boneless", "boneless_wind", "footplant", "handplant")
 
 
 def shoulder(pose, side):
