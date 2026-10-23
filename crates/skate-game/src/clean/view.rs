@@ -167,7 +167,7 @@ fn framing(shot: Shot) -> (f32, f32, f32, f32, f32, f32) {
     match shot {
         Shot::Chase => (3.7, 1.6, 0.7, 0.8, 0.0, 1.0),
         Shot::Crouch => (3.4, 1.2, 0.6, 0.65, 0.0, 1.0),
-        Shot::Manual => (3.1, 1.08, 0.5, 0.6, 0.15, 1.0),
+        Shot::Manual => (3.1, 1.095, 0.5, 0.6, 0.15, 1.0),
         // a small air: framed as on the ground, the camera barely rising with the pop
         Shot::Wall => (3.9, 1.3, 0.0, 1.0, 0.0, 0.3),
         Shot::SmallAir => (3.7, 1.6, 0.7, 0.85, 0.0, 0.25),
@@ -177,7 +177,7 @@ fn framing(shot: Shot) -> (f32, f32, f32, f32, f32, f32) {
         Shot::Grind => (3.3, 1.32, 0.8, 0.75, 0.75, 1.0),
         Shot::GrindSlow => (2.7, 1.2, 0.4, 0.7, 0.6, 1.0),
         Shot::Plant => (4.0, 1.4, 0.0, 1.0, 1.2, 0.5),
-        Shot::OnFoot => (2.9, 1.72, 0.4, 1.22, 0.0, 1.0),
+        Shot::OnFoot => (2.9, 1.72, 0.4, 1.235, 0.0, 1.0),
         Shot::Bail => (4.4, 2.3, 0.0, 0.4, 0.0, 1.0),
     }
 }
