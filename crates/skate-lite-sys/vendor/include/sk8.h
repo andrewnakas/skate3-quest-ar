@@ -250,6 +250,8 @@ void sk8_rider_delete(sk8_rider *rider);
 
 /* Put the rider on the board, standing at position, nose along facing (radians), rolling at speed. */
 void sk8_rider_place(sk8_rider *rider, const float position[3], float facing, float speed);
+/* Test harnesses: put the rider in the air at `position`, moving at `velocity` (m/s). */
+void sk8_rider_launch(sk8_rider *rider, const float position[3], const float velocity[3], float facing);
 void sk8_rider_step(sk8_rider *rider, sk8_world *world, const sk8_input *input);
 void sk8_rider_state(const sk8_rider *rider, sk8_state *state);
 int sk8_rider_poll_event(sk8_rider *rider, sk8_event *event); /* 0 when empty */

@@ -200,9 +200,23 @@ int find_trick(const char *name)
 	return -1;
 }
 
+// Up is wider toward the kick side than the heel side: in the port (a recorded session, 36 flicks)
+// a flick ending up to ~38 degrees right of up was still an ollie, one ~18 degrees left already a
+// heelflip. The other sectors stay 45 degrees, centred on their directions.
+constexpr float kUpHeelEdge = -18.5f, kUpKickEdge = 38.5f; // degrees from up
+
+constexpr int kRevise = 6; // steps after a trick the stick's carrying on can still change it
+
 int sector_of(float x, float y)
 {
 	float a = std::atan2(x, y); // 0 = up, clockwise positive
+	float deg = a * 180 / kPi;
+	if (deg >= kUpHeelEdge && deg < kUpKickEdge)
+		return 0;
+	if (deg >= kUpKickEdge && deg < 67.5f)
+		return 1;
+	if (deg >= -67.5f && deg < kUpHeelEdge)
+		return 7;
 	int s = int(std::lround(a / (kPi / 4)));
 	return ((s % 8) + 8) % 8;
 }
@@ -210,6 +224,7 @@ int sector_of(float x, float y)
 void Flick::reset()
 {
 	tokens_.clear();
+	raw_.clear();
 	pending_ = -1;
 	on_rim_ = false;
 	centre_steps_ = 0;
@@ -292,6 +307,28 @@ Flick::Result Flick::feed(float x, float y)
 {
 	float r = std::sqrt(x * x + y * y);
 	Result out;
+	if (revise_steps_ > 0) {
+		revise_steps_--;
+		if (r >= kRimIn) {
+			int s = sector_of(x, y);
+			if (!raw_.empty() && raw_.back().first == s)
+				raw_.back().second++;
+			else {
+				raw_.push_back({(unsigned char)s, 1});
+				push((unsigned char)s);
+				Result again = swept_shove();
+				if (again.trick >= 0 && again.trick != revise_trick_) {
+					out.revised = revise_trick_ = again.trick;
+				}
+			}
+		}
+		if (revise_steps_ == 0 || r < kCentreIn) {
+			revise_steps_ = 0;
+			reset();
+			spent_ = r >= kCentreIn;
+		}
+		return out;
+	}
 	if (spent_) {
 		if (r < kCentreIn)
 			spent_ = false;
@@ -311,11 +348,17 @@ Flick::Result Flick::feed(float x, float y)
 		// flick across from one that stops in the middle)
 		rim_steps_ = s == last_sector_ ? rim_steps_ + 1 : 0;
 		young_ = rim_steps_ + 1 < kSweepDwell && tokens_.size() >= 1;
+		if (!raw_.empty() && raw_.back().first == s)
+			raw_.back().second++;
+		else
+			raw_.push_back({(unsigned char)s, 1});
 		push((unsigned char)s);
 		last_sector_ = s;
 		on_rim_ = true;
 		centre_steps_ = 0;
-		out = resolve(false);
+		out = swept_shove();
+		if (out.trick < 0)
+			out = resolve(false);
 		// A shove-it's sweep held at its sideways end (instead of let go to the centre): it pops
 		// as the shove-it, and kept there it turns on (held: 360, 540)
 		if (out.trick < 0 && rim_steps_ >= 9) {
@@ -346,9 +389,53 @@ Flick::Result Flick::feed(float x, float y)
 		}
 	}
 	if (out.trick >= 0) {
-		reset();
-		spent_ = r >= kCentreIn;
+		if (r >= kRimIn) { // still on the rim: it may carry on round (read again for a few steps)
+			revise_steps_ = kRevise;
+			revise_trick_ = out.trick;
+		} else {
+			reset();
+			spent_ = r >= kCentreIn;
+		}
 	}
+	return out;
+}
+
+// A quick sweep round the rim from the crouch to the other end (down round a side to up, or up
+// round a side to down for a nollie), each sector on the way passed straight through: a shove-it,
+// the way the port reads one (in a recorded session the fast sweeps were shove-its, even though no
+// sector on the way was held). Through the right side, the pop shove-it; the left, frontside.
+Flick::Result Flick::swept_shove()
+{
+	Result out;
+	if (raw_.size() < 4)
+		return out;
+	unsigned char end = raw_.back().first;
+	if (end != TUp && end != TDown)
+		return out;
+	unsigned char from = end == TUp ? TDown : TUp;
+	// back from the end: the arc of quickly passed sectors, then the crouch it started from
+	int n = int(raw_.size()) - 1, i = n - 1, dir = 0, steps = 0;
+	for (; i >= 0; i--) {
+		unsigned char s = raw_[size_t(i)].first;
+		if (s == from)
+			break;
+		int d = ((raw_[size_t(i) + 1].first - s) + 8) % 8; // around from this sector to the next
+		int way = d == 1 ? 1 : d == 7 ? -1 : 0;
+		if (way == 0 || (dir != 0 && way != dir) || raw_[size_t(i)].second > kSweepDwell)
+			return out;
+		dir = way;
+		steps++;
+	}
+	if (i < 0 || steps < 2 || raw_[size_t(i)].second < 3) // a crouch held, then at least two passed through
+		return out;
+	if (((raw_[size_t(i) + 1].first - from + 8) % 8) != (dir == 1 ? 1 : 7))
+		return out;
+	// clockwise from down (round the right) is the pop shove-it; for a nollie, round the right too
+	// (sectors count clockwise from up: down round the right is down, down-right, right... falling)
+	bool right = end == TUp ? dir == -1 : dir == 1;
+	const char *name = end == TUp ? (right ? "Pop Shove-it" : "Frontside Shove-it")
+								  : (right ? "Nollie Shove-it" : "Nollie Frontside Shove-it");
+	out.trick = find_trick(name);
 	return out;
 }
 

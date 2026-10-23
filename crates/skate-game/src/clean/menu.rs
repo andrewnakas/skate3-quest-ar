@@ -373,7 +373,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             info_row("Late flips from up: back-foot flips. Slow + left stick hard over: kickturn. Left stick on a 5-0: salad / willy."),
             info_row("Grabbing: swirl the right stick (finger flip), R down + left stick (shifty), B (airwalk / superman)."),
             info_row("Grabs: point the right stick, then pull a trigger: up tail / seatbelt, down crail / nose,"),
-            info_row("  sideways stalefish / mute / stiffy, both triggers double, centred melon / indy."),
+            info_row("  sideways stalefish / mute / stiffy, both triggers double, centred frontside / backside grab."),
             info_row("  Trigger first, then push the stick: tweaks (nosebone, tailbone, japan, cross bone...)."),
         ],
         1 => {

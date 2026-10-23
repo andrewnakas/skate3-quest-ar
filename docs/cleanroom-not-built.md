@@ -16,6 +16,28 @@ in sk8. "Probed" means tried with s3trace (scratch probe harness: `probe/probe.p
 `rail.py`, `batch2.py`, `dark.py`); "needs you" means the input was not found and is best shown by
 playing the web port with the recorder (`recserver.py` on :8771), as for the plants.
 
+## Replaying the recorded session through sk8 (2026-10-23)
+Tools (scratch): `rec.jsonl` (the port session), `replay.py` (windows from the port's last ground tick),
+`airs.py` (each air launched at the port's takeoff, `sk8trace --vel`), `grinds.py`, `flips2.py` (each
+recorded stick path through s3trace and sk8, both regular stance). The park is KenneyPark dumped by
+`build/mapdump` (collision + the port's derived grind lines) for `sk8trace --mesh ... --host-map`.
+- Flicks: 39/43 recorded ground flicks named as the port names them for the same stick path. Fixed from
+  the session: the up sector is wider toward the kick side (-18.5..+38.5 deg: 27/27 ollies), quick
+  sweeps round the rim are shove-its, a flick read on arrival can be re-read during the takeoff.
+  Open: the 3 flicks started from a crouch held LEFT (tre, varial kickflip, 360 inward heelflip from
+  L-L-DL-D-DR-...) - the port reads them, we don't; one kickflip flicked up then on to up-right.
+- Air moves: late backfoot flips are "stick held up, then snapped down" (2/3 replayed), grab names now
+  the port's (Backside / Frontside / Crail / Seatbelt / Mute Grab), spins named on the trick ("Ollie 180")
+  or Frontside / Backside 180 with no trick (left stick left = backside, probed).
+- Grinds: the port pulls an air sideways onto a rail (~0.8 m, grind_assist 4.4 m/s^2), never catches a
+  rail while still rising, pops off only on an up flick, lets the left stick spin the board near rails
+  (how slides are set up) and changes a 50-50 with the left stick. 1/8 replayed catches named alike: the
+  rest depend on the stance the recording doesn't hold (switch swaps sides), on ground-started flips
+  (darkslides) and on rough launch velocities (the recorded position is the body root).
+- Open: slide kinds by the right stick (the port gave a boardslide where we give a tailslide with the
+  stick down) and the frontside / backside naming of slides.
+- Drop-ins: not doable in the port either (Y never dropped in for the user); dropped from the list.
+
 ## Moves
 
 ### Not found in the port with any input tried (needs you)

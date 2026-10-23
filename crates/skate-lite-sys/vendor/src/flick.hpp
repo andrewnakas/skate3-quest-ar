@@ -49,11 +49,21 @@ public:
 		int trick = -1;     // index into trick_table(), -1 = nothing yet
 		bool fallback = false;
 		bool crouch_let_go = false; // held down (the crouch), let go to the centre and no flick followed
+		int revised = -1;   // a trick already returned, read again as the stick carried on (see feed)
 	};
 
 	// Feed one stick sample. Returns a trick the moment one completes.
 	Result feed(float x, float y);
 	void reset();
+	Result swept_shove();
+	// in the air after a pop: a new flick may start from wherever the stick is held (as the port:
+	// held up after the ollie, then flicked down, a late backfoot flip)
+	void rearm()
+	{
+		reset();
+		spent_ = false;
+		revise_steps_ = 0;
+	}
 
 	// The first token held so far (the crouch), or -1.
 	int lead() const { return tokens_.empty() ? -1 : tokens_[0]; }
@@ -67,8 +77,14 @@ private:
 	Result resolve(bool ending);
 
 	std::vector<unsigned char> tokens_;
+	// every rim sector the stick has passed through since the last reset (no dwell filtering),
+	// with how many steps it stayed in each: for quick sweeps round the rim
+	std::vector<std::pair<unsigned char, int>> raw_;
 	bool on_rim_ = false;
 	bool spent_ = false;
+	// after a trick: a few more steps the stick may carry on (a sweep on round to the end) and the
+	// trick be read again, as the port reads the whole flick by the takeoff
+	int revise_steps_ = 0, revise_trick_ = -1;
 	int centre_steps_ = 0;
 	int rim_steps_ = 0; // steps the stick has stayed in one rim sector
 	bool young_ = false; // the newest rim sector is only just reached (may be a sweep passing through)

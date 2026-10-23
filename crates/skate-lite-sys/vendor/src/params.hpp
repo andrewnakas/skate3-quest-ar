@@ -19,7 +19,7 @@ enum Param : int
 	// Bails
 	LandClean, LandMax, SideMax, LandSkid, WallBail, ImpactBail, BailTime, BailSlide, Rise,
 	// Grinds
-	GrindCatch, GrindDrag, GrindBalance, GrindKeep, GrindOffKeep, PlantStall,
+	GrindCatch, GrindDrag, GrindBalance, GrindKeep, GrindOffKeep, PlantStall, GrindAssist,
 	// Manuals
 	ManualWobble, ManualCorrect, ManualHold, ManualDrag, ManualLand,
 	// Scoring
