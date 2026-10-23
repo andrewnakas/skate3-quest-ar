@@ -283,6 +283,73 @@ fn demo_grinds(t: f32, s: &skate_lite_sys::State, rail: Option<[Vec3; 2]>) -> In
     i
 }
 
+/// `SK8_DEMO=extras`: the port's smaller moves, one per slot: a kickflip underflip (the opposite
+/// flick just after the pop), a one-foot ollie (A held in the air), an indy one foot (a trigger, then
+/// A), a board adjust (the right stick held up then sideways in the air), a ground grab (the right
+/// trigger rolling along) and a grab on a rail (the right trigger on a 50-50).
+const EXTRA_EACH: f32 = 3.5;
+const EXTRA_SLOTS: usize = 6;
+fn demo_extras(t: f32, s: &skate_lite_sys::State) -> Input {
+    let d = t % EXTRA_EACH;
+    let slot = (t / EXTRA_EACH) as usize % EXTRA_SLOTS;
+    let mut i = Input::default();
+    let ollie = |i: &mut Input| {
+        if (0.15..0.5).contains(&d) {
+            i.flick = [0.0, -1.0];
+        } else if (0.5..0.6).contains(&d) {
+            i.flick = [0.0, 1.0];
+        }
+    };
+    match slot {
+        0 => {
+            // the kickflip's own stick path (as SK8_DEMO=flips plays it), then up-left at once
+            let kick = skate_lite_sys::trick_names().iter().position(|n| *n == "Kickflip").unwrap_or(0);
+            let path = skate_lite_sys::trick_demo_path(kick);
+            let k = ((d - 0.15).max(0.0) * 60.0) as usize;
+            let k = if k < 4 { k } else if k < 24 { 4 } else { k - 19 };
+            if let Some(p) = path.get(k) {
+                i.flick = *p;
+            } else if k < path.len() + 6 {
+                i.flick = [-0.7071, 0.7071];
+            }
+        }
+        1 => {
+            ollie(&mut i);
+            if (0.75..1.3).contains(&d) {
+                i.buttons |= buttons::PUSH;
+            }
+        }
+        2 => {
+            ollie(&mut i);
+            if (0.7..1.4).contains(&d) {
+                i.buttons |= buttons::GRAB_RIGHT;
+            }
+            if (0.85..1.35).contains(&d) {
+                i.buttons |= buttons::PUSH;
+            }
+        }
+        3 => {
+            ollie(&mut i);
+            // (held from the centre: one way only, or the stick's path reads as a late flick)
+            if (0.8..1.35).contains(&d) {
+                i.flick = [0.0, 1.0];
+            }
+        }
+        4 => {
+            if (0.3..2.4).contains(&d) {
+                i.buttons |= buttons::GRAB_RIGHT;
+            }
+        }
+        _ => {
+            ollie(&mut i);
+            if s.mode == skate_lite_sys::Mode::Grind {
+                i.buttons |= buttons::GRAB_RIGHT;
+            }
+        }
+    }
+    i
+}
+
 /// The demo's rail for slot `n`, from the spawn (straight ahead along `fwd`).
 fn demo_rail(n: usize, at: Vec3, fwd: Vec3) -> [Vec3; 2] {
     let (slide, ..) = GRIND_SLOTS[n % GRIND_SLOTS.len()];
@@ -589,6 +656,7 @@ fn demo_slot(t: f32) -> Option<usize> {
         Ok("manual") => Some((t / MANUAL_EACH) as usize),
         Ok("oldschool") => Some((t / OLD_EACH) as usize),
         Ok("grinds") => Some((t / GRIND_EACH) as usize),
+        Ok("extras") => Some((t / EXTRA_EACH) as usize),
         Ok("revert") => Some((t / REVERT_EACH) as usize),
         Ok("switch") => Some((t / SWITCH_EACH) as usize),
         Ok("wallride") => Some((t / WALL_EACH) as usize),
@@ -655,6 +723,17 @@ pub(crate) fn read_desktop(
                 sim.place_rolling(Vec3::new(10.0, 0.0, 14.0), std::f32::consts::FRAC_PI_2, 13.0);
             } else if demo_kind == "bail" {
                 sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 7.0);
+            } else if demo_kind == "extras" {
+                sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, 6.5);
+                sim.world.clear_rails();
+                sim.demo_rail = None;
+                if slot.unwrap_or(0) % EXTRA_SLOTS == EXTRA_SLOTS - 1 {
+                    let s = sim.current;
+                    let fwd = Quat::from_array(s.rider_rot) * Vec3::Z;
+                    let rail = demo_rail(0, Vec3::from_array(s.position), fwd);
+                    sim.world.add_rail(&[rail[0].to_array(), rail[1].to_array()]);
+                    sim.demo_rail = Some(rail);
+                }
             } else if demo_kind == "grinds" {
                 let (slide, ..) = GRIND_SLOTS[slot.unwrap_or(0) % GRIND_SLOTS.len()];
                 sim.place_rolling(Vec3::ZERO, std::f32::consts::PI, if slide { 7.5 } else { 6.0 });
@@ -682,6 +761,7 @@ pub(crate) fn read_desktop(
             Ok("manual") => demo_manual(*t),
             Ok("oldschool") => demo_oldschool(*t),
             Ok("grinds") => demo_grinds(*t, &sim.current, sim.demo_rail),
+            Ok("extras") => demo_extras(*t, &sim.current),
             Ok("revert") => demo_revert(*t),
             Ok("switch") => demo_switch(*t),
             Ok("wallride") => demo_wallride(*t, &sim.current),

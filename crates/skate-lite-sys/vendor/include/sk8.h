@@ -117,7 +117,8 @@ typedef struct sk8_state
 	float lean;          /* -1..1 */
 	float push_phase;    /* 0..1 through a stroke (foot plants at SK8_PUSH_PLANT, lifts at
 	                      * SK8_PUSH_RELEASE), -1 otherwise */
-	int grab;            /* 0 none, 1 left, 2 right, 3 both */
+	int grab;            /* hands on the board (1 left trigger, 2 right, 3 both): in the air a grab,
+	                      * rolling along a ground grab */            /* 0 none, 1 left, 2 right, 3 both */
 	float flip_progress; /* 0..1 during a flip trick (and while a flip landed short settles), -1 otherwise */
 	float balance;       /* -1..1 manual / grind balance */
 	float air_time;
@@ -145,6 +146,8 @@ typedef struct sk8_state
 	float bail_stage_time; /* seconds into the bail stage */
 	float plant_wind;      /* 0..1 through a boneless's wind-up (front foot stepping down), -1 otherwise */
 	int plant_pose;        /* on a handplant: sk8_plant_pose bits (feet off, body dropped / swung) */
+	int air_feet;          /* in the air: a foot held off the board (sk8_plant_pose foot bits) */
+	int grind_grab;        /* on a rail: a hand on the board (1 front hand, 2 back hand), 0 none */
 } sk8_state;
 
 typedef enum sk8_plant_pose

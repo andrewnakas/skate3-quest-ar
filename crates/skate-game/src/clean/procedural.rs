@@ -63,6 +63,11 @@ const PIN_BLEND: f32 = 0.06;
 /// The foot stays on the deck: at most this far off its centre line, and inside the trucks' span.
 const PIN_HALF_WIDTH: f32 = 0.07;
 const PIN_HALF_LEN: f32 = 0.36;
+/// A foot held off the board in the air reaches out past its own end of the deck, a little to the
+/// side and below it (deck space, m).
+const FOOT_OFF_SIDE: f32 = 0.1;
+const FOOT_OFF_LEN: f32 = 0.62;
+const FOOT_OFF_DROP: f32 = 0.24;
 /// Room left between the feet and a flipping board (m).
 const FLIP_ROOM: f32 = 0.09;
 /// The pushing foot: seconds to take hold of the ground at the plant, and to lift off it (rising
@@ -97,6 +102,8 @@ pub(crate) struct Motion {
     last_vel: Option<Vec3>,
     air_vy: f32,
     pin: [f32; 2],
+    /// 0..1 per leg: a foot held off the board in the air (one-foot ollies and grabs).
+    foot_off: [f32; 2],
     ground: Ground,
     /// This stroke's foot has planted already (one plant per stroke).
     planted: bool,
@@ -504,9 +511,16 @@ pub(crate) fn layer(
     let sole = skater::DECK_TOP - skater::DECK_CENTRE;
     // Pinned feet turn with the deck (manual pitch, carve roll, powerslide yaw, the pop).
     let tilt = pin_tf.rotation * rider_rot.inverse();
+    // the front leg (the left one, or the right when the body is mirrored)
+    let front_leg = if mirrored { 1 } else { 0 };
     for (i, chain) in set.legs.iter().enumerate() {
         let Some(ankle) = ankles.get(i).copied() else { continue };
         let height = deck_inv.transform_point3(ankle).y - sole - skater::ANKLE;
+        let off_bit = if i == front_leg { skate_lite_sys::plant_pose::FRONT_FOOT } else { skate_lite_sys::plant_pose::BACK_FOOT };
+        let off = s.mode == Mode::Air && s.air_feet & off_bit != 0;
+        if dt > 0.0 {
+            motion.foot_off[i] += ((off as u8 as f32) - motion.foot_off[i]) * (1.0 - (-dt / 0.15).exp());
+        }
         // The foot rides with the deck: its spot on the deck the clip meant, carried to where the
         // deck really is (so a powerslide, manual or pop turns the feet with it instead of sliding).
         let mut local = rest_inv.transform_point3(ankle);
@@ -518,7 +532,7 @@ pub(crate) fn layer(
             // The board is in the hands: the feet are off it.
             Mode::Air if motion.held > 0.5 || hippie || s.on_foot => false,
             // the board turned under the body (a body varial): the feet are off it
-            Mode::Air => !flipping && !deck_turned,
+            Mode::Air => !flipping && !deck_turned && !off,
             // The pushing foot is on the ground (the back foot, or the front one pushing mongo), and
             // lets go of the deck as it steps off.
             Mode::Ride if s.push_phase.is_some() || s.push_start.is_some_and(|k| k > 0.4) => i != pusher,
@@ -538,6 +552,15 @@ pub(crate) fn layer(
             motion.pin[i] *= (-dt / 0.025).exp(); // quickly, over two or three frames
         }
         let w = motion.pin[i];
+        let lift = motion.foot_off[i];
+        // (the pin, fading out, then pulls from where the lifted foot is, not the clip's)
+        let mut base = ankle;
+        if lift > 1e-3 {
+            let end = if i == front_leg { FOOT_OFF_LEN } else { -FOOT_OFF_LEN };
+            let out = deck_m.transform_point3(Vec3::new(FOOT_OFF_SIDE, -FOOT_OFF_DROP, end));
+            base = ankle.lerp(out, skater::smooth01(lift));
+            two_bone(*chain, base, Quat::IDENTITY, rider, &mut bones);
+        }
         if w < 1e-3 {
             continue;
         }
@@ -546,7 +569,7 @@ pub(crate) fn layer(
         // on the deck's real surface: concave across, rising up the nose and tail
         let u = local.x / (super::board::DECK_WIDTH * 0.5);
         local.y = super::board::deck_top(local.z, u) + skater::ANKLE;
-        let target = ankle.lerp(deck_m.transform_point3(local), w);
+        let target = base.lerp(deck_m.transform_point3(local), w);
         two_bone(*chain, target, Quat::IDENTITY.slerp(tilt, w), rider, &mut bones);
     }
 

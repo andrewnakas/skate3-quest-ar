@@ -373,6 +373,14 @@ BL_LIFT = P(hips=(0.02, -0.03, 0.78), hips_rot=(20, 0, 9), spine=(26, 0, 14), he
             lf=foot(FRONT_X - 0.03, -0.16, 0.2, yaw=28, pitch=-10), rf=foot(BACK_X, 0.0, 0.0, yaw=BACK_YAW),
             lh=(0.36, -0.22, 0.86), rh=(-0.26, -0.12, 0.62), knee_out=0.45)
 
+# A hand on the board rolling along (a trigger held on the ground; also blended over a grind for a
+# grab on the rail): crouched low, the back hand on the toe edge between the feet, or the front hand
+# on the heel edge.
+GROUND_GRAB_BACK = P(hips=(0.0, -0.05, 0.52), hips_rot=(42, 0, 10), spine=(52, 0, 18), head=(-38, 0, 46),
+                     lh=(0.36, -0.22, 0.62), rh=(-0.02, -0.13, 0.06), knee_out=0.55)
+GROUND_GRAB_FRONT = P(hips=(0.02, 0.05, 0.52), hips_rot=(40, 0, 4), spine=(52, 0, 4), head=(-38, 0, 48),
+                      lh=(0.06, 0.13, 0.06), rh=(-0.34, -0.1, 0.62), knee_out=0.55)
+
 # Plants on an edge (the rider sits at the edge; the runtime puts the board in the back hand).
 # Footplant: the front foot planted on the edge, the back knee pulled up with the board in hand,
 # the front arm out. Handplant: the front hand planted on the edge, the body tipped up over it
@@ -684,6 +692,8 @@ CLIPS = {
     "handplant": (False, [(0.0, AIR_TUCK), (0.22, HANDPLANT_REACH), (0.29, HANDPLANT_SWING), (0.36, HANDPLANT_TIP), (0.52, HANDPLANT),
                           (1.1, idle(HANDPLANT, 0.25, 0.01, 0.0))]),
     # driven by the engine's wind-up progress (0.6 s long, as the wind-up), ending where the pop starts
+    "ground_grab_back": (True, loop(lambda t: idle(GROUND_GRAB_BACK, t, 0.008, 0.0), IDLE_LEN)),
+    "ground_grab_front": (True, loop(lambda t: idle(GROUND_GRAB_FRONT, t, 0.008, 0.0), IDLE_LEN)),
     "boneless_wind": (False, [(0.0, STANCE), (0.22, BL_LIFT), (0.42, NC_STEP), (0.6, BL_REACH)]),
     "handplant_back_off": (True, loop(lambda t: idle(HANDPLANT_BACK_OFF, t, 0.01, 0.0), IDLE_LEN)),
     "handplant_front_off": (True, loop(lambda t: idle(HANDPLANT_FRONT_OFF, t, 0.01, 0.0), IDLE_LEN)),
@@ -816,7 +826,7 @@ ARM_REACH_MAX = 0.41
 # The bail's hands reach for the ground and are left alone; in a grab only the free hand (above the
 # board) relaxes.
 REACHING = ("bail", "get_up", "powerslide")  # (the powerslide: arms spread wide on purpose)
-GRABBING = ("grab_", "pop_boneless", "boneless_wind", "footplant", "handplant")
+GRABBING = ("grab_", "ground_grab", "pop_boneless", "boneless_wind", "footplant", "handplant")
 
 
 def shoulder(pose, side):

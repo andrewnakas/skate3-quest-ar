@@ -117,9 +117,12 @@ enum Clip {
     HandplantDown,
     HandplantLeft,
     HandplantRight,
+    /// A hand on the board rolling along (also blended over a grind: a grab on the rail).
+    GroundGrabBack,
+    GroundGrabFront,
 }
 
-const CLIPS: usize = 78;
+const CLIPS: usize = 80;
 const GRAB_FIRST: usize = Clip::GrabIndy as usize;
 pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_ride", "sk8_crouch", "sk8_pop", "sk8_air", "sk8_flip_kick", "sk8_flip_heel", "sk8_flip_shuv", "sk8_land", "sk8_push", "sk8_manual",
@@ -135,10 +138,13 @@ pub(crate) const CLIP_NAMES: [&str; CLIPS] = [
     "sk8_grab_seatbelt", "sk8_grab_mute", "sk8_grab_japan", "sk8_grab_nosebone", "sk8_grab_tailbone",
     "sk8_grab_cross_bone", "sk8_boneless_wind", "sk8_handplant_back_off", "sk8_handplant_front_off",
     "sk8_handplant_no_foot", "sk8_handplant_down", "sk8_handplant_left", "sk8_handplant_right",
+    "sk8_ground_grab_back", "sk8_ground_grab_front",
 ];
 /// Clips that loop (idles and the push); the rest play once and hold their last frame.
-const LOOPED: [Clip; 33] = [
+const LOOPED: [Clip; 35] = [
     Clip::BailFlail,
+    Clip::GroundGrabBack,
+    Clip::GroundGrabFront,
     Clip::HandplantBackOff,
     Clip::HandplantFrontOff,
     Clip::HandplantNoFoot,
@@ -382,6 +388,8 @@ fn blend_time(clip: Clip) -> f32 {
         Clip::Stand | Clip::Walk | Clip::Run => 0.18,
         Clip::Footplant | Clip::Handplant => 0.08,
         Clip::BonelessWind => 0.08,
+        // crouching down to the board (or onto it on a rail): a moment
+        Clip::GroundGrabBack | Clip::GroundGrabFront => 0.14,
         // a leg kicked out / the body shifting on the planted hand: a moment, not a snap
         Clip::HandplantBackOff
         | Clip::HandplantFrontOff
@@ -568,6 +576,9 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
             } else if c.since_push < len[Clip::StepOn as usize] {
                 let clip = if s.push_mongo { Clip::StepOnMongo } else { Clip::StepOn };
                 set(clip, 1.0, c.since_push);
+            } else if s.grab != 0 {
+                // a hand on the board rolling along: the back hand (right trigger), or the front
+                set(if s.grab & 2 != 0 { Clip::GroundGrabBack } else { Clip::GroundGrabFront }, 1.0, c.idle);
             } else if s.foot_off {
                 // old school: the front foot steps down off the board onto the ground as the
                 // crouch loads (the no comply's first pose), ready to spring off it at the pop
@@ -579,6 +590,12 @@ fn targets(s: &State, c: &Clock, trick: &str, len: &[f32; CLIPS]) -> [(f32, Opti
                 set(Clip::Crouch, s.crouch, c.idle);
             }
         }
+    }
+    // a grab on a rail: the hand down to the board over the grind's own pose
+    if s.mode == Mode::Grind && s.grind_grab != 0 && s.grind_kind < 15 {
+        let clip = if s.grind_grab == 2 { Clip::GroundGrabBack } else { Clip::GroundGrabFront };
+        let l = len[clip as usize];
+        t[clip as usize] = (3.0, Some(c.idle.rem_euclid(l)));
     }
     t
 }
@@ -722,7 +739,7 @@ const CLIP_ORDER: [Clip; CLIPS] = [
     Clip::BailFlail, Clip::BailBack, Clip::Rise, Clip::RiseBack, Clip::GrabSeatbelt, Clip::GrabMute,
     Clip::GrabJapan, Clip::GrabNosebone, Clip::GrabTailbone, Clip::GrabCrossBone, Clip::BonelessWind,
     Clip::HandplantBackOff, Clip::HandplantFrontOff, Clip::HandplantNoFoot, Clip::HandplantDown,
-    Clip::HandplantLeft, Clip::HandplantRight,
+    Clip::HandplantLeft, Clip::HandplantRight, Clip::GroundGrabBack, Clip::GroundGrabFront,
 ];
 
 pub(crate) fn smooth01(x: f32) -> f32 {

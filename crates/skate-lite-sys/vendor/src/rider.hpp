@@ -40,6 +40,10 @@ private:
 	void walk(World &w, const sk8_input &in);
 
 	void pop(const TrickDef &def, float share);
+	void flick_dir(float out[2]) const;
+	bool opposite_flick(const float dir[2]) const;
+	void start_underflip();
+	std::string grind_full_name() const;
 	static int plant_bits(const sk8_input &in);
 	std::string plant_variant(int bits) const;
 	void start_flip(int trick);
@@ -117,6 +121,21 @@ private:
 	// held flicks: the stick kept at the flick's last direction adds turns (double .. quad)
 	float flip_mult_ = 1, flip_dir_[2] = {0, 0}, last_flick_[2] = {0, 0};
 	int flip_extra_ = 0;
+	// an underflip: the angle (turns) the board turned back at (-1 none), and how much faster it goes
+	// round to land when the flip would have; the flick's way kept through the takeoff, and the
+	// opposite way flicked during it
+	float under_a0_ = -1, flip_speed_ = 1, takeoff_dir_[2] = {0, 0};
+	bool under_wanted_ = false;
+	// a foot off in the air (sk8_plant_pose foot bits): asked for, how long, shown, scored this air
+	int air_feet_ = 0, air_feet_want_ = 0;
+	float air_feet_time_ = 0;
+	bool air_feet_scored_ = false;
+	float adjust_[2] = {0, 0}; // a board adjust in the air (the right stick, eased)
+	int ground_grab_ = 0;      // a hand on the board rolling along (1 left trigger, 2 right)
+	// a grab on a rail (0 none, 1 front hand, 2 back hand): held, asked for and how long
+	int grind_grab_ = 0, grind_grab_want_ = 0;
+	float grind_grab_time_ = 0;
+	std::string grind_side_; // "Backside " / "Frontside "
 	float pop_y_ = 0; // height the last pop left from
 	float varial_ = 0;
 	bool foot_air_ = false; // jumped on foot: lands back on its feet, the board in hand // body varial: how far the body has turned on its own, the board staying

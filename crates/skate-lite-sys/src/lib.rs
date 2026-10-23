@@ -114,6 +114,8 @@ struct RawState {
     bail_stage_time: f32,
     plant_wind: f32,
     plant_pose: c_int,
+    air_feet: c_int,
+    grind_grab: c_int,
 }
 
 /// A bail's stages (`sk8_bail_stage`).
@@ -198,6 +200,10 @@ pub struct State {
     pub plant_wind: Option<f32>,
     /// On a handplant: [`plant_pose`] bits (feet off, body dropped / swung).
     pub plant_pose: u32,
+    /// In the air: a foot held off the board ([`plant_pose`] foot bits).
+    pub air_feet: u32,
+    /// On a rail: a hand on the board (1 front hand, 2 back hand), 0 none.
+    pub grind_grab: u32,
     /// 0 none, 1 axle, 2 board slide, 3 nose, 4 tail.
     pub grind_kind: u32,
     pub combo_points: u32,
@@ -241,6 +247,8 @@ impl From<RawState> for State {
             bail_back: r.bail_dir < 0,
             plant_wind: (r.plant_wind >= 0.0).then_some(r.plant_wind),
             plant_pose: r.plant_pose as u32,
+            air_feet: r.air_feet as u32,
+            grind_grab: r.grind_grab as u32,
             grind_kind: r.grind_kind as u32,
             combo_points: r.combo_points,
             combo_count: r.combo_count,

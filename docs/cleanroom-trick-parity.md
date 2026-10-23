@@ -104,6 +104,28 @@ Verify each: `make sk8-test`, `SK8_DEMO=<slot> SK8_ANIM_TRACE=1 SK8_FIXED_DT=1`,
   held on into a boardslide, left lipslide, up-left overcrook, down-left willy; left stick back for
   smith/feeble/salad/suski), moving it on the rail transfers, let go it stays; pop off a rail as
   high as the port (grind_pop 0.7)
+- Probed in the port 2026-10-23 (scratch probe/: probe.py harness, s3trace, motion-state paths), then
+  built in sk8:
+  - one-foot ollies: A held in the air takes the front foot off ("One Foot Ollie"), X the back
+    foot ("Back Foot Ollie"); with a grab held, a one-foot grab ("Indy One Foot"); B while grabbing
+    lets go of the board (a dismount: the port wipes out)
+  - underflips: a kickflip / heelflip then the mirror flick (up-left / up-right) by just after the
+    pop; the board carries on ~a third of a turn, turns back and goes round once the other way,
+    landing when the flip would have (port deck roll -120 then +360; ours -100 then +360)
+  - board adjusts: the right stick held in a plain air turns the board under the feet (nose up /
+    down, swung sideways); the port scores nothing for them
+  - ground grabs: a trigger held rolling along crouches with a hand on the board (a pose in the
+    port too, no score; a manual or powerslide lets go)
+  - grind grabs: a trigger on a rail grabs the board, which grab by where the board's weighted
+    (port: 50-50 RT backside / LT frontside, nosegrind RT backside / LT tail, 5-0 RT nose / LT
+    frontside, crooked / overcrook LT tail); scored like a transfer
+  - grinds named Frontside / Backside: the rail on the right of the way it's going is backside (as
+    the port names its test rail; its default skater is goofy, so the port's names follow the
+    input / screen side, not the body - ours do the same), swapped rolling fakie
+  - not found in the port with any input tried: dark catches, kickturns / manual snap-arounds,
+    shifties (a grab plus either stick), grab hops; pumping gives no clear gain (its half pipe
+    keeps ~10 m/s anyway), and its test course's coping box cuts vert speed, so vert height and
+    drop-ins can't be compared there (no deck to drop in from)
 - Walls: at riding speed (7.5-9 m/s measured) the port stops against a wall without bailing; sk8
   now bails only above 11.6 m/s
 - Not measured: kickers (KenneyPark geometry isn't loadable in sk8trace), the hard-landing
