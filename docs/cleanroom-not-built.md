@@ -50,6 +50,13 @@ recorded stick path through s3trace and sk8, both regular stance). The park is K
   side; the misses are darkslides (their flip starts on the ground, before the launch), switch /
   fakie ones, and catches the replay doesn't reach. Wasm vs native float differences make the port's
   own replay drift (identical inputs, mm per second), so whole-session replay isn't exact.
+- Later the same day: air spins as the port's (probed with held-stick lengths): held ~0.13 s before
+  a spin starts (a tap does nothing), quick to speed (spin_rate 7.95), carry on when let go (~0.6 s
+  coast); our body varial stays immediate. Switch mirrors the right stick's sides for grinds and the
+  slide families. A board landing ~20-55 deg off the rail picks crooked / salad / overcrook by side
+  (probed). Grind replay with stance + ground-started darkslides: 4/12.
+- Point values: the port's per-trick points vary with the air (a heelflip 48-125 in one session) and
+  copying its table would be its data; ours keep their own scale (about 4-10x the port's).
 - Replay: the browser's logged position is a presentation snapshot (a step either side of the
   simulation), and an s3trace replay of the same inputs splits off at a wipeout ~tick 3500. The
   recorder now also logs the simulation's own rider position / velocity, the rider's frame and the
