@@ -417,6 +417,9 @@ HANDPLANT_NO_FOOT = P(hips=(0.02, 0.06, 0.74), hips_rot=(158, 0, 6), spine=(14, 
 HANDPLANT_DOWN = P(hips=(0.02, 0.1, 0.6), hips_rot=(140, 0, 6), spine=(22, 0, 6), head=(24, 0, 14),
                    lf=foot(0.14, 0.34, 1.04, yaw=FRONT_YAW, pitch=-50), rf=foot(-0.18, 0.36, 1.0, yaw=BACK_YAW, pitch=-50),
                    lh=(0.06, -0.06, -0.08), rh=(-0.08, 0.14, 0.56), knee_out=0.35)
+HANDPLANT_UP = P(hips=(0.02, 0.04, 0.86), hips_rot=(172, 0, 6), spine=(8, 0, 6), head=(36, 0, 8),
+                 lf=foot(0.08, 0.04, 1.66, yaw=FRONT_YAW, pitch=-82), rf=foot(-0.12, 0.06, 1.62, yaw=BACK_YAW, pitch=-82),
+                 lh=(0.06, -0.06, -0.08), rh=(-0.06, 0.08, 0.74), knee_out=0.1)
 HANDPLANT_LEFT = P(hips=(0.06, 0.06, 0.74), hips_rot=(150, 14, 6), spine=(14, 8, 6), head=(30, 0, 10),
                    lf=foot(0.42, 0.1, 1.38, yaw=FRONT_YAW, pitch=-60), rf=foot(0.12, 0.12, 1.4, yaw=BACK_YAW, pitch=-60),
                    lh=(0.06, -0.06, -0.08), rh=(-0.02, 0.1, 0.66), knee_out=0.2)
@@ -699,6 +702,7 @@ CLIPS = {
     "handplant_front_off": (True, loop(lambda t: idle(HANDPLANT_FRONT_OFF, t, 0.01, 0.0), IDLE_LEN)),
     "handplant_no_foot": (True, loop(lambda t: idle(HANDPLANT_NO_FOOT, t, 0.01, 0.0), IDLE_LEN)),
     "handplant_down": (True, loop(lambda t: idle(HANDPLANT_DOWN, t, 0.01, 0.0), IDLE_LEN)),
+    "handplant_up": (True, loop(lambda t: idle(HANDPLANT_UP, t, 0.01, 0.0), IDLE_LEN)),
     "handplant_left": (True, loop(lambda t: idle(HANDPLANT_LEFT, t, 0.01, 0.0), IDLE_LEN)),
     "handplant_right": (True, loop(lambda t: idle(HANDPLANT_RIGHT, t, 0.01, 0.0), IDLE_LEN)),
     "primo": (True, loop(lambda t: idle(PRIMO, t, 0.016, 0.05), IDLE_LEN)),

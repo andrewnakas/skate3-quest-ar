@@ -81,7 +81,7 @@ const sk8_param kTable[ParamCount] = {
 	{"manual_land", "After a landing, s before a fresh manual (held into it: at once)", kManuals, 0.0f, 2.0f, 0.75f, 0.05f},
 
 	{"score_scale", "Score multiplier", kScore, 0.0f, 100.0f, 1.0f, 0.1f},
-	{"bank_wait", "Roll-away to bank, s", kScore, 0.0f, 5.0f, 0.95f, 0.05f},
+	{"bank_wait", "Roll-away to bank, s", kScore, 0.0f, 5.0f, 1.2f, 0.05f},
 	{"grind_rate", "Grind points per second", kScore, 0.0f, 1000.0f, 65.0f, 5.0f},
 	{"manual_rate", "Manual points per second", kScore, 0.0f, 1000.0f, 45.0f, 5.0f},
 };

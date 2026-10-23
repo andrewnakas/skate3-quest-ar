@@ -157,6 +157,8 @@ typedef struct sk8_state
 	float best_grind;      /* metres on one rail */
 	float best_manual;     /* metres in one manual */
 	unsigned best_tricks;  /* tricks in one line */
+	int dark;              /* 1: the board caught upside down under the feet in the air (a darkcatch) */
+	float kickturn;        /* seconds into a kickturn (nose up, pivoting), 0 none */
 } sk8_state;
 
 typedef enum sk8_plant_pose
@@ -166,6 +168,7 @@ typedef enum sk8_plant_pose
 	SK8_PLANT_DOWN = 4,       /* the body dropped low over the hand */
 	SK8_PLANT_LEFT = 8,       /* legs swung to the rider's left */
 	SK8_PLANT_RIGHT = 16,     /* ... to the right */
+	SK8_PLANT_UP = 32,        /* the body pushed up tall on the planted arm */
 } sk8_plant_pose;
 
 /* A bail goes through stages: thrown off (in the air, arms flailing), tumbling and sliding along the

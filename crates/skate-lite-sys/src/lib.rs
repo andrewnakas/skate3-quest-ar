@@ -121,6 +121,8 @@ struct RawState {
     best_grind: f32,
     best_manual: f32,
     best_tricks: u32,
+    dark: c_int,
+    kickturn: f32,
 }
 
 /// A bail's stages (`sk8_bail_stage`).
@@ -216,6 +218,10 @@ pub struct State {
     pub best_grind: f32,
     pub best_manual: f32,
     pub best_tricks: u32,
+    /// The board caught upside down under the feet in the air (a darkcatch).
+    pub dark: bool,
+    /// Seconds into a kickturn (nose up, pivoting), 0 none.
+    pub kickturn: f32,
     /// 0 none, 1 axle, 2 board slide, 3 nose, 4 tail.
     pub grind_kind: u32,
     pub combo_points: u32,
@@ -266,6 +272,8 @@ impl From<RawState> for State {
             best_grind: r.best_grind,
             best_manual: r.best_manual,
             best_tricks: r.best_tricks,
+            dark: r.dark != 0,
+            kickturn: r.kickturn,
             grind_kind: r.grind_kind as u32,
             combo_points: r.combo_points,
             combo_count: r.combo_count,
@@ -283,6 +291,7 @@ pub mod plant_pose {
     pub const DOWN: u32 = 4;
     pub const LEFT: u32 = 8;
     pub const RIGHT: u32 = 16;
+    pub const UP: u32 = 32;
 }
 
 /// Grab styles (`sk8_grab_style`): picked as a trigger goes down by which trigger(s) and where the

@@ -134,6 +134,14 @@ private:
 	bool air_feet_scored_ = false;
 	float adjust_[2] = {0, 0}; // a board adjust in the air (the right stick, eased)
 	int ground_grab_ = 0;      // a hand on the board rolling along (1 left trigger, 2 right)
+	bool dark_ = false;        // the board caught upside down under the feet (a darkcatch)
+	bool dark_used_ = false;   // (once per flip: turned back over, it isn't caught again)
+	bool airwalk_ = false, shifty_scored_ = false, air_footplant_ = false;
+	float shifty_ = 0, shifty_time_ = 0;
+	float kickturn_ = 0;       // s into a kickturn (0 none)
+	float slide_time_ = 0;     // s into a powerslide, and its name
+	std::string slide_name_;
+	float lean_time_ = 0;      // the left stick held over on a tail grind
 	// a grab on a rail (0 none, 1 front hand, 2 back hand): held, asked for and how long
 	int grind_grab_ = 0, grind_grab_want_ = 0;
 	float grind_grab_time_ = 0;

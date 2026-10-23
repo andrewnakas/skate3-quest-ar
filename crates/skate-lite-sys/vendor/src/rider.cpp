@@ -149,6 +149,11 @@ constexpr float kSettleFlip = 0.45f;
 constexpr float kCrookToBoard = 0.13f;  // s a crooked holds before turning across into a boardslide
 constexpr float kPlantWind = 0.605f;
 constexpr float kFootOffHold = 0.1f;
+constexpr double kLineMultiplier = 1.5; // a line's points banked at this (the port's never went higher)
+constexpr float kFingerFlipSpeed = 2.3f;
+constexpr float kKickturnTop = 4.6f;  // m/s: slower than this, the stick hard over is a kickturn
+constexpr float kKickturnRate = 3.1f; // rad/s once it's turning (it eases in over kKickturnEase)
+constexpr float kKickturnEase = 0.45f;
 constexpr float kBigAir = 1.4f, kLongAir = 9.5f; // m: an air this high (above its lower end) / long scores  // s a foot held off in the air before it counts
 constexpr float kAdjustYaw = 0.5f, kAdjustPitch = 0.38f; // rad: a board adjust at full stick
 constexpr float kUnderTurn = 0.34f;   // turns an underflip goes its first way before it turns back
@@ -256,7 +261,7 @@ void Rider::bank()
 {
 	if (combo_names_.empty())
 		return;
-	double total = double(combo_points_) * double(combo_names_.size()) * double(p[ScoreScale]);
+	double total = double(combo_points_) * kLineMultiplier * double(p[ScoreScale]);
 	auto pts = (unsigned long long)(total + 0.5);
 	score_ += pts;
 	emit(SK8_EV_BANK, "", unsigned(pts));
@@ -551,10 +556,18 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	bool stick_slide = in.steer[1] < -0.45f && std::fabs(in.steer[0]) > 0.4f;
 	// (the button only on the flat: held riding up a ramp, it's for a handplant at the top)
 	bool want_slide = stick_slide || ((in.buttons & SK8_SLIDE) && std::fabs(steer) > 0.4f && up_.y > 0.95f);
-	if (mode_ == SK8_MODE_RIDE && want_slide && speed > 1.8f)
+	if (mode_ == SK8_MODE_RIDE && want_slide && speed > 1.8f) {
 		mode_ = SK8_MODE_SLIDE;
-	else if (mode_ == SK8_MODE_SLIDE && ((!want_slide && !(in.buttons & SK8_SLIDE)) || speed < 0.6f))
+		slide_time_ = 0;
+		// named as the port does: swung out to the left (the stick back-left), backside
+		slide_name_ = (steer < 0) != fakie_ ? "Backside Powerslide" : "Powerslide";
+	} else if (mode_ == SK8_MODE_SLIDE && ((!want_slide && !(in.buttons & SK8_SLIDE)) || speed < 0.6f)) {
 		mode_ = SK8_MODE_RIDE;
+		if (slide_time_ > 0.35f)
+			add_trick(staged(slide_name_.c_str()), 60 + unsigned(slide_time_ * 40));
+	}
+	if (mode_ == SK8_MODE_SLIDE)
+		slide_time_ += kDt;
 
 	// carve: the turn comes on over a moment (two easing stages: a gentle start, like the port)
 	float ease = 1 - std::exp(-kDt / std::max(p[CarveEase], 0.001f));
@@ -563,6 +576,17 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	float rate = p[Carve] * carve_ * clampf(speed / 2.5f, 0.35f, 1.0f);
 	if (mode_ == SK8_MODE_SLIDE)
 		rate *= 0.5f;
+	// a kickturn (as the port: slow, the left stick hard over): the nose lifts and the board pivots
+	// on its back wheels, easing in, then turning steadily for as long as it's held
+	if (mode_ == SK8_MODE_RIDE && speed < kKickturnTop && std::fabs(steer) > 0.7f && push_time_ < 0 &&
+		plant_wind_ < 0 && takeoff_trick_ < 0) {
+		kickturn_ += kDt;
+		float k = std::min(kickturn_ / kKickturnEase, 1.0f);
+		rate = kKickturnRate * k * k * (steer > 0 ? 1.0f : -1.0f);
+		carve_ = carve_in_ = steer; // (no carve still to come out of when it stops)
+	} else {
+		kickturn_ = 0;
+	}
 	fwd_ = unit(flatten(rotate(fwd_, up_, -rate * kDt), up_), fwd_);
 	// The wheels carry the motion round with the board (a carve keeps its speed).
 	if (mode_ != SK8_MODE_SLIDE)
@@ -837,6 +861,8 @@ void Rider::pop(const TrickDef &def, float share)
 	air_feet_ = air_feet_want_ = 0;
 	air_feet_scored_ = false;
 	adjust_[0] = adjust_[1] = 0;
+	airwalk_ = shifty_scored_ = air_footplant_ = false;
+	shifty_ = shifty_time_ = 0;
 	emit(SK8_EV_POP, staged(def.name).c_str(), 0, 0, surface_);
 }
 
@@ -868,6 +894,7 @@ void Rider::start_flip(int trick)
 	flip_dir_[1] = r > 0.3f ? last_flick_[1] / r : 0;
 	under_a0_ = -1;
 	flip_speed_ = 1;
+	dark_used_ = false;
 	if (takeoff_dir_[0] != 0 || takeoff_dir_[1] != 0) { // (flicked before a takeoff: the flick's own way)
 		flip_dir_[0] = takeoff_dir_[0];
 		flip_dir_[1] = takeoff_dir_[1];
@@ -983,7 +1010,9 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 
 	// spin about the stance axis; near a rail the stick is picking the grind instead
 	bool by_rail = !w.rails.empty() && w.nearest_rail(pos_, 1.0f).rail >= 0;
-	float target = by_rail ? 0.0f : -clampf(in.steer[0], -1, 1) * p[SpinRate];
+	// (grabbing with the right stick down, the left stick is a shifty, not a spin)
+	bool shifting = grab_ && in.flick[1] < -0.5f;
+	float target = by_rail || shifting ? 0.0f : -clampf(in.steer[0], -1, 1) * p[SpinRate];
 	spin_speed_ = approach(spin_speed_, target, p[SpinEase] * p[SpinRate] * kDt);
 	float a = spin_speed_ * kDt;
 	fwd_ = unit(rotate(fwd_, up_, a), fwd_);
@@ -1021,10 +1050,60 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		}
 	}
 
+	// dark: the slide button held while a flip is turning catches the board upside down under the
+	// feet (as the port); flicked again, it goes on round the rest of the way (dark to light)
+	if (flip_ >= 0 && !dark_ && !dark_used_ && (in.buttons & SK8_SLIDE) && under_a0_ < 0 && flip_extra_ == 0) {
+		const TrickDef &d = trick_table()[size_t(flip_)];
+		float e = flip_frac();
+		if (d.roll != 0 && d.wrap == 0 && e > 0.15f && e < 0.6f) {
+			dark_ = dark_used_ = true;
+			flip_turns_ = 0.5f * flip_base_turns_;
+			flip_mult_ = 0.5f;
+			flip_name_ = "Darkcatch " + flip_name_;
+			trick_ = flip_name_;
+			if (!pending_.empty()) {
+				pending_.back().name = flip_name_;
+				pending_.back().points += 120;
+			}
+		}
+	}
+	if (dark_ && flip_ >= 0 && f.trick >= 0 && trick_table()[size_t(f.trick)].roll != 0) {
+		dark_ = false;
+		flip_turns_ = flip_base_turns_;
+		flip_mult_ = 1;
+		const TrickDef &d = trick_table()[size_t(flip_)];
+		std::string name = stance_pre_ + "Dark to Light " + d.name;
+		pending_.push_back({name, 160});
+		trick_ = flip_name_ = name;
+	}
 	// flick a trick late
 	// (not while grabbing: the stick then tweaks the grab)
-	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && !grab_ && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat)
-		start_flip(f.trick);
+	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && !grab_ && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat) {
+		// flicked from up (a nollie's way) in the air: the back foot flips it (a late backfoot flip)
+		const TrickDef &d = trick_table()[size_t(f.trick)];
+		bool backfoot = d.nollie && d.roll != 0 && d.wrap == 0;
+		int trick = backfoot ? find_trick(d.roll > 0 ? "Kickflip" : "Heelflip") : f.trick;
+		start_flip(trick);
+		std::string base = trick_table()[size_t(trick)].name;
+		flip_name_ = stance_pre_ + (backfoot ? "Late Backfoot " : "Late ") + base;
+		trick_ = flip_name_;
+		if (!pending_.empty())
+			pending_.back().name = flip_name_;
+	}
+	// a flick while grabbing (a sweep, not a held tweak): the hand spins the board (a finger flip)
+	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && grab_ && grab_time_ > 0.2f) {
+		const TrickDef &d = trick_table()[size_t(f.trick)];
+		if (!d.flat && (d.roll != 0 || d.shove != 0) && !d.nollie) {
+			start_flip(f.trick);
+			flip_speed_ = kFingerFlipSpeed; // the hand spins it round much quicker than a foot flick
+			flip_name_ = std::string(grab_def(grab_style_).name) + " Finger Flip";
+			trick_ = flip_name_;
+			if (!pending_.empty()) {
+				pending_.back().name = flip_name_;
+				pending_.back().points += 100;
+			}
+		}
+	}
 	if (flip_ >= 0 && under_a0_ < 0 && flip_time_ < kUnderWindow && opposite_flick(flip_dir_))
 		start_underflip();
 	if (flip_ >= 0) {
@@ -1079,9 +1158,42 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 				: air_feet_ == SK8_PLANT_FRONT_FOOT ? "One Foot Ollie" : "Back Foot Ollie";
 			pending_.push_back({staged(name.c_str()), 120});
 		}
-		if (grab_ && (in.buttons & SK8_BRAKE) && !(prev_buttons_ & SK8_BRAKE) && !never_bail()) {
+		// B with a grab (as the port): a nose / tail grab's legs walk off the board (an airwalk), a
+		// double grab flies out flat (a superman); any other grab lets go of the board (a dismount)
+		bool b_press = (in.buttons & SK8_BRAKE) && !(prev_buttons_ & SK8_BRAKE);
+		if (grab_ && b_press && (grab_style_ == SK8_GRAB_NOSE || grab_style_ == SK8_GRAB_TAIL)) {
+			airwalk_ = true;
+			pending_.push_back({std::string(grab_def(grab_style_).name) + " Airwalk", 220});
+		} else if (grab_ == 3 && b_press && grab_style_ != SK8_GRAB_SUPERMAN) {
+			grab_style_ = SK8_GRAB_SUPERMAN;
+			pending_.push_back({grab_def(grab_style_).name, grab_def(grab_style_).points});
+		} else if (grab_ && b_press && !airwalk_ && !never_bail()) {
 			bail("Dismount");
 			return;
+		}
+		if (airwalk_ && (!grab_ || !(in.buttons & SK8_BRAKE)))
+			airwalk_ = false;
+		if (airwalk_)
+			air_feet_ = SK8_PLANT_FRONT_FOOT | SK8_PLANT_BACK_FOOT;
+		// a shifty (as the port): grabbing, the right stick down and the left stick swung to a side,
+		// held a moment: the board twisted out that way
+		bool shift = grab_ && in.flick[1] < -0.5f && std::fabs(in.steer[0]) > 0.6f;
+		shifty_time_ = shift ? shifty_time_ + kDt : 0;
+		if (shift && shifty_time_ > 0.2f && !shifty_scored_) {
+			shifty_scored_ = true;
+			bool fs = (in.steer[0] > 0) != fakie_;
+			pending_.push_back({std::string(fs ? "Frontside Shifty " : "Backside Shifty ") + grab_def(grab_style_).name, 140});
+		}
+		shifty_ = shift ? (in.steer[0] > 0 ? 1.0f : -1.0f) : 0.0f;
+		// a one-foot grab coming down onto the ground: the free foot planted, a hop back up (a footplant)
+		if (grab_ && air_feet_ && !airwalk_ && vel_.y < 0 && !air_footplant_) {
+			Hit g;
+			if (w.cast(pos_, V3{0, -0.3f, 0}, g) && g.normal.y > 0.8f) {
+				air_footplant_ = true;
+				vel_.y = 3.4f;
+				pending_.push_back({std::string(grab_def(grab_style_).name) + " Footplant", 180});
+				emit(SK8_EV_POP, "Footplant", 0, 0, g.surface);
+			}
 		}
 	}
 	// the right stick held with nothing else going on: the board adjusted under the feet (nose up /
@@ -1090,6 +1202,8 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		bool free = flip_ < 0 && !grab_ && !foot_air_ && air_time_ > 0.08f;
 		float r = std::sqrt(in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1]);
 		float tx = free && r > 0.6f ? in.flick[0] / std::max(r, 1.0f) : 0, ty = free && r > 0.6f ? in.flick[1] / std::max(r, 1.0f) : 0;
+		if (shifty_ != 0) // a shifty swings the board under the feet the way the left stick went
+			tx = shifty_;
 		float k = 1 - std::exp(-kDt / 0.08f);
 		adjust_[0] += (tx - adjust_[0]) * k;
 		adjust_[1] += (ty - adjust_[1]) * k;
@@ -1169,6 +1283,18 @@ void Rider::land(const Hit &h)
 		bail(bad);
 		return;
 	}
+	// landed with the board caught upside down: the skater steps off and runs it out (as the port)
+	if (dark_) {
+		dark_ = false;
+		flip_ = -1;
+		commit_pending();
+		pos_ = h.point;
+		up_ = kUp;
+		vel_ = flatten(vel_, kUp) * 0.55f;
+		mode_ = SK8_MODE_WALK;
+		emit(SK8_EV_LAND, "dark", 0, 1, h.surface);
+		return;
+	}
 	// a big air (high, or long) scores for itself, on top of what was done in it
 	if (!foot_air_ && air_time_ > 0.3f) {
 		float hgt = peak_ - std::max(launch_.y, h.point.y), dist = len(flatten(h.point - launch_, kUp));
@@ -1223,6 +1349,8 @@ void Rider::land(const Hit &h)
 	air_feet_ = air_feet_want_ = 0;
 	air_feet_scored_ = false;
 	adjust_[0] = adjust_[1] = 0;
+	airwalk_ = shifty_scored_ = air_footplant_ = false;
+	shifty_ = shifty_time_ = 0;
 	commit_pending();
 	land_settle_ = clean ? kSettleClean : kSettleSketchy;
 	if (!clean)
@@ -1386,6 +1514,8 @@ int Rider::plant_bits(const sk8_input &in)
 							   : 0;
 	if (in.flick[1] < -0.6f)
 		bits |= SK8_PLANT_DOWN;
+	else if (in.flick[1] > 0.6f)
+		bits |= SK8_PLANT_UP;
 	else if (std::fabs(in.flick[0]) > 0.6f)
 		bits |= in.flick[0] > 0 ? SK8_PLANT_RIGHT : SK8_PLANT_LEFT;
 	return bits;
@@ -1401,6 +1531,8 @@ std::string Rider::plant_variant(int bits) const
 	name = plant_side_ + name + "Handplant";
 	if (bits & SK8_PLANT_DOWN)
 		name += " Down";
+	else if (bits & SK8_PLANT_UP)
+		name += " Up";
 	else if (bits & (SK8_PLANT_LEFT | SK8_PLANT_RIGHT))
 		name += (bits & SK8_PLANT_RIGHT) ? " Right" : " Left";
 	return name;
@@ -1472,7 +1604,7 @@ bool Rider::try_grind(World &w)
 	}
 	// half way round a flip, across the rail: it lands upside down on it (a darkslide)
 	bool dark = false;
-	if (flip_ >= 0 && trick_table()[size_t(flip_)].roll != 0 && flip_frac() > 0.3f && flip_frac() < 0.75f) {
+	if (flip_ >= 0 && trick_table()[size_t(flip_)].roll != 0 && ((flip_frac() > 0.3f && flip_frac() < 0.75f) || dark_)) {
 		V3 tt = s.tangent;
 		float aa = angle_between(unit(flatten(fwd_, kUp), fwd_), unit(flatten(tt, kUp), tt));
 		aa = std::min(aa, kPi - aa);
@@ -1622,8 +1754,18 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 	if (f.trick >= 0) {
 		const TrickDef &def = trick_table()[size_t(f.trick)];
 		leave_grind(t * rail_speed_, true);
+		bool was_dark = grind_kind_ == SK8_GRIND_DARKSLIDE;
 		pop(def, p[GrindPop]);
-		if (!def.flat)
+		if (was_dark) {
+			// off a darkslide: the board flipped back over the rest of the way (a darkslide out)
+			int roll = def.roll != 0 && def.wrap == 0 ? f.trick : find_trick("Kickflip");
+			start_flip(roll);
+			flip_angle_ = 0.5f * flip_base_turns_;
+			flip_name_ = stance_pre_ + "Darkslide Out";
+			trick_ = flip_name_;
+			if (!pending_.empty())
+				pending_.back() = {flip_name_, 200};
+		} else if (!def.flat)
 			start_flip(f.trick);
 		return;
 	}
@@ -1641,6 +1783,21 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 			grind_grab_ = hands;
 			grind_name_ = trick_ = grind_full_name();
 			grind_time_ = 0;
+		}
+	}
+	{
+		int k = grind_kind_;
+		bool tail = k == SK8_GRIND_5_0 || k == SK8_GRIND_SALAD || k == SK8_GRIND_WILLY;
+		int want = !tail ? k : in.steer[0] > 0.6f ? SK8_GRIND_SALAD : in.steer[0] < -0.6f ? SK8_GRIND_WILLY
+			: in.steer[1] > 0.6f ? SK8_GRIND_5_0 : k;
+		lean_time_ = want != k ? lean_time_ + kDt : 0;
+		if (want != k && lean_time_ > 0.4f) {
+			add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
+			grind_kind_ = want;
+			grind_name_ = trick_ = grind_full_name();
+			grind_time_ = 0;
+			lean_time_ = 0;
+			emit(SK8_EV_GRIND, grind_name_.c_str(), 0, grind_kind_, surface_);
 		}
 	}
 	// the right stick moved and held a moment: over into that grind (the one left is scored), as
@@ -1861,6 +2018,8 @@ void Rider::state(sk8_state &s) const
 		board = board * Q::axis_angle({0, 0, 1}, def.roll * g * m * 2 * kPi * e) *
 			Q::axis_angle({1, 0, 0}, -def.wrap * m * 2 * kPi * e);
 	}
+	if (kickturn_ > 0) // a kickturn: the nose up off the ground, pivoting on the back wheels
+		board = board * Q::axis_angle({1, 0, 0}, -std::min(kickturn_ / 0.15f, 1.0f) * 0.32f);
 	if (mode_ == SK8_MODE_AIR && (adjust_[0] != 0 || adjust_[1] != 0)) // a board adjust: nose up / swung
 		board = board * Q::axis_angle({0, 1, 0}, -adjust_[0] * kAdjustYaw) * Q::axis_angle({1, 0, 0}, -adjust_[1] * kAdjustPitch);
 	if (slide_amount_ > 0)
@@ -1895,6 +2054,8 @@ void Rider::state(sk8_state &s) const
 	s.revert = revert_time_ >= 0 ? clampf(revert_time_ / 0.34f, 0, 1) : -1;
 	s.grab = ground_mode(mode_) ? ground_grab_ : grab_;
 	s.air_feet = mode_ == SK8_MODE_AIR ? air_feet_ : 0;
+	s.dark = dark_ ? 1 : 0;
+	s.kickturn = kickturn_;
 	s.grind_grab = mode_ == SK8_MODE_GRIND ? grind_grab_ : 0;
 	s.grab_style = grab_style_;
 	// (still settling after landing short: the board finishing its turn under the feet)

@@ -79,6 +79,8 @@ pub(crate) fn desktop_world(
     commands.spawn((
         ChaseCamera,
         Camera3d::default(),
+        // as wide as the port's (its ~75 degrees, across a 16:9 window)
+        Projection::Perspective(PerspectiveProjection { fov: 47f32.to_radians(), ..default() }),
         Transform::from_xyz(0.0, 2.5, -5.0).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
     ));
     if three_views() {
@@ -165,20 +167,21 @@ enum Shot {
 /// share of the rider's rise it follows) for a shot, metres.
 fn framing(shot: Shot) -> (f32, f32, f32, f32, f32, f32) {
     match shot {
-        Shot::Chase => (3.7, 1.6, 0.7, 0.8, 0.0, 1.0),
-        Shot::Crouch => (3.4, 1.2, 0.6, 0.65, 0.0, 1.0),
-        Shot::Manual => (3.1, 1.095, 0.5, 0.6, 0.15, 1.0),
+        Shot::Chase => (2.65, 2.0, 1.0, 1.0, 0.0, 1.0),
+        Shot::Crouch => (2.65, 1.9, 1.0, 0.95, 0.0, 1.0),
+        Shot::Manual => (2.65, 1.9, 1.0, 0.9, 0.0, 1.0),
         // a small air: framed as on the ground, the camera barely rising with the pop
         Shot::Wall => (3.9, 1.3, 0.0, 1.0, 0.0, 0.3),
-        Shot::SmallAir => (3.7, 1.6, 0.7, 0.85, 0.0, 0.25),
-        // a big air: pulled back and up, following most of the rise
-        Shot::BigAir => (4.6, 1.9, 0.3, 0.9, 0.0, 0.65),
+        Shot::SmallAir => (2.65, 2.0, 1.0, 1.0, 0.0, 0.3),
+        // a big air: up over the rider, close, looking down on it (as the port's)
+        Shot::BigAir => (1.135, 3.1, 0.3, 0.55, 0.0, 1.0),
         Shot::Reentry => (4.2, 1.1, 0.0, 1.0, 0.0, 0.2),
-        Shot::Grind => (3.3, 1.32, 0.8, 0.75, 0.75, 1.0),
-        Shot::GrindSlow => (2.7, 1.2, 0.4, 0.7, 0.6, 1.0),
-        Shot::Plant => (4.0, 1.4, 0.0, 1.0, 1.2, 0.5),
-        Shot::OnFoot => (2.9, 1.72, 0.4, 1.235, 0.0, 1.0),
-        Shot::Bail => (4.4, 2.3, 0.0, 0.4, 0.0, 1.0),
+        Shot::Grind => (2.65, 1.9, 1.0, 0.95, 0.5, 1.0),
+        Shot::GrindSlow => (2.45, 1.9, 0.6, 0.9, 0.4, 1.0),
+        // a plant: low, out to the side
+        Shot::Plant => (0.4, 0.9, 0.0, 0.95, 2.3, 0.5),
+        Shot::OnFoot => (2.72, 2.4, 0.5, 1.045, 0.0, 1.0),
+        Shot::Bail => (2.72, 2.5, 0.0, 0.3, 0.0, 1.0),
     }
 }
 

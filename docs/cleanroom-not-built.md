@@ -1,4 +1,15 @@
-# Clean tier: what is not built yet (status 2026-10-23)
+# Clean tier: what is not built yet (status 2026-10-23, after the recorded port session)
+
+## Built from the recorded session (2026-10-23, 29,640 ticks, rec.jsonl in scratch)
+Darkcatch (RB during a flip) / dark to light (flick again) / landing dark runs it out on foot; darkslide
+out (flick off a darkslide); late flips named "Late ..."; late backfoot kick / heel flips (flicked from
+up in the air); finger flips (a stick sweep while grabbing, quick); shifties (grabbing, right stick down,
+left stick to a side); airwalk (B in a nose / tail grab); superman (B in a double grab); footplant out of
+a one-foot grab coming down; kickturns (slow, left stick hard over: eases in, ~180 deg/s while held, as
+probed); left stick on a 5-0: salad / willy; handplant Up; powerslides named (left: Backside) and
+scored; line multiplier a flat 1.5 (the port never went higher) and lines bank after 1.2 s; desktop
+camera framed from the port's measured shots (riding 2.6 m back, ~2 m up; big airs up over the rider
+looking down; plants low to the side; ~75 deg wide).
 
 Everything below is in the port (the Rust rewrite, Skate 3's own data) or its trick list, and not yet
 in sk8. "Probed" means tried with s3trace (scratch probe harness: `probe/probe.py`, `scen.json`,
@@ -8,31 +19,21 @@ playing the web port with the recorder (`recserver.py` on :8771), as for the pla
 ## Moves
 
 ### Not found in the port with any input tried (needs you)
-- **Dark catches** (flip, catch the board upside down; `DARKCATCH_*`, `RELEASE_DARKCATCH`, the
-  `DSOUT*` darkslide exits). Every second-flick direction at six timings: nothing.
-- **Kickturns, nose-pivot kickturns, manual snap-arounds** (`GROUND_TRICK_*KICKTURN*`,
-  `*_MANUAL_SNAP_AROUND`). Left stick and bumpers in manuals, while stopped, and while braking: nothing.
-- **Shifties** (`GRAB_*_SHIFTY_*`, `AIR_METRICS_*SHIFTY*`). A grab plus either stick: nothing. Board
-  adjusts (the right stick held in a plain air) are built but score nothing, as in the port.
+- Darkslide exit directions (`DSOUT` BS/FS left/right/straight): ours is one "Darkslide Out".
+- **Nose-pivot kickturns, manual snap-arounds** (kickturns are built; these weren't in the session).
 - **Grab hops, grab powerslides, grab manuals** (`GROUND_TRICK_*_GRAB_HOP_NAME`,
   `*_GRAB_POWERSLIDE`, `NOSE_GRAB_MANUAL`, `TAIL_GRAB_NOSE_MANUAL`). In the probes a powerslide or
   manual cancels the ground grab, and a pop from it is a plain ollie.
-- **Airwalks** (`GRAB_NG_AIRWALK`, `GRAB_TG_AIRWALK`) and the named one-foot grabs (`*_ONEFOOT_*`):
-  ours names any one-foot grab "<grab> One Foot".
-- **Finger flips** (`FINGERFLIP_*`): the port's own notes say its stick-pattern file for them is
-  missing, so they may not work in the port either.
-- **Late backfoot flips** (`LATE_BACKFOOT_KICKFLIP/HEELFLIP`, `FLIP_BACKFOOT_*`).
-- **Handplant "Up" and the tweaked handplant** (`*_HANDPLANT_UP`, `TWEAKED_HANDPLANT`): ours has
-  Down / Left / Right and the feet-off ones.
-- **Footplant grab variants** (`GRAB_BSGRAB_BS_FOOTPLANT` etc.).
-- **Grind changes by the left stick on a rail**: in the port it switched to a lipslide or a back-foot
-  5-0 (`BF_BS_5_O`); ours changes grinds with the right stick only.
+- The port's finger-flip names say which grab it goes to (`STALE_TO_FSGRAB`...); ours "<grab> Finger Flip".
+- The named one-foot grabs (`*_ONEFOOT_BEHIND/FRONT`): ours "<grab> One Foot".
+- The tweaked handplant (`TWEAKED_HANDPLANT`).
+- Left stick on a 50-50 (the port went to a lipslide / back-foot 5-0); ours does salad / willy off a 5-0 only.
 - **Wipeout body tweaks** (cannonball, judo kick, swan dive, torpedo; `TYPE_INTENTIONAL_BAIL`) and
   the broken-bone slow motion.
 
 ### In the port, but could not be tested on its test course
-- **Drop-ins** (stall on the coping, then drop in): the course has no deck to stand on. Needs the
-  KenneyPark map in s3trace (load it as the map argument), or you in the web port.
+- **Drop-ins**: the port's code has a dropping-in state but it never came up in the session (maybe
+  not reachable on KenneyPark).
 - **Pumping**: the port has a pumping system, but its half pipe keeps ~10 m/s with no input, so no
   gain showed. Needs a real map's transitions and a crouch-timing sweep.
 - **Vert air height**: the course's coping box takes the port's speed at the lip, so its vert airs
@@ -46,15 +47,17 @@ playing the web port with the recorder (`recserver.py` on :8771), as for the pla
   lipslide nose / tail / double versions.
 - "Authentic" names for spins with tricks: Cab, Half Cab, Big Spin, Bigger Spin, El Camino,
   McTwist, Rodeo, Alley-oop, Frontside flip (ours names spins "<n> Spin" with the trick).
-- Spins named frontside / backside (`AIR_FS_SPIN`, `AIR_BS_SPIN`), reverts frontside / backside,
-  180 / layback powerslides, tail drag, ride-up curb.
+- Spins named frontside / backside (`AIR_FS_SPIN`, `AIR_BS_SPIN`; both seen, but the recording has
+  no body rotation to tell which way is which), reverts frontside / backside, 180 / layback
+  powerslides, tail drag, ride-up curb.
 - Skitching, moving objects, other off-board actions.
 
 ## Scoring (built today: our own rules after the port's)
 Built: repeated tricks in a line decay (rails exempt), Big Air / Long Air bonuses, personal bests
 (line, air time, grind length, manual length, tricks per line) with a "New best" HUD line.
 Not built:
-- the port's exact multiplier behaviour (it refreshes on a big enough reward; ours is the trick count);
+- the port's point scale (its kickflip is 20, ollie 2; ours 240 / 80) and its in-air height part of
+  the sequence (it rises and falls with the air);
 - per-air sequence rewards and the flip / spin / height metric curves (ours: fixed bonuses);
 - the bail penalty as the port takes it (ours just loses the line);
 - trick classes (air / flip / grab / grind / plant / manual / ...) driving anything;
