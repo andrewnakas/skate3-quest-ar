@@ -151,13 +151,13 @@ enum Shot {
     Manual,
     /// Riding up a steep transition: held low, looking up the wall (so it doesn't climb with the rider).
     Wall,
-    LowAir,
+    SmallAir,
     BigAir,
     Reentry,
     Grind,
     GrindSlow,
     Plant,
-    OffBoard,
+    OnFoot,
     Bail,
 }
 
@@ -165,19 +165,19 @@ enum Shot {
 /// share of the rider's rise it follows) for a shot, metres.
 fn framing(shot: Shot) -> (f32, f32, f32, f32, f32, f32) {
     match shot {
-        Shot::Chase => (3.7, 1.55, 0.7, 0.8, 0.0, 1.0),
+        Shot::Chase => (3.7, 1.6, 0.7, 0.8, 0.0, 1.0),
         Shot::Crouch => (3.4, 1.2, 0.6, 0.65, 0.0, 1.0),
-        Shot::Manual => (3.1, 1.05, 0.5, 0.6, 0.15, 1.0),
+        Shot::Manual => (3.1, 1.08, 0.5, 0.6, 0.15, 1.0),
         // a small air: framed as on the ground, the camera barely rising with the pop
         Shot::Wall => (3.9, 1.3, 0.0, 1.0, 0.0, 0.3),
-        Shot::LowAir => (3.7, 1.55, 0.7, 0.85, 0.0, 0.25),
+        Shot::SmallAir => (3.7, 1.6, 0.7, 0.85, 0.0, 0.25),
         // a big air: pulled back and up, following most of the rise
         Shot::BigAir => (4.6, 1.9, 0.3, 0.9, 0.0, 0.65),
         Shot::Reentry => (4.2, 1.1, 0.0, 1.0, 0.0, 0.2),
-        Shot::Grind => (3.3, 1.35, 0.8, 0.75, 0.75, 1.0),
+        Shot::Grind => (3.3, 1.32, 0.8, 0.75, 0.75, 1.0),
         Shot::GrindSlow => (2.7, 1.2, 0.4, 0.7, 0.6, 1.0),
         Shot::Plant => (4.0, 1.4, 0.0, 1.0, 1.2, 0.5),
-        Shot::OffBoard => (2.9, 1.75, 0.4, 1.25, 0.0, 1.0),
+        Shot::OnFoot => (2.9, 1.72, 0.4, 1.22, 0.0, 1.0),
         Shot::Bail => (4.4, 2.3, 0.0, 0.4, 0.0, 1.0),
     }
 }
@@ -208,12 +208,12 @@ fn pick_shot(s: &skate_lite_sys::State, previous: Shot, base_y: f32) -> Shot {
     match s.mode {
         Mode::Ride | Mode::Slide | Mode::Manual if up.y < STEEP_UP => Shot::Wall,
         Mode::Bail => Shot::Bail,
-        Mode::Walk => Shot::OffBoard,
+        Mode::Walk => Shot::OnFoot,
         Mode::Grind if s.grind_kind == 15 || s.grind_kind == 16 => Shot::Plant,
         Mode::Grind if s.speed < 2.0 => Shot::GrindSlow,
         Mode::Grind => Shot::Grind,
         Mode::Manual => Shot::Manual,
-        Mode::Air if s.on_foot => Shot::OffBoard,
+        Mode::Air if s.on_foot => Shot::OnFoot,
         Mode::Air => {
             // going up or coming down nearly straight (out of a ramp and back in): held below
             if v.y.abs() > 2.5 * flat.max(0.5) {
@@ -226,7 +226,7 @@ fn pick_shot(s: &skate_lite_sys::State, previous: Shot, base_y: f32) -> Shot {
             } else if previous == Shot::Reentry {
                 Shot::Reentry
             } else {
-                Shot::LowAir
+                Shot::SmallAir
             }
         }
         _ if s.crouch > 0.5 => Shot::Crouch,
