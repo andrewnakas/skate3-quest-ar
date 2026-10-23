@@ -47,6 +47,8 @@ impl Bones {
 const CARVE_ROLL: f32 = 0.2;
 /// The deck rolls a little on its trucks with the carve, radians.
 const BOARD_ROLL: f32 = 0.06;
+/// A handplant with a foot off: the board's centre from the foot still on it, along the deck (m).
+const PLANT_HALF_STANCE: f32 = 0.21;
 /// Hips drop per m/s of landing speed (initial velocity of the spring), and the spring itself.
 const LAND_KICK: f32 = 0.13;
 const HIPS_HZ: f32 = 2.6;
@@ -109,6 +111,10 @@ pub(crate) struct Motion {
     planted: bool,
     /// 0..1: how much the board is held in the hands (grabs where both feet leave it).
     held: f32,
+    /// On a handplant: how much the board is carried on the feet (0..1), and the way from the back
+    /// foot to the front one (kept while a foot is off).
+    on_feet: f32,
+    plant_along: Vec3,
     /// Where the ground was when a hippie jump left it (the board rolls on along it).
     hippie_ground: Option<f32>,
     /// 0..1: how far a tilted grab (method, rocket) has turned the deck, and which one.
@@ -399,8 +405,14 @@ pub(crate) fn layer(
         motion.lift_vel = 0.0;
     }
     // No Foot and Superman: both feet leave the board, which hangs from the hands on its edges.
-    // on foot, or planted on an edge: the board is in the back hand
-    let walking = s.on_foot || (s.mode == Mode::Grind && s.grind_kind >= 15 && s.grind_kind != 17);
+    // on foot, or a foot planted on an edge: the board is in the back hand (a handplant keeps it on
+    // the feet, up over the edge - in the hand only with both feet off it)
+    use skate_lite_sys::plant_pose as pp;
+    let feet_off = pp::BACK_FOOT | pp::FRONT_FOOT;
+    let planted_hand = s.mode == Mode::Grind && s.grind_kind == 16;
+    let walking = s.on_foot
+        || (s.mode == Mode::Grind && s.grind_kind == 15)
+        || (planted_hand && s.plant_pose & feet_off == feet_off);
     let hand_held =
         walking || (s.mode == Mode::Air && matches!(s.grab_style, gs::NO_FOOT | gs::SUPERMAN | gs::CHRIST));
     // which hands hold it: both, or the back hand alone (Christ air out to the side, carried on foot)
@@ -456,6 +468,31 @@ pub(crate) fn layer(
         let (shift, pitched) = skater::pop_snap(deck, clock.since_pop, clock.nollie);
         at += shift;
         deck = pitched;
+    }
+    // A handplant: only the hand is on the edge - the board stays on the feet up in the air, going
+    // where they go (under the soles, nose toward the front foot, grip toward the body); with a foot
+    // off it, under the one still on.
+    let on_feet = planted_hand && s.plant_pose & feet_off != feet_off;
+    if dt > 0.0 {
+        motion.on_feet += ((on_feet as u8 as f32) - motion.on_feet) * (1.0 - (-dt / 0.06).exp());
+    }
+    if motion.on_feet > 1e-3 && ankles.len() == 2 {
+        let (fi, bi) = if mirrored { (1, 0) } else { (0, 1) };
+        if s.plant_pose & feet_off == 0 {
+            motion.plant_along = (ankles[fi] - ankles[bi]).normalize_or(fwd);
+        }
+        let along = motion.plant_along.normalize_or(fwd);
+        let soles = match s.plant_pose & feet_off {
+            pp::BACK_FOOT => ankles[fi] - along * PLANT_HALF_STANCE,
+            pp::FRONT_FOOT => ankles[bi] + along * PLANT_HALF_STANCE,
+            _ => (ankles[0] + ankles[1]) * 0.5,
+        };
+        let body = in_space(set.hips, rider, &bones).map(|m| Vec3::from(m.translation) - soles).unwrap_or(up);
+        let grip = (body - along * body.dot(along)).normalize_or(up);
+        let q = Quat::from_mat3(&Mat3::from_cols(grip.cross(along), grip, along));
+        let want = soles - grip * (skater::ANKLE + skater::DECK_TOP - skater::DECK_CENTRE);
+        at = at.lerp(want, motion.on_feet);
+        deck = deck.slerp(q, motion.on_feet);
     }
     if s.mode == Mode::Bail {
         if motion.loose.is_none() {

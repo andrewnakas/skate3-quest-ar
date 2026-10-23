@@ -55,6 +55,29 @@ recorded stick path through s3trace and sk8, both regular stance). The park is K
   coast); our body varial stays immediate. Switch mirrors the right stick's sides for grinds and the
   slide families. A board landing ~20-55 deg off the rail picks crooked / salad / overcrook by side
   (probed). Grind replay with stance + ground-started darkslides: 4/12.
+- Approach physics (later still, 2026-10-23), measured from both recordings and s3trace:
+  - The port's ollie off flat ground isn't an arc (board height from the recorded wheel's velocity
+    and s3trace deck_vy): it holds the pop speed ~0.1 s, keeps climbing, is pulled up short, hangs
+    ~0.2 s at the top, then drops at ~3 g. A quick flick pops less, slows like an arc and hangs
+    longer. Built and fitted (tap and full ollie peak / landing tick match; feel.py has no flags
+    left, the old ollie_tap artifact included). Ramp and grind pops keep the plain arc.
+  - Air spins: the board answers the left stick 2 ticks late both ways, is quickly at ~3 deg/tick,
+    then gathers to ~7.5; a 3-tick tap turns ~60 deg (the old "a tap does nothing" was a stick held
+    through the pop, which still waits until it's airborne). Built (taps 73 / 118 / 181 deg vs the
+    port's 60 / 126 / 178).
+  - Catches: the port catches only as the board comes down onto the rail; sk8 caught near the top
+    of the air with the board just over it (4-8 ticks early) and also yanked it down. Fixed:
+    grind_low catch 44 ticks vs the port's 43. The board stops turning on the rail.
+  - Naming from the port's true board angle (the wheel's axle, not the animated root): ~60 deg off
+    is still a crooked / 5-0, ~77+ a slide (sk8 now 69); 19 deg is a nosegrind (turned grind now
+    from 25); the right stick ~35 deg off up is still "up"; a stick pushed up / down doesn't turn the
+    board on the catch. Frontside / backside: rail right of the takeoff path = backside, fakie
+    swaps it, switch doesn't (9/12 sides now right).
+  - Replay limits: the port's skater is goofy and ours regular, so its spins turn the other way:
+    whole-air replays need a mirrored park (grinds_m.py / grinds_g.py in scratch). Ground-started
+    replays drift on the carve before the pop; the controlled feel.py scenario is the reference.
+  - Open: which side is the "lip" side in the port's slide names (6310's up-left at ~80 deg is a
+    tailslide), and the stick-down angled catch (57 deg, down = 5-0, not salad).
 - Point values: the port's per-trick points vary with the air (a heelflip 48-125 in one session) and
   copying its table would be its data; ours keep their own scale (about 4-10x the port's).
 - Replay: the browser's logged position is a presentation snapshot (a step either side of the

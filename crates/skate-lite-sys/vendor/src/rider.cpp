@@ -80,6 +80,10 @@ int grind_kind_for(bool slide, float x, float y, bool crouched)
 	// crooked (held, it slides on into a boardslide), left lipslide, up-left overcrook, down-left
 	// willy; with the left stick held back: left smith, right feeble, down-right salad, up-right suski
 	bool right = x > 0.45f, left = x < -0.45f;
+	// (pushed up and a little to a side is still up: the port's nosegrind takes the stick ~40 deg
+	// either way of up, recorded)
+	if (up && std::fabs(x) < y * 0.84f)
+		right = left = false;
 	if (crouched && side)
 		return up ? SK8_GRIND_SUSKI : down ? SK8_GRIND_SALAD : right ? SK8_GRIND_FEEBLE : SK8_GRIND_SMITH;
 	if (up) // (up-right: a crooked, as the port's)
@@ -153,9 +157,30 @@ constexpr float kPlantWind = 0.605f;
 constexpr float kFootOffHold = 0.1f;
 constexpr double kLineMultiplier = 1.5; // a line's points banked at this (the port's never went higher)
 constexpr float kFingerFlipSpeed = 2.3f;
-constexpr float kSpinCommit = 0.13f; // s the left stick is held over before an air spin starts
-constexpr float kSpinCoast = 0.6f;   // s: a spin let go slows over about this long
-constexpr float kAngledGrind = 0.33f; // rad (~19 deg): a board landing this far off the rail is a turned grind
+constexpr float kSpinUp = 0.07f;      // s into the air before the stick spins it (not off the pop)
+constexpr float kSpinKick = 3.3f;     // rad/s it's quickly up to; then it gathers speed
+constexpr float kSpinKickEase = 64.0f; // 1/s: how quickly it's up to that
+constexpr float kSpinAccel = 37.0f;   // rad/s^2 on from there to the full rate
+// An ollie off flat ground isn't a plain arc (as the port's board, measured and fitted): the board
+// comes up off the tail over a few ticks, carries on up, is pulled up short near the top, hangs there
+// a moment, then is pushed back down hard. A quick flick's pops less, slows more like an arc, and
+// hangs the longer.
+constexpr float kOllieFlatTap = 0.685f, kOllieFlatFull = 0.76f; // its pop, of the pop's (quick / loaded)
+constexpr float kOllieKickNow = 0.44f;  // share of the pop at once, the rest over a few ticks
+constexpr float kOllieKickTicks = 3;
+constexpr float kOllieCarry = 0.1f;     // s at the pop's speed before it starts to slow
+constexpr float kOllieRise = 0.29f;     // s of the climb at most
+constexpr float kOllieRiseFull = 0.35f, kOllieRiseTap = 0.78f; // the climb's pull of gravity
+constexpr float kOllieBrake = 3.4f;     // times gravity, pulled up short
+constexpr float kOllieHangVy = 0.4f;    // m/s up when it's hanging
+constexpr float kOllieHang = 0.23f;     // s it hangs at the top
+constexpr float kOllieHangTap = 0.16f;  // s longer, a quick flick's
+constexpr float kOllieHangPull = 0.45f; // times gravity, hanging
+constexpr float kOllieDrop = 3.0f;      // times gravity, pushed back down
+constexpr float kOllieDropTo = 4.2f;    // m/s down, then falling as any air
+constexpr float kSlideAngle = 1.2f;  // rad (~69 deg) off the rail: a slide, not a grind
+constexpr float kSpinCoast = 0.42f;  // s: a spin let go slows over about this long
+constexpr float kAngledGrind = 0.44f; // rad (~25 deg): a board landing this far off the rail is a turned grind (19 off was still a nosegrind, recorded)
 constexpr float kAssistReach = 1.8f; // m: how far to the side a rail pulls an air onto it
 constexpr float kBackfootHold = 0.1f, kBackfootSnap = 0.14f; // s held up, s to get down from there
 constexpr float kKickturnTop = 4.6f;  // m/s: slower than this, the stick hard over is a kickturn
@@ -211,10 +236,12 @@ void Rider::emit(sk8_event_kind kind, const char *name, unsigned points, int val
 void Rider::launch(V3 position, V3 velocity, float facing)
 {
 	place(position, facing, 0);
+	ollie_ = 0;
 	vel_ = velocity;
 	mode_ = SK8_MODE_AIR;
 	pop_y_ = position.y;
 	launch_ = position;
+	launch_vel_ = velocity;
 	peak_ = position.y;
 }
 
@@ -343,6 +370,8 @@ void Rider::lose_combo()
 
 void Rider::step(World &w, const sk8_input &in)
 {
+	if (mode_ != SK8_MODE_AIR)
+		ollie_ = 0, ollie_kick_ = 0;
 	if (settle_trick_ >= 0) {
 		settle_e_ += kDt / (kSettleFlip * std::max(settle_mult_, 1.0f));
 		if (settle_e_ >= 1 || !ground_mode(mode_))
@@ -875,12 +904,19 @@ void Rider::pop(const TrickDef &def, float share)
 	skid_time_ = 0;
 	vert_air_ = false;
 	push_cooldown_ = 0;
-	vel_ += up_ * v;
-	pos_ += up_ * 0.02f;
 	mode_ = SK8_MODE_AIR;
+	ollie_ = up_.y > 0.95f ? 1 : 0; // (off flat ground: the ollie's own rise and fall)
+	ollie_load_ = clampf((charge - 0.35f) / 0.65f, 0, 1);
+	if (ollie_)
+		v *= kOllieFlatTap + (kOllieFlatFull - kOllieFlatTap) * ollie_load_;
+	// (an ollie's board comes up off the tail over a few ticks, not at once)
+	ollie_kick_ = ollie_ ? v * (1 - kOllieKickNow) : 0;
+	vel_ += up_ * (v - ollie_kick_);
+	pos_ += up_ * 0.02f;
 	air_time_ = 0;
 	spin_total_ = 0;
 	spin_hold_ = 0;
+	spin_lag_[0] = spin_lag_[1] = 0;
 	crouch_ = crouch_time_ = 0;
 	grab_scored_ = false;
 	grab_time_ = 0;
@@ -1014,8 +1050,7 @@ void Rider::extend_flip()
 	float turns = flip_base_turns_ * mult;
 	// held, it goes for the next turn if the air looks long enough for it, judged hopefully (like
 	// the port: a just-too-small air still tries it and comes down under-flipped)
-	float h = std::max(pos_.y - pop_y_, 0.0f), g = p[Gravity];
-	float to_land = (vel_.y + std::sqrt(std::max(vel_.y * vel_.y + 2 * g * h, 0.0f))) / g;
+	float to_land = air_left();
 	if ((turns - flip_angle_) * p[FlipPerRev] > to_land * p[HeldReach])
 		return;
 	flip_turns_ = turns;
@@ -1029,15 +1064,56 @@ void Rider::extend_flip()
 	}
 }
 
+// The pull of gravity through an ollie off flat ground (as a share of it), stepping its phase on.
+static float ollie_pull(int &ollie, float &hang, float air_time, float vy, float load)
+{
+	if (ollie <= 0)
+		return 1;
+	if (ollie == 1 && (air_time > kOllieRise || vy < kOllieHangVy))
+		ollie = 2;
+	if (ollie == 2 && vy <= kOllieHangVy) {
+		ollie = 3;
+		hang = 0;
+	}
+	if (ollie == 3 && (hang += kDt) > kOllieHang + (1 - load) * kOllieHangTap)
+		ollie = 4;
+	if (ollie == 4 && vy < -kOllieDropTo)
+		ollie = 0;
+	// (the pop's first moment carries it straight up: the board still coming up off the tail)
+	return ollie == 1 ? (air_time < kOllieCarry ? 0.0f : kOllieRiseTap + (kOllieRiseFull - kOllieRiseTap) * load) : ollie == 2 ? kOllieBrake : ollie == 3 ? kOllieHangPull : ollie == 4 ? kOllieDrop : 1.0f;
+}
+
+// How long until it's back down to the height it left from, the ollie's way down and all.
+float Rider::air_left() const
+{
+	int ollie = ollie_;
+	float hang = hang_, t = air_time_, vy = vel_.y + ollie_kick_, y = pos_.y, g = p[Gravity], left = 0;
+	while (left < 4 && (vy > 0 || y > pop_y_)) {
+		t += kDt;
+		vy -= g * ollie_pull(ollie, hang, t, vy, ollie_load_) * kDt;
+		y += vy * kDt;
+		left += kDt;
+	}
+	return left;
+}
+
 void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 {
 	if (air_time_ <= 0) { // into the air: where from, for the air's height and length
 		launch_ = pos_;
+		launch_vel_ = vel_;
 		peak_ = pos_.y;
 	}
 	air_time_ += kDt;
 	peak_ = std::max(peak_, pos_.y);
-	vel_ += V3{0, -p[Gravity], 0} * kDt;
+	float pull = 1;
+	if (ollie_kick_ > 0) {
+		float add = std::min(ollie_kick_, (ollie_kick_ + 1e-3f) / std::max(kOllieKickTicks - air_time_ / kDt + 1, 1.0f));
+		vel_.y += add;
+		ollie_kick_ -= add;
+	}
+	pull = ollie_pull(ollie_, hang_, air_time_, vel_.y, ollie_load_);
+	vel_ += V3{0, -p[Gravity] * pull, 0} * kDt;
 	float sp = len(vel_);
 	if (sp > 0)
 		vel_ *= std::max(0.0f, 1 - p[AirDrag] * sp * kDt);
@@ -1052,16 +1128,33 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	// as the port (probed): the stick has to be held over a moment before a spin starts (a tap
 	// does nothing), then it comes up to speed quickly, and let go it carries on, slowing gradually
 	float stick = by_rail || shifting ? 0.0f : clampf(in.steer[0], -1, 1);
+	bool varial = in.buttons & SK8_FOOT_OFF;
+	// (as the port, probed: the board answers the stick a couple of ticks late, going over and
+	// letting go alike - so even a tap turns it some; a body varial, ours, answers at once)
+	float late = spin_lag_[1];
+	spin_lag_[1] = spin_lag_[0];
+	spin_lag_[0] = stick;
+	if (!varial)
+		stick = late;
 	bool over = std::fabs(stick) > 0.3f;
 	spin_hold_ = over && (spin_hold_ == 0 || (stick > 0) == (spin_dir_ > 0)) ? spin_hold_ + kDt : 0;
 	if (over)
 		spin_dir_ = stick > 0 ? 1.0f : -1.0f;
-	// (a body varial - ours, the foot-off button held - turns at once)
-	float commit = (in.buttons & SK8_FOOT_OFF) ? 0.0f : kSpinCommit;
-	float target = over && spin_hold_ > commit ? -stick * p[SpinRate] : 0.0f;
+	// (quickly to about a third of the full rate, then gathering speed; held through the pop, it
+	// waits until the board's up)
+	bool up_yet = varial || air_time_ > kSpinUp;
+	float target = over && up_yet ? -stick * p[SpinRate] : 0.0f;
 	bool speeding = std::fabs(target) > std::fabs(spin_speed_) || target * spin_speed_ < 0;
-	float tau = speeding || commit == 0 ? 1.0f / std::max(p[SpinEase], 0.1f) : kSpinCoast;
-	spin_speed_ += (target - spin_speed_) * (1 - std::exp(-kDt / tau));
+	float ease = 1 - std::exp(-kDt * std::max(p[SpinEase], 0.1f));
+	if (varial) // (a body varial: at once)
+		spin_speed_ += (target - spin_speed_) * ease;
+	else if (!speeding) // let go: it carries on round, slowing
+		spin_speed_ += (target - spin_speed_) * (1 - std::exp(-kDt / kSpinCoast));
+	else if (target * spin_speed_ < 0 || std::fabs(spin_speed_) < kSpinKick) {
+		float kick = std::min(std::fabs(target), kSpinKick * 1.1f);
+		spin_speed_ += ((target > 0 ? kick : -kick) - spin_speed_) * (1 - std::exp(-kDt * kSpinKickEase));
+	} else
+		spin_speed_ = approach(spin_speed_, target, kSpinAccel * kDt);
 	float a = spin_speed_ * kDt;
 	fwd_ = unit(rotate(fwd_, up_, a), fwd_);
 	// Off a slide the board is still across the way it's going: turn it back (to whichever end is
@@ -1699,75 +1792,18 @@ std::string Rider::grind_full_name() const
 		kGrindDefs[grind_kind_].name + grind_grab_name(grind_kind_, grind_grab_);
 }
 
-bool Rider::try_grind(World &w)
+// Which grind / slide the board is in, from how it lies on the rail and the right stick at the
+// catch. Returns whether it's ridden backwards along the rail.
+bool Rider::classify_grind(V3 tangent)
 {
-	// the slide button held going up off a ramp: a handplant on its edge (the port's way in)
-	// (off the top of a ramp only: RB held through an ollie by a ledge is a darkcatch, not a plant)
-	bool hand = (last_buttons_ & SK8_SLIDE) && wall_off_;
-	if (grind_cooldown_ > 0 || w.rails.empty() || (vel_.y > 2.5f && !hand))
-		return false;
-	RailSpot s = w.nearest_rail(pos_, p[GrindCatch]);
-	if (s.rail < 0 || pos_.y - s.point.y < -0.15f)
-		return false;
-	// still rising past the rail (an ollie up beside it): not yet - it lands on it coming down
-	if (vel_.y > 0.6f && !(last_buttons_ & SK8_SLIDE))
-		return false;
-	float vt = dot(vel_, s.tangent);
-	// a plant (foot-off held) catches the edge from any way, even straight at it
-	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0 || hand;
-	// a handplant's side: carried along the edge toward the toes, frontside; toward the heels (or
-	// straight in), backside (taken before the catch squares the board up)
-	V3 toe = cross(fwd_, up_) * (switch_ ? -1.0f : 1.0f);
-	float plant_lateral = dot(s.tangent, toe) * dot(vel_, s.tangent);
-	if (std::fabs(vt) < 0.8f && !plant)
-		return false;
-	// over the rail, along it: coming down, the board is drawn onto it over a few ticks (no snap
-	// from high up). Across it (a slide) the moment over it is brief: caught at once.
-	float gap = pos_.y - s.point.y;
-	float along_cos = std::fabs(dot(unit(flatten(vel_, kUp), fwd_), unit(flatten(s.tangent, kUp), s.tangent)));
-	if (gap > 0.09f && !plant && along_cos > 0.57f) {
-		if (vel_.y < 0) {
-			vel_.y = std::min(vel_.y, -gap * 10.7f);
-			V3 lat = flatten(s.point - pos_, kUp);
-			lat = lat - s.tangent * dot(lat, s.tangent);
-			vel_ += lat * (9.0f * kDt);
-		}
-		return false;
-	}
-	// half way round a flip, across the rail: it lands upside down on it (a darkslide)
-	bool dark = false;
-	if (flip_ >= 0 && trick_table()[size_t(flip_)].roll != 0 && ((flip_frac() > 0.3f && flip_frac() < 0.75f) || dark_)) {
-		V3 tt = s.tangent;
-		float aa = angle_between(unit(flatten(fwd_, kUp), fwd_), unit(flatten(tt, kUp), tt));
-		aa = std::min(aa, kPi - aa);
-		dark = aa > 55 * kDeg;
-	}
-	if (!dark && flip_ >= 0 && !flip_landable() && !never_bail()) {
-		bail("Under-flipped");
-		return true;
-	}
-	V3 pre_pos = pos_, pre_vel = vel_;
-	// a board adjust held into the catch (the right stick turning the board under the body, as the
-	// port's): the board lands turned that way on the rail - a slide set up without spinning the body
-	// (not with the left stick held back: then the right stick sideways picks a crouched grind)
-	if (std::fabs(adjust_[0]) > 0.3f && last_steer_[1] > -0.6f)
-		fwd_ = unit(flatten(rotate(fwd_, up_, -adjust_[0] * kAdjustCatch), kUp), fwd_);
-	rail_ = s.rail;
-	seg_ = s.seg;
-	seg_u_ = s.u;
-	rail_dir_ = vt >= 0 ? 1 : -1;
-	rail_speed_ = std::fabs(vt) * p[GrindKeep];
-	pos_ = s.point;
-	up_ = kUp;
-	fwd_ = unit(flatten(fwd_, kUp), fwd_);
-	V3 t = s.tangent * float(rail_dir_);
+	V3 t = tangent * float(rail_dir_);
 	float a = angle_between(fwd_, unit(flatten(t, kUp), t));
 	bool backwards = a > kPi / 2;
 	if (backwards)
 		a = kPi - a;
-	bool slide = a > 55 * kDeg;
-	// crouched for the catch: loaded on the ground, or the right stick held down in the air
-	bool crouched = crouch_ > 0.5f || last_steer_[1] < -0.6f; // loaded, or the left stick held back
+	// (as the port, recorded: ~60 deg off is still a grind - crooked, 5-0 - ~75 a slide)
+	bool slide = a > kSlideAngle;
+	bool crouched = catch_crouched_;
 	grind_slide_ = slide;
 	grind_transfer_ = 0;
 	// (in switch the stick's sides swap, as the port reads a switch flick mirrored)
@@ -1789,6 +1825,78 @@ bool Rider::try_grind(World &w)
 		else if (!grind_lip_)
 			grind_kind_ = SK8_GRIND_SALAD;
 	}
+	return backwards;
+}
+
+bool Rider::try_grind(World &w)
+{
+	// the slide button held going up off a ramp: a handplant on its edge (the port's way in)
+	// (off the top of a ramp only: RB held through an ollie by a ledge is a darkcatch, not a plant)
+	bool hand = (last_buttons_ & SK8_SLIDE) && wall_off_;
+	if (grind_cooldown_ > 0 || w.rails.empty() || (vel_.y > 2.5f && !hand))
+		return false;
+	RailSpot s = w.nearest_rail(pos_, p[GrindCatch]);
+	if (s.rail < 0 || pos_.y - s.point.y < -0.15f)
+		return false;
+	// still rising past the rail (an ollie up beside it, or just over it at the top): not yet - it
+	// lands on it coming down (as the port, recorded: caught as the board comes down onto it)
+	if (vel_.y > 0.05f && !(last_buttons_ & SK8_SLIDE))
+		return false;
+	float vt = dot(vel_, s.tangent);
+	// a plant (foot-off held) catches the edge from any way, even straight at it
+	bool plant = (last_buttons_ & SK8_FOOT_OFF) != 0 || hand;
+	// a handplant's side: carried along the edge toward the toes, frontside; toward the heels (or
+	// straight in), backside (taken before the catch squares the board up)
+	V3 toe = cross(fwd_, up_) * (switch_ ? -1.0f : 1.0f);
+	float plant_lateral = dot(s.tangent, toe) * dot(vel_, s.tangent);
+	if (std::fabs(vt) < 0.8f && !plant)
+		return false;
+	// over the rail, along it: coming down, the board is drawn in over it until it comes down onto it
+	// (no snap from high up; the ollie's own drop brings it down, as the port's). Across it (a slide)
+	// the moment over it is brief: caught at once.
+	float gap = pos_.y - s.point.y;
+	float along_cos = std::fabs(dot(unit(flatten(vel_, kUp), fwd_), unit(flatten(s.tangent, kUp), s.tangent)));
+	if (gap > 0.09f && !plant && along_cos > 0.57f) {
+		if (vel_.y < 0) {
+			V3 lat = flatten(s.point - pos_, kUp);
+			lat = lat - s.tangent * dot(lat, s.tangent);
+			vel_ += lat * (9.0f * kDt);
+		}
+		return false;
+	}
+	// half way round a flip, across the rail: it lands upside down on it (a darkslide)
+	bool dark = false;
+	if (flip_ >= 0 && trick_table()[size_t(flip_)].roll != 0 && ((flip_frac() > 0.3f && flip_frac() < 0.75f) || dark_)) {
+		V3 tt = s.tangent;
+		float aa = angle_between(unit(flatten(fwd_, kUp), fwd_), unit(flatten(tt, kUp), tt));
+		aa = std::min(aa, kPi - aa);
+		dark = aa > 55 * kDeg;
+	}
+	if (!dark && flip_ >= 0 && !flip_landable() && !never_bail()) {
+		bail("Under-flipped");
+		return true;
+	}
+	V3 pre_pos = pos_, pre_vel = vel_;
+	int mode_before = mode_;
+	// a board adjust held into the catch (the right stick turning the board under the body, as the
+	// port's): the board lands turned that way on the rail - a slide set up without spinning the body
+	// (not with the left stick held back: then the right stick sideways picks a crouched grind)
+	// (the stick pushed up or down picks a grind, nosegrind / crooked / 5-0, and doesn't turn it)
+	if (std::fabs(adjust_[0]) > 0.3f && last_steer_[1] > -0.6f && std::fabs(last_flick_[1]) < 0.45f)
+		fwd_ = unit(flatten(rotate(fwd_, up_, -adjust_[0] * kAdjustCatch), kUp), fwd_);
+	rail_ = s.rail;
+	seg_ = s.seg;
+	seg_u_ = s.u;
+	rail_dir_ = vt >= 0 ? 1 : -1;
+	rail_speed_ = std::fabs(vt) * p[GrindKeep];
+	pos_ = s.point;
+	up_ = kUp;
+	fwd_ = unit(flatten(fwd_, kUp), fwd_);
+	// crouched for the catch: loaded on the ground, or the left stick held back
+	catch_crouched_ = crouch_ > 0.5f || last_steer_[1] < -0.6f;
+	bool backwards = classify_grind(s.tangent);
+	spin_speed_ = 0; // (the board stops turning as it lands on the rail, as the port's)
+	bool slide = grind_slide_;
 	if (dark)
 		grind_kind_ = SK8_GRIND_DARKSLIDE;
 	if (plant) {
@@ -1806,18 +1914,23 @@ bool Rider::try_grind(World &w)
 	// named for how it's ridden: switch stance, or riding the rail backwards (fakie)
 	grind_backwards_ = backwards && !slide;
 	// frontside / backside as the port names it: the rail on the right of the way it's going,
-	// backside; on the left, frontside (the other way round rolling fakie or switch). Coming
-	// straight down onto it, by which way it was drifting.
+	// backside; on the left, frontside (the other way round rolling fakie). Right over it, by
+	// which way it was drifting.
 	{
-		V3 travel = fakie_ ? fwd_ * -1.0f : fwd_;
+		// (judged from the takeoff: the way it went up, and where the rail lay off that path -
+		// the pull onto the rail and a spin in the air don't change it)
+		V3 heading = fakie_ ? fwd_ * -1.0f : fwd_;
+		V3 up_vel = mode_before == SK8_MODE_AIR ? launch_vel_ : pre_vel;
+		V3 travel = len(flatten(up_vel, kUp)) > 0.5f ? unit(flatten(up_vel, kUp), heading) : heading;
 		V3 right = cross(travel, kUp);
-		// (by the way it's drifting onto the rail - pulled or steered toward it - and, coming
-		// straight at it, by where the rail is)
-		float off = dot(flatten(pre_vel, kUp), right);
-		if (std::fabs(off) < 0.3f)
-			off = dot(flatten(s.point - pre_pos, kUp), right);
+		V3 from = mode_before == SK8_MODE_AIR ? launch_ : pre_pos;
+		float off = dot(flatten(s.point - from, kUp), right);
+		if (std::fabs(off) < 0.05f)
+			off = dot(flatten(pre_vel, kUp), right);
 		bool on_right = off >= 0;
-		grind_side_ = on_right != (fakie_ != switch_) ? "Backside " : "Frontside ";
+		// (riding fakie swaps it; switch doesn't - the port's switch-fakie catches with the rail
+		// on the left were all backside)
+		grind_side_ = on_right != fakie_ ? "Backside " : "Frontside ";
 	}
 	grind_grab_ = 0;
 	grind_grab_want_ = 0;

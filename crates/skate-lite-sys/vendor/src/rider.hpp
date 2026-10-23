@@ -53,6 +53,8 @@ private:
 	void start_flip(int trick);
 	void land(const Hit &h);
 	bool try_grind(World &w);
+	bool classify_grind(V3 tangent);
+	float air_left() const;
 	void leave_grind(V3 velocity, bool popped, bool off_end = false);
 	void move_on_ground(World &w, V3 delta);
 	void follow_ground(World &w);
@@ -145,6 +147,7 @@ private:
 	std::string slide_name_;
 	float lean_time_ = 0;      // the left stick held over on a tail grind
 	float air_up_ = 0, air_down_in_ = 0; // in the air: the right stick held up, and since it left up
+	float spin_lag_[2] = {0, 0};       // the left stick the last two ticks (the spin answers it late)
 	float spin_hold_ = 0, spin_dir_ = 0;  // the left stick held over for a spin (s), and which way
 	// a grab on a rail (0 none, 1 front hand, 2 back hand): held, asked for and how long
 	int grind_grab_ = 0, grind_grab_want_ = 0;
@@ -153,7 +156,7 @@ private:
 	bool grind_lip_ = false;  // a slide's family: the board turned onto the rail the lip way
 	// scoring: where the air began and its top; lengths ridden on the current rail / manual (m);
 	// personal bests (line points, air seconds, rail and manual metres, tricks in a line)
-	V3 launch_;
+	V3 launch_, launch_vel_;
 	float peak_ = 0, grind_run_ = 0, manual_run_ = 0;
 	float best_line_ = 0, best_air_ = 0, best_grind_ = 0, best_manual_ = 0, best_tricks_ = 0;
 	float pop_y_ = 0; // height the last pop left from
@@ -165,6 +168,9 @@ private:
 	bool flip_landable() const { return flip_ < 0 || flip_turns_ - flip_angle_ <= (1 - p[FlipLenience]) * flip_base_turns_ + 1e-4f; }
 	float spin_speed_ = 0, spin_total_ = 0;
 	float air_time_ = 0;
+	int ollie_ = 0;     // an ollie off flat ground: 1 rising, 2 pulled up short, 3 hanging, 4 pushed down
+	float hang_ = 0, ollie_kick_ = 0, ollie_load_ = 1;
+	bool catch_crouched_ = false;
 
 	// manual / grind
 	int manual_dir_ = 0;

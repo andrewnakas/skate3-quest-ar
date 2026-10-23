@@ -210,7 +210,9 @@ def m_grind(s):
     a, b = on[0], on[-1]
     land = next((i for i in range(b + 1, len(s)) if not s[i][5] and not s[i][8]), None)
     after = s[min(land + 20, len(s) - 1)][2] if land is not None else float("nan")
-    return {"catch_keep": s[a + 2][2] / s[a - 2][2],
+    up = next((i for i, x in enumerate(s) if x[5]), a)
+    return {"catch_ticks": a - up,  # from leaving the ground to on the rail
+            "catch_keep": s[a + 2][2] / s[a - 2][2],
             "rail_decel": (s[a + 3][2] - s[b - 3][2]) / ((b - a - 6) * DT),
             "rail_s": (b - a + 1) * DT,
             "off_keep": after / s[b][2]}
