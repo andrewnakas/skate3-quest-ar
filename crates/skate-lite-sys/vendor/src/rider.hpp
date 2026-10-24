@@ -95,6 +95,9 @@ private:
 	float flick_pad_[2] = {0, 0};
 	// ticks since the stick left the crouch (the pop's first move)
 	int since_lead_ = 0;
+	// the board's tip in a manual / a 5-0 or nosegrind, degrees (eased to the stick's reach)
+	float manual_tilt_ = 0, grind_tilt_ = 0;
+	int tip_kind_ = -1;
 
 	bool unslide_ = false;
 	V3 plant_in_; // the way it was going when it planted (a foot/handplant pops back off that way)

@@ -68,7 +68,9 @@ const GrindDef kGrindDefs[] = {
 
 int grind_kind_for(bool slide, float x, float y, bool crouched)
 {
-	bool side = std::fabs(x) > 0.45f, up = y > 0.45f, down = y < -0.45f;
+	// (as the port, probed on a rail: a 5-0 from just over half way down, a nosegrind from two thirds
+	// up, a crooked from half way to the side; short of that it's the 50-50 / boardslide)
+	bool side = std::fabs(x) > 0.52f, up = y > 0.66f, down = y < -0.52f;
 	if (slide) {
 		if (up)
 			return side ? SK8_GRIND_NOSEBLUNT : SK8_GRIND_NOSESLIDE;
@@ -397,6 +399,28 @@ static const float kSpinCurve[][2] = {
 	{0.0f, 0.0f}, {0.214f, 0.056f}, {0.357f, 0.127f}, {0.5f, 0.399f}, {0.643f, 0.5376f}, {0.786f, 0.597f},
 	{0.929f, 0.602f}, {1.0f, 0.999f}};
 
+// ---------------------------------------------------------------- board tilt
+
+// The board's tilt in a manual and a 5-0 / nosegrind goes by how far the right stick is tipped, and
+// eases there (as the port, measured: degrees for the stick's reach).
+static const float kManualTilt[][2] = {{0.0f, 9.3f}, {0.35f, 9.3f}, {0.55f, 14.61f}, {0.85f, 22.3f}, {1.0f, 22.3f}};
+constexpr float kManualTiltButton = 14.61f; // held with a button, no stick: the middle
+constexpr float kTiltRate = 27.0f;         // degrees per second at most
+constexpr float kTiltEase = 0.25f;         // s, settling at the end
+// a 5-0 / nosegrind caught with the stick that far over, and where it settles held there
+static const float kTipCatch[][2] = {{0.0f, 11.11f}, {0.55f, 11.11f}, {0.7f, 16.71f}, {1.0f, 23.8f}};
+static const float kTipHold[][2] = {{0.0f, 10.51f}, {0.55f, 10.51f}, {0.7f, 16.0f}, {1.0f, 16.0f}};
+static const float kNoseCatch[][2] = {{0.0f, 12.8f}, {0.7f, 12.8f}, {1.0f, 18.5f}};
+static const float kNoseHold[][2] = {{0.0f, 17.0f}, {0.7f, 17.0f}, {1.0f, 16.5f}};
+constexpr float kTipSettle = 0.5f; // s
+constexpr float kNoseTiltWait = 0.45f; // s a nose manual stays level
+
+static float ease_tilt(float tilt, float target, float tau)
+{
+	float d = (target - tilt) * (1 - std::exp(-kDt / tau));
+	return tilt + clampf(d, -kTiltRate * kDt, kTiltRate * kDt);
+}
+
 // ---------------------------------------------------------------- crouch
 
 // How much pop a crouch has charged, by how far it got (crouch_: the share of crouch_charge held).
@@ -552,6 +576,25 @@ void Rider::step(World &w, const sk8_input &in)
 	}
 	float target = mode_ == SK8_MODE_SLIDE ? 1.0f : 0.0f;
 	slide_amount_ = approach(slide_amount_, target, 6 * kDt);
+	{
+		float reach = std::sqrt(in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1]);
+		if (mode_ == SK8_MODE_MANUAL) {
+			float target = stick_manual_ == manual_dir_ && reach >= kManualIn ? on_curve(kManualTilt, reach) : kManualTiltButton;
+			// (a nose manual stays level a moment before it tips: as the port)
+			if (manual_dir_ > 0 || manual_time_ >= kNoseTiltWait)
+				manual_tilt_ = ease_tilt(manual_tilt_, target, kTiltEase);
+		} else {
+			manual_tilt_ = 0;
+		}
+		bool tip = mode_ == SK8_MODE_GRIND && (grind_kind_ == SK8_GRIND_5_0 || grind_kind_ == SK8_GRIND_NOSEGRIND);
+		bool nose = grind_kind_ == SK8_GRIND_NOSEGRIND;
+		float y = std::fabs(in.flick[1]);
+		if (tip && tip_kind_ != grind_kind_)
+			grind_tilt_ = nose ? on_curve(kNoseCatch, y) : on_curve(kTipCatch, y);
+		else if (tip)
+			grind_tilt_ = ease_tilt(grind_tilt_, nose ? on_curve(kNoseHold, y) : on_curve(kTipHold, y), kTipSettle);
+		tip_kind_ = tip ? grind_kind_ : -1;
+	}
 }
 
 // ---------------------------------------------------------------- ground
@@ -2434,7 +2477,7 @@ void Rider::state(sk8_state &s) const
 	else if (mode_ == SK8_MODE_MANUAL && manual_style_ == 2)
 		board = board * Q::axis_angle({0, 0, 1}, kPi) * Q::axis_angle({1, 0, 0}, 0.38f); // casper: upside down, tail up
 	else if (mode_ == SK8_MODE_MANUAL)
-		board = board * Q::axis_angle({1, 0, 0}, -0.13f * float(manual_dir_));
+		board = board * Q::axis_angle({1, 0, 0}, -manual_tilt_ * kDeg * float(manual_dir_));
 	if (mode_ == SK8_MODE_AIR && varial_ != 0)
 		board = board * Q::axis_angle({0, 1, 0}, -varial_); // the board stays while the body turns
 	if (mode_ == SK8_MODE_GRIND && catch_board_ != 0)
@@ -2444,7 +2487,9 @@ void Rider::state(sk8_state &s) const
 		// rides on (local x right = heel edge, y up, z the nose)
 		const GrindDef &g = kGrindDefs[grind_tip_ ? SK8_GRIND_5_0 : grind_kind_];
 		float side = switch_ ? -1.0f : 1.0f; // the heel edge is on the other side in switch
-		board = board * Q::axis_angle({0, 1, 0}, -g.yaw * side * kDeg) * Q::axis_angle({1, 0, 0}, -g.pitch * kDeg) *
+		// (a 5-0 / nosegrind tips as far as the stick says: see grind_tilt_)
+		float pitch = tip_kind_ >= 0 && !grind_tip_ ? (g.pitch < 0 ? -grind_tilt_ : grind_tilt_) : g.pitch;
+		board = board * Q::axis_angle({0, 1, 0}, -g.yaw * side * kDeg) * Q::axis_angle({1, 0, 0}, -pitch * kDeg) *
 			Q::axis_angle({0, 0, 1}, g.roll * side * kDeg);
 		(pos_ - fwd * g.along).store(s.position);
 	}

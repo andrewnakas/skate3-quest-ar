@@ -91,6 +91,16 @@ SCENARIOS = {
     "fliph_c12": (flick_path([(0, -1)] * 12 + [(0, 0)] + [(-0.707, 0.707)] * 48, 0), 120, "flip"),
     "heldA_c35": (flick_path([(0, 0)] + [(0, -1)] * 35 + [(0.707, 0.707)] * 110, 0), 150, "flip"),
     "heldB_tiny": (flick_path([(0, -1)] * 2 + [(0, 0)] + [(0.707, 0.707)] * 110, 0), 150, "flip"),
+    "manpose_35": ("0 90 0 0 0 -0.35 0\n", 100, "pose"),
+    "manpose_55": ("0 90 0 0 0 -0.55 0\n", 100, "pose"),
+    "manpose_85": ("0 90 0 0 0 -0.85 0\n", 100, "pose"),
+    "manpose_nose80": ("0 90 0 0 0 0.8 0\n", 100, "pose"),
+    "manpose_step": ("0 40 0 0 0 -0.4 0\n41 100 0 0 0 -0.8 0\n", 110, "pose"),
+    "grpose_m055": ("0 8 0 0 0 -1 0\n9 15 0 0 0 1 0\n16 160 0 0 0 -0.55 0\n", 160, "pose", ON_RAIL),
+    "grpose_m07": ("0 8 0 0 0 -1 0\n9 15 0 0 0 1 0\n16 160 0 0 0 -0.7 0\n", 160, "pose", ON_RAIL),
+    "grpose_m1": ("0 8 0 0 0 -1 0\n9 15 0 0 0 1 0\n16 160 0 0 0 -1 0\n", 160, "pose", ON_RAIL),
+    "grpose_07": ("0 8 0 0 0 -1 0\n9 15 0 0 0 1 0\n16 160 0 0 0 0.7 0\n", 160, "pose", ON_RAIL),
+    "grpose_1": ("0 8 0 0 0 -1 0\n9 15 0 0 0 1 0\n16 160 0 0 0 1 0\n", 160, "pose", ON_RAIL),
     "pop_up61": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.61 0\n", 120, "air"),
     "pop_up50": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.50 0\n", 120, "air"),
     "pop_up60": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.60 0\n", 120, "air"),
@@ -170,8 +180,25 @@ def series(rows, port):
         if not port:
             air = air or r["mode"] == "Grind"
         manual = "Manual" in r["motion_state"] if port else r["mode"] == "Manual"
+        # the deck's nose up (+) or down, degrees: its forward axis's height part
+        nose_y = 2 * (qy * qz - qw * qx)
+        pitch = math.degrees(math.asin(max(-1.0, min(1.0, nose_y))))
         out.append((int(r["tick"]), float(r["deck_py"]), math.hypot(vx, vz), vy, yaw, air, r.get("events", ""),
-                    board_up_y, grind, manual))
+                    board_up_y, grind, manual, pitch))
+    return out
+
+
+def m_pose(s):
+    """The deck's pitch through a grind or manual: at its start and 10 / 20 / 40 / 60 ticks in
+    (the stick picks how far it tips, and it eases there)."""
+    on = [i for i, x in enumerate(s) if x[8] or x[9]]
+    if not on:
+        return {"held": 0}
+    i0 = on[0]
+    out = {"ticks_on": len(on)}
+    for k in (0, 10, 20, 40, 60):
+        if i0 + k < len(s) and (s[i0 + k][8] or s[i0 + k][9]):
+            out[f"pitch_{k}"] = abs(s[i0 + k][10])
     return out
 
 
