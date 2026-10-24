@@ -1,56 +1,114 @@
+#[cfg(feature = "retail")]
 mod animation;
 #[cfg(target_os = "android")]
 mod android;
-#[cfg(any(target_os = "android", test))]
+#[cfg(all(feature = "retail", any(target_os = "android", test)))]
 mod clean_pack;
+#[cfg(feature = "retail")]
 mod animation_pose;
+#[cfg(feature = "retail")]
 mod app;
+#[cfg(feature = "retail")]
 mod apt_display;
+#[cfg(feature = "retail")]
 mod apt_movie;
+#[cfg(feature = "retail")]
 mod apt_scene;
+#[cfg(feature = "retail")]
 mod apt_text;
+#[cfg(feature = "retail")]
 mod apt_vm;
+#[cfg(feature = "retail")]
 mod assets;
+#[cfg(feature = "retail")]
 mod camera;
 mod config;
+#[cfg(feature = "retail")]
 mod crash_context;
+#[cfg(feature = "retail")]
 mod crash_report;
+#[cfg(feature = "retail")]
 mod custom_models;
+#[cfg(feature = "retail")]
 mod customiser;
+#[cfg(feature = "retail")]
 mod customiser_material;
+#[cfg(feature = "retail")]
 mod customiser_parts;
+#[cfg(feature = "retail")]
 mod difficulty;
+#[cfg(feature = "retail")]
 mod fps_overlay;
+#[cfg(feature = "retail")]
 mod graph_host;
+#[cfg(feature = "retail")]
 mod graph_runtime;
+#[cfg(feature = "retail")]
 mod graphics_menu;
+#[cfg(feature = "retail")]
 mod grind_world;
+#[cfg(feature = "retail")]
 mod hud_runtime;
+#[cfg(feature = "retail")]
 mod input;
+// The store build: the pad plumbing the imported-disc tier reads, as stand-ins.
+#[cfg(not(feature = "retail"))]
+#[path = "input_store.rs"]
+mod input;
+#[cfg(feature = "retail")]
 mod map_library;
+#[cfg(feature = "retail")]
 mod map_render;
+#[cfg(feature = "retail")]
 mod map_transition;
+#[cfg(feature = "retail")]
 mod modding;
+#[cfg(feature = "retail")]
 mod multiplayer;
+#[cfg(feature = "retail")]
 mod performance;
+#[cfg(feature = "retail")]
 mod physics;
+#[cfg(feature = "retail")]
 mod presentation;
+#[cfg(feature = "retail")]
 mod profiling;
+#[cfg(feature = "retail")]
 mod render_capacity;
+#[cfg(feature = "retail")]
 mod replay;
+#[cfg(feature = "retail")]
 mod retail_character;
+#[cfg(feature = "retail")]
 mod retail_irradiance;
+#[cfg(feature = "retail")]
 mod retail_render;
+#[cfg(feature = "retail")]
 mod scoring_hud;
+#[cfg(feature = "retail")]
 mod scoring_runtime;
+#[cfg(feature = "retail")]
 mod session_marker;
+#[cfg(feature = "retail")]
 mod setup;
+#[cfg(feature = "retail")]
 mod skate_audio;
+// The store build (no `retail`): only the clean tier's own sounds.
+#[cfg(not(feature = "retail"))]
+#[path = "skate_audio_store.rs"]
+mod skate_audio;
+mod stream_pcm;
+#[cfg(feature = "retail")]
 mod skate_world;
+#[cfg(feature = "retail")]
 mod skater_animation;
+#[cfg(feature = "retail")]
 mod teleport_menu;
+#[cfg(feature = "retail")]
 mod updater;
+#[cfg(feature = "retail")]
 mod verification;
+#[cfg(feature = "retail")]
 mod world;
 #[cfg(feature = "xr")]
 mod xr;
@@ -86,6 +144,7 @@ pub(crate) fn request_storage_access() {
 
 /// Startup loading. `Err` is the exit to return, including the asset
 /// check's success.
+#[cfg(feature = "retail")]
 fn load() -> Result<Loaded, bevy::app::AppExit> {
     eprintln!("REPORT_META stage=configuration_and_installation");
     let config = match bevy::log::info_span!("load_configuration_and_map")
@@ -209,6 +268,7 @@ pub fn run() -> bevy::app::AppExit {
 }
 
 /// Everything startup loads before the app is built.
+#[cfg(feature = "retail")]
 struct Loaded {
     config: config::Config,
     manifest: skate_data::GameAssets,
@@ -229,10 +289,20 @@ pub fn run_with(pump: Option<&mut dyn FnMut()>) -> bevy::app::AppExit {
         eprintln!("{error}");
         return bevy::app::AppExit::error();
     }
-    // The public tier: the clean-room engine, no game data at all.
-    if clean::wanted() {
-        return clean::run();
+    // The public tier: the clean-room engine, no game data at all. (The store build has nothing
+    // else.)
+    #[cfg(feature = "retail")]
+    if !clean::wanted() {
+        return run_retail(pump);
     }
+    #[cfg(not(feature = "retail"))]
+    let _ = pump;
+    clean::run()
+}
+
+/// The imported-disc tier: the faithful port on the player's own converted data.
+#[cfg(feature = "retail")]
+fn run_retail(pump: Option<&mut dyn FnMut()>) -> bevy::app::AppExit {
     // The updater and the crash supervisor relaunch the current executable,
     // which on Android is the system app process.
     #[cfg(not(target_os = "android"))]
@@ -299,6 +369,6 @@ pub fn run_with(pump: Option<&mut dyn FnMut()>) -> bevy::app::AppExit {
     app.run()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "retail"))]
 #[path = "tests/action_host.rs"]
 mod action_host_tests;

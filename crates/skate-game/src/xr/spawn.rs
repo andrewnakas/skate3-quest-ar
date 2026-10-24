@@ -8,7 +8,7 @@ use super::link::{ArWorld, TeleportSkater};
 use crate::input::ExternalPad;
 use bevy::prelude::*;
 use bevy_mod_openxr::openxr_session_running;
-use skate_core::input::xbox::XboxState;
+use super::touch::XboxState;
 
 const SQUEEZE: f32 = 0.7;
 /// Game-world units (metres at skater scale).

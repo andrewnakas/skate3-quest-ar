@@ -1,6 +1,9 @@
+#[cfg(feature = "retail")]
 use bevy::prelude::Resource;
+#[cfg(feature = "retail")]
 use std::path::PathBuf;
 
+#[cfg(feature = "retail")]
 #[derive(Resource)]
 pub(crate) struct Config {
     pub asset_root: PathBuf,
@@ -30,6 +33,7 @@ impl Default for XrOptions {
     }
 }
 
+#[cfg(feature = "retail")]
 impl Config {
     pub fn from_env() -> Result<Self, String> {
         let mut config = Self {
@@ -245,6 +249,7 @@ impl Config {
 }
 
 /// Hash map bytes identically for startup and background map replacement.
+#[cfg(feature = "retail")]
 pub(crate) fn map_fingerprint(path: Option<&std::path::Path>) -> Result<u64, String> {
     Ok(if let Some(path) = path {
         use std::io::Read;

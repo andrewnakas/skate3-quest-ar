@@ -12,10 +12,12 @@
 //! `files/use-retail-data` exists. That path is for the fully clean-room
 //! pack; the current skate3-cleanroom pack still keeps retail animations,
 //! graphs, tuning and colliders, so it must not ship in a public APK.
+#[cfg(feature = "retail")]
 use std::io::BufReader;
 use std::path::PathBuf;
 
 /// Bump when the bundled pack changes in a way its size would not show.
+#[cfg(feature = "retail")]
 const BUNDLE_VERSION: u32 = 2;
 
 pub(crate) fn files_dir() -> Result<PathBuf, String> {
@@ -28,6 +30,7 @@ pub(crate) fn files_dir() -> Result<PathBuf, String> {
 
 /// The asset root: a pack bundled in the APK (unpacked on first use) unless
 /// `files/use-retail-data` asks otherwise; else the pushed installation.
+#[cfg(feature = "retail")]
 pub(crate) fn asset_root() -> Result<PathBuf, String> {
     let files = files_dir()?;
     let pushed = files.join("assets");

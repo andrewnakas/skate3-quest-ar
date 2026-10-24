@@ -42,6 +42,7 @@ pub(crate) fn embed_font(app: &mut App) {
 }
 
 /// Whether this launch runs the clean tier.
+#[cfg(feature = "retail")]
 pub(crate) fn wanted() -> bool {
     #[cfg(target_os = "android")]
     {

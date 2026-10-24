@@ -44,7 +44,7 @@ use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy_mod_openxr::openxr_session_running;
 use serde::{Deserialize, Serialize};
-use skate_core::input::xbox::XboxState;
+use crate::xr::touch::XboxState;
 
 const HOLD_TO_TOGGLE_SECONDS: f32 = 1.0;
 /// Left stick deflection that makes a menu hold a D-pad chord instead.

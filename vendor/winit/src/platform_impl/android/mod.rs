@@ -34,6 +34,109 @@ pub(crate) use crate::icon::NoIcon as PlatformIcon;
 
 static HAS_FOCUS: AtomicBool = AtomicBool::new(true);
 
+/// LOCAL PATCH (see vendor/README.md): the last state of a game pad (on Quest, a Bluetooth Xbox
+/// controller). Pad events are kept here for the app to read rather than sent as touches / keys.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GamepadState {
+    /// left x, left y, right x, right y (-1..1, +y down as Android gives it), left / right trigger
+    /// (0..1), d-pad x, d-pad y
+    pub axes: [f32; 8],
+    /// `GAMEPAD_*` bits held
+    pub buttons: u32,
+    /// Bumped on every pad event (0: no pad seen yet).
+    pub events: u64,
+}
+
+pub const GAMEPAD_A: u32 = 1 << 0;
+pub const GAMEPAD_B: u32 = 1 << 1;
+pub const GAMEPAD_X: u32 = 1 << 2;
+pub const GAMEPAD_Y: u32 = 1 << 3;
+pub const GAMEPAD_LB: u32 = 1 << 4;
+pub const GAMEPAD_RB: u32 = 1 << 5;
+pub const GAMEPAD_LS: u32 = 1 << 6;
+pub const GAMEPAD_RS: u32 = 1 << 7;
+pub const GAMEPAD_START: u32 = 1 << 8;
+pub const GAMEPAD_SELECT: u32 = 1 << 9;
+pub const GAMEPAD_MODE: u32 = 1 << 10;
+pub const GAMEPAD_UP: u32 = 1 << 11;
+pub const GAMEPAD_DOWN: u32 = 1 << 12;
+pub const GAMEPAD_LEFT: u32 = 1 << 13;
+pub const GAMEPAD_RIGHT: u32 = 1 << 14;
+
+static GAMEPAD: Mutex<GamepadState> = Mutex::new(GamepadState { axes: [0.0; 8], buttons: 0, events: 0 });
+
+pub fn gamepad_state() -> GamepadState {
+    GAMEPAD.lock().map(|g| *g).unwrap_or_default()
+}
+
+fn gamepad_bit(code: Keycode) -> Option<u32> {
+    Some(match code {
+        Keycode::ButtonA => GAMEPAD_A,
+        Keycode::ButtonB => GAMEPAD_B,
+        Keycode::ButtonX => GAMEPAD_X,
+        Keycode::ButtonY => GAMEPAD_Y,
+        Keycode::ButtonL1 => GAMEPAD_LB,
+        Keycode::ButtonR1 => GAMEPAD_RB,
+        Keycode::ButtonThumbl => GAMEPAD_LS,
+        Keycode::ButtonThumbr => GAMEPAD_RS,
+        Keycode::ButtonStart => GAMEPAD_START,
+        Keycode::ButtonSelect | Keycode::Back => GAMEPAD_SELECT,
+        Keycode::ButtonMode => GAMEPAD_MODE,
+        Keycode::DpadUp => GAMEPAD_UP,
+        Keycode::DpadDown => GAMEPAD_DOWN,
+        Keycode::DpadLeft => GAMEPAD_LEFT,
+        Keycode::DpadRight => GAMEPAD_RIGHT,
+        _ => return None,
+    })
+}
+
+/// A pad event: kept in [`GAMEPAD`] (true), or not a pad's (false).
+fn take_gamepad_event(event: &InputEvent<'_>) -> bool {
+    // (sources are bit sets: class joystick 0x10, gamepad buttons 0x400)
+    match event {
+        InputEvent::MotionEvent(m) => {
+            let source: u32 = m.source().into();
+            if source & 0x10 == 0 {
+                return false;
+            }
+            let p = m.pointer_at_index(0);
+            let a = |axis: android_activity::input::Axis| p.axis_value(axis);
+            use android_activity::input::Axis;
+            let axes = [
+                a(Axis::X),
+                a(Axis::Y),
+                a(Axis::Z),
+                a(Axis::Rz),
+                a(Axis::Ltrigger).max(a(Axis::Brake)),
+                a(Axis::Rtrigger).max(a(Axis::Gas)),
+                a(Axis::HatX),
+                a(Axis::HatY),
+            ];
+            if let Ok(mut g) = GAMEPAD.lock() {
+                g.axes = axes;
+                g.events += 1;
+            }
+            true
+        },
+        InputEvent::KeyEvent(k) => {
+            let source: u32 = k.source().into();
+            let Some(bit) = gamepad_bit(k.key_code()) else { return false };
+            if source & 0x400 == 0 && source & 0x10 == 0 {
+                return false;
+            }
+            if let Ok(mut g) = GAMEPAD.lock() {
+                match k.action() {
+                    KeyAction::Down => g.buttons |= bit,
+                    _ => g.buttons &= !bit,
+                }
+                g.events += 1;
+            }
+            true
+        },
+        _ => false,
+    }
+}
+
 // Lifecycle state seen by `pump_lifecycle` before the event loop existed,
 // handed to the loop when it starts (the events themselves were consumed).
 static EARLY_RESUMED: AtomicBool = AtomicBool::new(false);
@@ -435,6 +538,9 @@ impl<T: 'static> EventLoop<T> {
         F: FnMut(event::Event<T>, &RootAEL),
     {
         let mut input_status = InputStatus::Handled;
+        if take_gamepad_event(event) {
+            return input_status;
+        }
         match event {
             InputEvent::MotionEvent(motion_event) => {
                 let window_id = window::WindowId(WindowId);

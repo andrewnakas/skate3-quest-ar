@@ -19,6 +19,7 @@
 //! playing" into evidence that samples reached the device.
 
 mod skate_audio;
+mod stream_pcm;
 
 use std::time::{Duration, Instant};
 

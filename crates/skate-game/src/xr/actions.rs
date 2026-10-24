@@ -183,6 +183,12 @@ fn read(
         right_stick_click: button(&actions.right_click),
         menu: button(&actions.menu),
     };
+    // A game pad (Quest: a Bluetooth Xbox controller) drives everything the Touch controllers do.
+    #[cfg(target_os = "android")]
+    let touch = {
+        let pad = winit::platform::android::gamepad_state();
+        if pad.events > 0 { super::touch::pad_into_touch(touch, pad.axes, pad.buttons) } else { touch }
+    };
     latest.0 = touch;
     let mut state = mapper.map(&touch, time.delta_secs());
     // A menu tap is Start, which opens the flat pause menu; its camera is off
@@ -190,7 +196,7 @@ fn read(
     state.buttons &= !super::touch::START;
     // A headset menu owns the controllers: the skater gets a neutral pad.
     if ui.is_some_and(|ui| ui.0) {
-        state = skate_core::input::xbox::XboxState { buttons: 0, triggers: [0, 0], left: [0, 0], right: [0, 0] };
+        state = super::touch::XboxState { buttons: 0, triggers: [0, 0], left: [0, 0], right: [0, 0] };
     }
     pad.set(state);
 }

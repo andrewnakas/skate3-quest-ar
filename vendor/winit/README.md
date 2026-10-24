@@ -68,3 +68,10 @@ same MSRV policy.
 ### Platform-specific usage
 
 Check out the [`winit::platform`](https://rust-windowing.github.io/winit/winit/platform/index.html) module for platform-specific usage.
+
+## Game pads (Quest: a Bluetooth Xbox controller)
+
+winit 0.30's Android backend turns joystick motion into touches and pad buttons into key events
+(or drops them). `platform_impl/android/mod.rs` now keeps pad events instead (sources with the
+joystick or gamepad class bits): the sticks, triggers, d-pad and buttons in a `GamepadState` the
+app reads with `winit::platform::android::gamepad_state()`.

@@ -35,6 +35,12 @@ pub(crate) use crate::config::XrOptions;
 #[derive(Resource, Clone)]
 pub(crate) struct XrFiles(pub std::path::PathBuf);
 
+/// The app's name for the OpenXR runtime (the store build has no imported-disc tier, nor its name).
+#[cfg(feature = "retail")]
+const APP_NAME: &str = "Skate 3 AR";
+#[cfg(not(feature = "retail"))]
+const APP_NAME: &str = "SK8 AR";
+
 /// Wrap the game's `DefaultPlugins` so the OpenXR runtime owns rendering.
 /// `add_xr_plugins` replaces the `RenderPlugin` with one built on the
 /// runtime's Vulkan device; if no runtime/headset is present it falls back
@@ -66,7 +72,7 @@ pub(crate) fn plugins(base: PluginGroupBuilder) -> PluginGroupBuilder {
     add_xr_plugins(base)
         .set(OxrInitPlugin {
             app_info: AppInfo {
-                name: "Skate 3 AR".into(),
+                name: APP_NAME.into(),
                 ..AppInfo::BEVY
             },
             exts,
@@ -88,6 +94,7 @@ pub(crate) struct XrPlugin {
 
 impl Plugin for XrPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "retail")]
         if self.retail {
             app.add_plugins(link::RetailLinkPlugin)
                 .insert_resource(ui::ControlsSheet(retail_controls()));
@@ -135,6 +142,7 @@ impl Plugin for XrPlugin {
 
 /// The imported-disc tier's controls: the Touch controllers stand in for the
 /// game's pad.
+#[cfg(feature = "retail")]
 fn retail_controls() -> Vec<(String, String)> {
     [
         ("Right stick", "flick it: ollies and flip tricks"),

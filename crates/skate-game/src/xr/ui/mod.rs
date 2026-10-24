@@ -16,6 +16,7 @@
 //! full SK8 sheet. This module then only listens for the menu tap that
 //! closes everything.
 pub(crate) mod hud;
+#[cfg(feature = "retail")]
 pub(crate) mod import;
 pub(crate) mod pages;
 mod pointer;
@@ -233,6 +234,8 @@ impl Plugin for XrUiPlugin {
         if self.retail {
             crate::clean::embed_font(app);
         }
+        #[cfg(feature = "retail")]
+        app.add_plugins(import::ImportPlugin);
         let mut providers = UiProviders::default();
         providers.0.push(Arc::new(pages::Shared));
         app.insert_resource(providers)
@@ -241,7 +244,7 @@ impl Plugin for XrUiPlugin {
             .init_resource::<UiNav>()
             .init_resource::<UiOwnsControllers>()
             .init_resource::<pointer::UiPointer>()
-            .add_plugins((hud::HudPlugin, import::ImportPlugin))
+            .add_plugins(hud::HudPlugin)
             .add_systems(Startup, (spawn_ui, pointer::spawn_beam))
             .add_systems(
                 Update,

@@ -116,6 +116,14 @@ impl ActiveEventLoopExtAndroid for ActiveEventLoop {
     }
 }
 
+/// LOCAL PATCH: the last state of a game pad (see `platform_impl::android::GamepadState`).
+#[cfg(android_platform)]
+pub use crate::platform_impl::{
+    gamepad_state, GamepadState, GAMEPAD_A, GAMEPAD_B, GAMEPAD_DOWN, GAMEPAD_LB, GAMEPAD_LEFT,
+    GAMEPAD_LS, GAMEPAD_MODE, GAMEPAD_RB, GAMEPAD_RIGHT, GAMEPAD_RS, GAMEPAD_SELECT, GAMEPAD_START,
+    GAMEPAD_UP, GAMEPAD_X, GAMEPAD_Y,
+};
+
 /// Service the Activity lifecycle before the event loop is created; see
 /// the implementation for why. (Local patch, not upstream winit.)
 #[cfg(android_platform)]

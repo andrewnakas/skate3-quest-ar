@@ -580,6 +580,7 @@ fn page_rows(menu: &Menu, sim: &CleanSkate) -> Vec<Row> {
                 .filter(|item| menu.xr || !matches!(**item, "Build a park" | "Put the skater in front of me"))
                 .map(|s| row(*s))
                 .collect();
+            #[cfg(feature = "retail")]
             if menu.retail_available {
                 rows.push(row("Use my imported disc from the next launch"));
             }
@@ -650,6 +651,7 @@ fn select(menu: &mut Menu, sim: &mut CleanSkate, alt: bool) {
                     menu.xr_requests.recenter = true;
                     menu.open = false;
                 }
+                #[cfg(feature = "retail")]
                 "Use my imported disc from the next launch" => {
                     match std::fs::write(menu.files.join("use-retail-data"), b"") {
                         Ok(()) => menu.say("Imported disc next launch. Quit and reopen the app."),

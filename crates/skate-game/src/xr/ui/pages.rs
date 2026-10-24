@@ -1,6 +1,7 @@
 //! The headset menu's shared pages, the same in both tiers: the start page,
 //! the first-run intro, AR settings, building a park, controls and the
 //! Skate 3 data page. A tier adds its own (the clean tier's skater page).
+#[cfg(feature = "retail")]
 use super::import::{Import, Status};
 use super::{Act, ControlsSheet, Outcome, PageId, UiPage, UiProvider, UiProviders, Widget, XrUi};
 use crate::xr::actions::Hand;
@@ -22,11 +23,13 @@ pub(crate) const AR: PageId = "ar";
 pub(crate) const BUILD: PageId = "build";
 pub(crate) const CONTROLS: PageId = "controls";
 const BUILD_CONTROLS: PageId = "build_controls";
+#[cfg(feature = "retail")]
 pub(crate) const DATA: PageId = "data";
 
 /// Where "put the skater in front of me" aims, real metres ahead of the head.
 const AHEAD_M: f32 = 0.6;
 /// Import buttons, one per bundle found.
+#[cfg(feature = "retail")]
 const IMPORT_IDS: [&str; 4] = ["import0", "import1", "import2", "import3"];
 
 /// Which tier is running.
@@ -52,6 +55,7 @@ impl UiProvider for Shared {
                     Widget::link("Build a park", BUILD),
                     Widget::button("recenter", "Put the skater in front of me"),
                     Widget::link("Controls", CONTROLS),
+                    #[cfg(feature = "retail")]
                     Widget::link("Skate 3 data", DATA),
                     Widget::info(""),
                     Widget::info(tier_line(retail)),
@@ -118,6 +122,7 @@ impl UiProvider for Shared {
                 UiPage::new("Controls", w)
             }
             BUILD_CONTROLS => UiPage::new("Build mode controls", BUILD_HELP.iter().map(|(a, b)| pair(a, b)).collect()),
+            #[cfg(feature = "retail")]
             DATA => UiPage::new("Skate 3 data", data_widgets(world)),
             _ => return None,
         })
@@ -165,6 +170,7 @@ impl UiProvider for Shared {
             },
             (AR, _) => ar_act(widget, world),
             (BUILD | INTRO_FLOOR, _) => build_act(widget, act, world)?,
+            #[cfg(feature = "retail")]
             (DATA, _) => data_act(widget, world),
             _ => return None,
         })
@@ -179,6 +185,12 @@ fn controls_rows(world: &World) -> Vec<Widget> {
     world.resource::<ControlsSheet>().0.iter().map(|(a, b)| pair(a, b)).collect()
 }
 
+#[cfg(not(feature = "retail"))]
+fn tier_line(_retail: bool) -> &'static str {
+    "Every move, value and sound in this game was made for it."
+}
+
+#[cfg(feature = "retail")]
 fn tier_line(retail: bool) -> &'static str {
     if retail {
         "Playing your own Skate 3 data (retail controls and skaters)."
@@ -446,6 +458,7 @@ const BUILD_HELP: [(&str, &str); 17] = [
 
 // ---------------------------------------------------------------- data
 
+#[cfg(feature = "retail")]
 fn data_widgets(world: &World) -> Vec<Widget> {
     let retail = world.resource::<UiTier>().retail;
     let import = world.resource::<Import>();
@@ -501,6 +514,7 @@ fn data_widgets(world: &World) -> Vec<Widget> {
     w
 }
 
+#[cfg(feature = "retail")]
 fn data_act(widget: &str, world: &mut World) -> Outcome {
     let import = world.resource::<Import>().clone();
     match widget {

@@ -22,11 +22,15 @@ use std::sync::Arc;
 
 use bevy::audio::{AudioSinkPlayback, SpatialAudioSink, Volume};
 use bevy::prelude::*;
+#[cfg(feature = "retail")]
 use skate_core::physics::phase::PhysicsEvent;
 
-use super::{FrontEndSoundRequest, PlayerAudioObservation, StreamPcm};
+use crate::stream_pcm::StreamPcm;
+#[cfg(feature = "retail")]
+use super::{FrontEndSoundRequest, PlayerAudioObservation};
 
 /// Whether this build plays the clean sounds instead of the retail player audio.
+#[cfg(feature = "retail")]
 pub(crate) fn enabled() -> bool {
     match std::env::var("SKATE_AUDIO").as_deref() {
         Ok("clean") => true,
@@ -207,6 +211,7 @@ struct Edges {
     trick: Option<String>,
 }
 
+#[cfg(feature = "retail")]
 pub(super) fn install(app: &mut App) {
     app.init_resource::<SurfaceHints>()
         .add_systems(Startup, setup)
@@ -477,18 +482,22 @@ impl CleanAudio {
     }
 }
 
+#[cfg(feature = "retail")]
 fn is_ground(state: u32) -> bool {
     (100..=105).contains(&state)
 }
 
+#[cfg(feature = "retail")]
 fn is_air(state: u32) -> bool {
     (200..=202).contains(&state)
 }
 
+#[cfg(feature = "retail")]
 fn is_grind(state: u32) -> bool {
     (400..=405).contains(&state)
 }
 
+#[cfg(feature = "retail")]
 fn is_flip(trick: &str) -> bool {
     let t = trick.to_ascii_lowercase();
     ["flip", "heel", "shuv", "varial", "tre", "360", "impossible", "casper", "dolphin"]
@@ -496,6 +505,7 @@ fn is_flip(trick: &str) -> bool {
         .any(|k| t.contains(k))
 }
 
+#[cfg(feature = "retail")]
 fn observe(
     mut commands: Commands,
     audio: Option<ResMut<CleanAudio>>,
@@ -599,6 +609,7 @@ fn observe(
     }
 }
 
+#[cfg(feature = "retail")]
 fn frontend(
     mut commands: Commands,
     audio: Option<ResMut<CleanAudio>>,
@@ -661,6 +672,7 @@ mod tests {
         assert!(!hints.on_wood(Vec3::new(3.0, 0.5, 0.5)));
     }
 
+    #[cfg(feature = "retail")]
     #[test]
     fn flips_are_recognised() {
         assert!(is_flip("Kickflip"));

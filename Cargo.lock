@@ -4825,6 +4825,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "sk8-quest"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "jni 0.22.4",
+ "libc",
+ "ndk-context",
+ "skate-game",
+ "winit",
+]
+
+[[package]]
 name = "skate-audio-core"
 version = "0.1.0"
 dependencies = [
@@ -4877,6 +4889,7 @@ dependencies = [
  "skate-vehicles",
  "tracing-log",
  "wgpu",
+ "winit",
  "zip",
 ]
 
