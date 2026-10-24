@@ -335,7 +335,7 @@ Flick::Result Flick::feed(float x, float y)
 			spent_ = false;
 		return out;
 	}
-	if (r >= kRimIn) {
+	if (r >= (tokens_.empty() ? kLeadIn : kRimIn)) {
 		int s = sector_of(x, y);
 		if (last_sector_ >= 0 && s != last_sector_ && !tokens_.empty() && tokens_.back() == last_sector_ &&
 			tokens_.size() >= 2 && rim_steps_ + 1 < kSweepDwell &&
@@ -388,7 +388,8 @@ Flick::Result Flick::feed(float x, float y)
 			push(TCentre);
 			last_sector_ = -1;
 			out = resolve(false);
-			if (out.trick < 0 && ++centre_steps_ > 12) {
+			// (let go this long, the flick is over: the port still pops after 10 ticks, not 11)
+			if (out.trick < 0 && ++centre_steps_ > 10) {
 				bool lone = tokens_.size() == 2 && tokens_[0] == TDown && tokens_[1] == TCentre;
 				out = resolve(true);
 				if (out.trick < 0) {

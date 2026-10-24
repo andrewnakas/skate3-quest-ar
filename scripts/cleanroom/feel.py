@@ -67,13 +67,64 @@ SCENARIOS = {
     "push_tap": ("0 89 0 0 0 0 0x2000\n90 92 0 0 0 0 0x1000\n", 180, "push"),
     "ollie_tap": (ollie(4), 120, "air"),
     "ollie_half": (ollie(12), 120, "air"),
+    "pop_down50": ("0 12 0 0 0 -0.50 0\n13 19 0 0 0 1 0\n", 120, "air"),
+    "pop_down60": ("0 12 0 0 0 -0.60 0\n13 19 0 0 0 1 0\n", 120, "air"),
+    "pop_down70": ("0 12 0 0 0 -0.70 0\n13 19 0 0 0 1 0\n", 120, "air"),
+    "pop_down80": ("0 12 0 0 0 -0.80 0\n13 19 0 0 0 1 0\n", 120, "air"),
+    "pop_down90": ("0 12 0 0 0 -0.90 0\n13 19 0 0 0 1 0\n", 120, "air"),
+    "pop_tap34": ("0 5 0 0 0 -0.34 0\n6 12 0 0 0 1 0\n", 120, "air"),
+    "pop_tap40": ("0 5 0 0 0 -0.40 0\n6 12 0 0 0 1 0\n", 120, "air"),
+    "pop_tap60": ("0 5 0 0 0 -0.60 0\n6 12 0 0 0 1 0\n", 120, "air"),
+    "pop_tap80": ("0 5 0 0 0 -0.80 0\n6 12 0 0 0 1 0\n", 120, "air"),
+    "pop_tap90": ("0 5 0 0 0 -0.90 0\n6 12 0 0 0 1 0\n", 120, "air"),
+    "pop_deep88": ("0 12 0 0 0 -0.88 0\n13 19 0 0 0 1 0\n", 120, "air"),
+    "pop_deep89": ("0 12 0 0 0 -0.89 0\n13 19 0 0 0 1 0\n", 120, "air"),
+    "pop_deep95": ("0 12 0 0 0 -0.95 0\n13 19 0 0 0 1 0\n", 120, "air"),
+    "flip_part6": (flick_path([(0, -1)] * 12 + [(0, 0)] + [(-0.424, 0.424)] * 7, 0), 120, "air"),
+    "flip_part7": (flick_path([(0, -1)] * 12 + [(0, 0)] + [(-0.495, 0.495)] * 7, 0), 120, "air"),
+    "flip_part8": (flick_path([(0, -1)] * 12 + [(0, 0)] + [(-0.566, 0.566)] * 7, 0), 120, "air"),
+    "flipk_c2": (flick_path([(0, -1)] * 2 + [(0, 0), (-0.707, 0.707), (-0.707, 0.707), (-0.707, 0.707)], 0), 120, "flip"),
+    "fliph_c2": (flick_path([(0, -1)] * 2 + [(0, 0)] + [(-0.707, 0.707)] * 48, 0), 120, "flip"),
+    "flipk_c6": (flick_path([(0, -1)] * 6 + [(0, 0), (-0.707, 0.707), (-0.707, 0.707), (-0.707, 0.707)], 0), 120, "flip"),
+    "fliph_c6": (flick_path([(0, -1)] * 6 + [(0, 0)] + [(-0.707, 0.707)] * 48, 0), 120, "flip"),
+    "flipk_c12": (flick_path([(0, -1)] * 12 + [(0, 0), (-0.707, 0.707), (-0.707, 0.707), (-0.707, 0.707)], 0), 120, "flip"),
+    "fliph_c12": (flick_path([(0, -1)] * 12 + [(0, 0)] + [(-0.707, 0.707)] * 48, 0), 120, "flip"),
+    "heldA_c35": (flick_path([(0, 0)] + [(0, -1)] * 35 + [(0.707, 0.707)] * 110, 0), 150, "flip"),
+    "heldB_tiny": (flick_path([(0, -1)] * 2 + [(0, 0)] + [(0.707, 0.707)] * 110, 0), 150, "flip"),
+    "pop_up61": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.61 0\n", 120, "air"),
+    "pop_up50": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.50 0\n", 120, "air"),
+    "pop_up60": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.60 0\n", 120, "air"),
+    "pop_up70": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.70 0\n", 120, "air"),
+    "pop_up80": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.80 0\n", 120, "air"),
+    "pop_up90": ("0 12 0 0 0 -1 0\n13 19 0 0 0 0.90 0\n", 120, "air"),
     "ollie_full": (ollie(30), 120, "air"),
     "kickflip": (flick_path(KICKFLIP, 0), 140, "air"),
     "flip_kick": (flick_path(KICKFLIP, 0), 140, "flip"),
     "flip_heel": (flick_path(HEELFLIP, 0), 140, "flip"),
     "flip_held": (flick_path(KICKFLIP_HELD, 0), 160, "flip"),
     "carve_right": ("0 90 1 0 0 0 0\n", 100, "carve"),
+    # part-way sticks: the pad's dead zone and scaling (half a stick is not half a turn)
+    "carve_half": ("0 90 0.5 0 0 0 0\n", 100, "carve"),
+    "carve_70": ("0 90 0.7 0 0 0 0\n", 100, "carve"),
+    "carve_tiny": ("0 90 0.2 0 0 0 0\n", 100, "carve"),
+    "carve_35": ("0 90 0.35 0 0 0 0\n", 100, "carve"),
+    "carve_40": ("0 90 0.40 0 0 0 0\n", 100, "carve"),
+    "carve_45": ("0 90 0.45 0 0 0 0\n", 100, "carve"),
+    "carve_55": ("0 90 0.55 0 0 0 0\n", 100, "carve"),
+    "carve_60": ("0 90 0.60 0 0 0 0\n", 100, "carve"),
+    "carve_65": ("0 90 0.65 0 0 0 0\n", 100, "carve"),
+    "carve_75": ("0 90 0.75 0 0 0 0\n", 100, "carve"),
+    "carve_80": ("0 90 0.80 0 0 0 0\n", 100, "carve"),
+    "carve_85": ("0 90 0.85 0 0 0 0\n", 100, "carve"),
+    "carve_90": ("0 90 0.90 0 0 0 0\n", 100, "carve"),
+    "carve_95": ("0 90 0.95 0 0 0 0\n", 100, "carve"),
+    "spin_40": (ollie(30, "37 100 -0.40 0 0 0 0\n"), 130, "air"),
+    "spin_50": (ollie(30, "37 100 -0.50 0 0 0 0\n"), 130, "air"),
+    "spin_70": (ollie(30, "37 100 -0.70 0 0 0 0\n"), 130, "air"),
+    "spin_80": (ollie(30, "37 100 -0.80 0 0 0 0\n"), 130, "air"),
+    "spin_90": (ollie(30, "37 100 -0.90 0 0 0 0\n"), 130, "air"),
     "spin_air": (ollie(30, "37 100 -1 0 0 0 0\n"), 130, "air"),
+    "spin_half": (ollie(30, "37 100 -0.6 0 0 0 0\n"), 130, "air"),
     # the left stick held back to a diagonal: a powerslide from full speed (speed kept at 0.25/0.5/1/2 s)
     "powerslide": ("0 120 0.7 -0.7 0 0 0\n", 122, "slide"),
     # the right stick part-way down / up and held still: a manual / nose manual, no balancing
@@ -251,7 +302,7 @@ def main():
     tmp = Path(tempfile.mkdtemp())
     print(f"{'scenario':<12} {'metric':<14} {'port':>9} {'sk8':>9} {'ratio':>7}")
     for name, (action, ticks, metric, *setup) in SCENARIOS.items():
-        if a.only and a.only != name:
+        if a.only and not __import__("re").fullmatch(a.only, name):
             continue
         setup = setup[0] if setup else {}
         prefix, t0 = setup.get("prefix", PREFIX), setup.get("t0", T0)
@@ -276,7 +327,7 @@ def main():
         sk8 = sk8[1:]
         f = globals()[f"m_{metric}"]
         mp, ms = f(port), f(sk8)
-        if name != "spin_air":
+        if not name.startswith("spin_"):
             mp.pop("spin_deg", None)  # only drift outside the spin scenario
         mp.pop("takeoff_vy", None)  # the port's deck is lifted by animation, not ballistic
         for k in mp:

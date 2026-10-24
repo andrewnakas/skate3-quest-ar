@@ -60,8 +60,10 @@ const SIZE_STEP: f32 = 0.05;
 /// World scale change per second at full stick deflection (multiplicative).
 const SCALE_RATE: f32 = 1.0;
 /// Park scale: every placed piece is this many times its authored size.
-pub(crate) const MIN_PARK_SCALE: f32 = 0.25;
-pub(crate) const MAX_PARK_SCALE: f32 = 4.0;
+/// Wide, because "skater size" changes it the other way to keep every piece
+/// its real size while the skater grows or shrinks (world scale 1..60).
+pub(crate) const MIN_PARK_SCALE: f32 = 0.05;
+pub(crate) const MAX_PARK_SCALE: f32 = 60.0;
 /// A grip counts as held for the park-scale chord past this pull.
 const PARK_CHORD_GRIP: f32 = 0.6;
 /// One piece's own uniform scale, on top of the park scale.

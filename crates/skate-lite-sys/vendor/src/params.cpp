@@ -18,8 +18,8 @@ const char *const kScore = "Scoring";
 // key, label, group, min, max, default, step
 const sk8_param kTable[ParamCount] = {
 	{"pop_low", "Pop (quick flick), m/s", kPop, 1.0f, 12.0f, 4.55f, 0.05f},
-	{"pop_high", "Pop (full crouch), m/s", kPop, 1.0f, 16.0f, 5.35f, 0.05f},
-	{"crouch_charge", "Crouch to full pop, s", kPop, 0.05f, 1.5f, 0.21f, 0.01f},
+	{"pop_high", "Pop (full crouch), m/s", kPop, 1.0f, 16.0f, 5.42f, 0.05f},
+	{"crouch_charge", "Crouch to full pop, s", kPop, 0.05f, 1.5f, 0.335f, 0.01f},
 	{"nollie_pop", "Nollie pop share", kPop, 0.3f, 1.5f, 1.015f, 0.005f},
 	{"grind_pop", "Pop off rails share", kPop, 0.3f, 1.5f, 0.7f, 0.01f},
 	{"boneless_pop", "Boneless / fastplant pop share", kPop, 0.3f, 1.5f, 0.835f, 0.01f},
@@ -38,7 +38,7 @@ const sk8_param kTable[ParamCount] = {
 	{"brake", "Brake, m/s^2", kSpeed, 0.0f, 20.0f, 4.1f, 0.05f},
 	{"brake_lead", "Foot down before braking, s", kSpeed, 0.0f, 1.0f, 0.2f, 0.01f},
 	{"brake_out", "Foot back up after braking, s", kSpeed, 0.0f, 1.0f, 0.42f, 0.01f},
-	{"carve", "Turning, rad/s", kSpeed, 0.2f, 8.0f, 1.7f, 0.01f},
+	{"carve", "Turning, rad/s", kSpeed, 0.2f, 8.0f, 1.855f, 0.01f},
 	{"carve_ease", "Turn coming on, s (each of two stages)", kSpeed, 0.0f, 0.5f, 0.11f, 0.01f},
 	{"grip", "Wheel grip", kSpeed, 0.5f, 40.0f, 8.4f, 0.1f},
 	{"slide_drag", "Powerslide drag, m/s^2", kSpeed, 0.0f, 25.0f, 4.2f, 0.05f},

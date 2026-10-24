@@ -296,11 +296,29 @@ pub(crate) fn skater_size_widget(world: &World) -> Widget {
     Widget::slider("skater_size", "Skater size", v, (0.0, 1.0, 0.01), text)
 }
 
-/// Set the world scale from the skater-size slider, keeping the skater on
-/// the same real spot.
+/// Set the skater's size from its slider. Only the skater changes: the world
+/// scale moves and the park scale moves with it, so every placed piece keeps
+/// its real size (and its own scale). The skater stays on the same real spot.
 pub(crate) fn set_skater_size(world: &mut World, v: f32) {
+    let old = world.resource::<Rig>().scale;
     let scale = MAX_SCALE.powf(1.0 - v).clamp(MIN_SCALE, MAX_SCALE);
+    {
+        let mut placed = world.resource_mut::<PlacedPieces>();
+        placed.park_scale = (placed.park_scale * scale / old).clamp(MIN_PARK_SCALE, MAX_PARK_SCALE);
+    }
     set_world_scale(world, scale);
+}
+
+/// The park-size slider is logarithmic over the wide park range.
+fn park_slider(world: &World) -> Widget {
+    let park = world.resource::<PlacedPieces>().park_scale;
+    let span = (MAX_PARK_SCALE / MIN_PARK_SCALE).ln();
+    let v = (park / MIN_PARK_SCALE).ln() / span;
+    Widget::slider("park_scale", "Park size (every piece)", v, (0.0, 1.0, 0.005), format!("{park:.2}x"))
+}
+
+fn park_from_slider(v: f32) -> f32 {
+    (MIN_PARK_SCALE * ((MAX_PARK_SCALE / MIN_PARK_SCALE).ln() * v).exp()).clamp(MIN_PARK_SCALE, MAX_PARK_SCALE)
 }
 
 pub(crate) fn set_world_scale(world: &mut World, scale: f32) {
@@ -324,13 +342,7 @@ fn build_widgets(world: &World) -> Vec<Widget> {
     let mut w = vec![
         Widget::button("build", "Start building (hold the menu button 1 s to stop)"),
         skater_size_widget(world),
-        Widget::slider(
-            "park_scale",
-            "Park size (every piece)",
-            placed.park_scale,
-            (MIN_PARK_SCALE, MAX_PARK_SCALE, 0.05),
-            format!("{:.2}x", placed.park_scale),
-        ),
+        park_slider(world),
     ];
     match placed.selected.and_then(|id| placed.items.iter().find(|p| p.id == id)) {
         Some(item) => w.extend([
@@ -373,7 +385,7 @@ fn build_act(widget: &str, act: Act, world: &mut World) -> Option<Outcome> {
         }
         "park_scale" => {
             let mut p = world.resource_mut::<PlacedPieces>();
-            p.park_scale = value?;
+            p.park_scale = park_from_slider(value?);
             p.revision += 1;
             Outcome::Stay
         }

@@ -31,9 +31,15 @@ int gesture_trick_count();
 int foot_off_variant(int trick, float *pop);
 int find_trick(const char *name);
 
-// Rim / centre thresholds on stick radius.
-// The rim sits far out so a part-way tilt is left for manuals (between kManualIn and the rim).
-constexpr float kRimIn = 0.88f;
+// Stick radius thresholds, measured on the port with a pad's right stick (scripted depth sweeps):
+// a pop's first move (the crouch) counts from kLeadIn, every move after it from kRimIn; the crouch
+// only charges a higher pop pulled past kDeepIn (shallower, it pops low). A part-way tilt held a
+// moment (from kManualIn, short of kDeepIn) is a manual, and a flick on from there pops out of it.
+constexpr float kLeadIn = 0.33f;
+constexpr float kRimIn = 0.605f;
+constexpr float kDeepIn = 0.885f;
+// held right out (a held flick's extra turns, the flick back for an underflip)
+constexpr float kHeldIn = 0.88f;
 constexpr float kManualIn = 0.3f;
 constexpr float kCentreIn = 0.30f;
 // A rim sector the stick stays in fewer ticks than this was only swept through (doesn't count).

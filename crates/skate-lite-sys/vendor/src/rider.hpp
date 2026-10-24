@@ -89,6 +89,13 @@ private:
 	bool push_mongo_ = false;
 	bool foot_off_ = false;
 	float last_steer_[2] = {0, 0};
+	// The sticks as a pad reads them (see stick_pad in rider.cpp): steering, spin, balance and
+	// board adjust use these; flick and direction checks use the stick as given.
+	float steer_pad_[2] = {0, 0};
+	float flick_pad_[2] = {0, 0};
+	// ticks since the stick left the crouch (the pop's first move)
+	int since_lead_ = 0;
+
 	bool unslide_ = false;
 	V3 plant_in_; // the way it was going when it planted (a foot/handplant pops back off that way)
 	unsigned plant_hold_ = 0; // the button that keeps a plant on the edge (let go, it comes off)

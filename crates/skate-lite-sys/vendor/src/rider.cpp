@@ -173,7 +173,7 @@ constexpr float kOllieRise = 0.29f;     // s of the climb at most
 constexpr float kOllieRiseFull = 0.35f, kOllieRiseTap = 0.78f; // the climb's pull of gravity
 constexpr float kOllieBrake = 3.4f;     // times gravity, pulled up short
 constexpr float kOllieHangVy = 0.4f;    // m/s up when it's hanging
-constexpr float kOllieHang = 0.23f;     // s it hangs at the top
+constexpr float kOllieHang = 0.25f;     // s it hangs at the top
 constexpr float kOllieHangTap = 0.16f;  // s longer, a quick flick's
 constexpr float kOllieHangPull = 0.45f; // times gravity, hanging
 constexpr float kOllieDrop = 3.0f;      // times gravity, pushed back down
@@ -368,10 +368,78 @@ void Rider::lose_combo()
 	bank_timer_ = 0;
 }
 
+// ---------------------------------------------------------------- stick curves
+
+// x on a measured curve of (in, out) points, rising from (0, 0); odd (the sign is kept).
+template <size_t N> static float on_curve(const float (&curve)[N][2], float x)
+{
+	float a = std::fabs(x), y = curve[N - 1][1];
+	for (size_t i = 1; i < N; i++)
+		if (a <= curve[i][0]) {
+			float t = (a - curve[i - 1][0]) / (curve[i][0] - curve[i - 1][0]);
+			y = curve[i - 1][1] + (curve[i][1] - curve[i - 1][1]) * t;
+			break;
+		}
+	return x < 0 ? -y : y;
+}
+
+// How hard the board turns for the (pad-read) left stick: barely at all part-way, coming on fast
+// toward full. Measured on the port as the turn rate held at each stick deflection while rolling.
+static const float kSteerCurve[][2] = {
+	{0.0f, 0.0f}, {0.143f, 0.0019f}, {0.214f, 0.0079f}, {0.286f, 0.0268f}, {0.357f, 0.0587f},
+	{0.429f, 0.1206f}, {0.5f, 0.2073f}, {0.571f, 0.3296f}, {0.643f, 0.4609f}, {0.714f, 0.6098f},
+	{0.786f, 0.6655f}, {0.857f, 0.7508f}, {0.929f, 0.8797f}, {1.0f, 1.0f}};
+
+// How hard an air spin goes for the (pad-read) left stick, measured on the port as how far it
+// spins through an ollie with the stick held at each deflection (less the turn after landing):
+// a little part-way, about half a turn from two thirds out, and the full turn only right out.
+static const float kSpinCurve[][2] = {
+	{0.0f, 0.0f}, {0.214f, 0.056f}, {0.357f, 0.127f}, {0.5f, 0.399f}, {0.643f, 0.5376f}, {0.786f, 0.597f},
+	{0.929f, 0.602f}, {1.0f, 0.999f}};
+
+// ---------------------------------------------------------------- crouch
+
+// How much pop a crouch has charged, by how far it got (crouch_: the share of crouch_charge held).
+// Solved point by point so ollie heights match the port's, measured at each crouch length (scripted
+// holds of 1..24 ticks), together with the ollie's rise-and-hang shape (which goes by crouch time,
+// see pop): a quick flick pops low, it builds slowly for a few ticks, then fast, then levels off.
+// A part-way crouch (short of kDeepIn) never charges: it pops as a quick flick.
+static const float kCrouchCurve[][2] = {
+	{0.0000f, 0.7717f}, {0.0498f, 0.7717f}, {0.0995f, 0.7766f}, {0.1492f, 0.7964f}, {0.1990f, 0.8555f}, {0.2488f, 0.8344f}, {0.2985f, 0.8400f}, {0.3483f, 0.8425f}, {0.3980f, 0.8343f}, {0.4478f, 0.7908f}, {0.4975f, 0.7919f}, {0.5473f, 0.7567f}, {0.5970f, 0.7269f}, {0.6965f, 0.8251f}, {0.7960f, 0.9413f}, {0.8955f, 1.0319f}, {1.0f, 1.071f}};
+
+static float crouch_charge(float u)
+{
+	const int n = int(sizeof kCrouchCurve / sizeof kCrouchCurve[0]);
+	if (u <= kCrouchCurve[0][0])
+		return kCrouchCurve[0][1];
+	for (int i = 1; i < n; i++)
+		if (u <= kCrouchCurve[i][0]) {
+			float t = (u - kCrouchCurve[i - 1][0]) / (kCrouchCurve[i][0] - kCrouchCurve[i - 1][0]);
+			return kCrouchCurve[i - 1][1] + (kCrouchCurve[i][1] - kCrouchCurve[i - 1][1]) * t;
+		}
+	return kCrouchCurve[n - 1][1];
+}
+
 // ---------------------------------------------------------------- step
+
+// A stick as a game pad reads it: a round dead zone at the centre, then the rest of the throw
+// scaled so it reaches full a little before the rim. Amounts (steering, spin, balance, board
+// adjust) ride on this, so half a stick does what half a stick does on a pad.
+constexpr float kStickDead = 0.25f;
+constexpr float kStickFull = 0.95f;
+
+static void stick_pad(const float in[2], float out[2])
+{
+	float r = std::sqrt(in[0] * in[0] + in[1] * in[1]);
+	float k = r <= kStickDead ? 0.0f : clampf((r - kStickDead) / (kStickFull - kStickDead), 0, 1) / r;
+	out[0] = in[0] * k;
+	out[1] = in[1] * k;
+}
 
 void Rider::step(World &w, const sk8_input &in)
 {
+	stick_pad(in.steer, steer_pad_);
+	stick_pad(in.flick, flick_pad_);
 	if (mode_ != SK8_MODE_AIR)
 		ollie_ = 0, ollie_kick_ = 0;
 	if (settle_trick_ >= 0) {
@@ -386,15 +454,26 @@ void Rider::step(World &w, const sk8_input &in)
 
 	// crouch: holding the first token of a pop (down, or up for a nollie)
 	int lead = flick_.lead();
-	if (flick_.holding_lead() && (lead == TDown || lead == TUp) && mode_ != SK8_MODE_AIR) {
+	// (only pulled right down does the crouch charge: part-way it pops low, as the port)
+	float flick_r = std::sqrt(in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1]);
+	if (flick_.holding_lead() && (lead == TDown || lead == TUp) && mode_ != SK8_MODE_AIR && flick_r >= kDeepIn) {
 		crouch_time_ += kDt;
 		crouch_ = clampf(crouch_time_ / std::max(p[CrouchCharge], 0.01f), 0, 1);
 	} else {
 		crouch_time_ = 0;
-		if (f.trick < 0)
+		if (f.trick < 0 && lead >= 0) {
+			// let out of the crouch on the way to the flick: as the port (probed with pauses at the
+			// stick's centre), the crouch keeps for two ticks, then what the pop can still have
+			// falls away fast, whatever the crouch was
+			static const float kAfterLead[] = {1.0f, 1.0f, 0.65f, 0.485f, 0.355f, 0.215f, 0.0f};
+			const int n = int(sizeof kAfterLead / sizeof kAfterLead[0]);
+			crouch_ = std::min(crouch_, kAfterLead[std::min(since_lead_, n - 1)]);
+		} else if (f.trick < 0) {
 			crouch_ = approach(crouch_, 0, 6 * kDt);
+		}
 	}
-	lean_ = approach(lean_, clampf(in.steer[0], -1, 1), 5 * kDt);
+	since_lead_ = flick_.holding_lead() ? 0 : since_lead_ + 1;
+	lean_ = approach(lean_, clampf(steer_pad_[0], -1, 1), 5 * kDt);
 	if (grind_cooldown_ > 0)
 		grind_cooldown_ -= kDt;
 
@@ -446,11 +525,11 @@ void Rider::step(World &w, const sk8_input &in)
 		float x = in.flick[0], y = in.flick[1], r = std::sqrt(x * x + y * y);
 		int zone = r >= kManualIn && std::fabs(y) > std::fabs(x) * 0.8f ? (y < 0 ? 1 : -1) : 0;
 		// pushing on to the rim from a manual is crouching to pop out of it, still the same manual
-		if (zone != 0 && r >= kRimIn && mode_ != SK8_MODE_MANUAL)
+		if (zone != 0 && r >= kDeepIn && mode_ != SK8_MODE_MANUAL)
 			zone = 0;
 		stick_manual_time_ = zone != 0 && zone == stick_manual_ ? stick_manual_time_ + kDt : 0;
 		stick_manual_ = zone;
-		stick_manual_depth_ = clampf((r - kManualIn) / (kRimIn - kManualIn), 0, 1);
+		stick_manual_depth_ = clampf((r - kManualIn) / (kDeepIn - kManualIn), 0, 1);
 	}
 
 	if (!ground_mode(mode_))
@@ -569,7 +648,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		fakie_time_ = 0;
 	}
 	V3 travel = fakie_ ? -fwd_ : fwd_;
-	float steer = clampf(in.steer[0], -1, 1);
+	float steer = clampf(steer_pad_[0], -1, 1);
 
 	// manual: hold to balance on two wheels
 	// (buttons, or the right stick part-way: held a moment so a flick passing through doesn't count;
@@ -597,7 +676,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		// and the stick push it off. Balance with the left stick, or with how far the right stick
 		// is tilted: half way is level, right out at the rim tips it over.
 		float drift = noise() * p[ManualWobble] - balance_ * 0.6f;
-		float lean = in.steer[1];
+		float lean = steer_pad_[1];
 		if (stick == manual_dir_)
 			lean += (0.5f - stick_manual_depth_) * 0.65f;
 		balance_ += (drift - lean * p[ManualCorrect] * float(manual_dir_)) * kDt;
@@ -633,7 +712,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 
 	// carve: the turn comes on over a moment (two easing stages: a gentle start, like the port)
 	float ease = 1 - std::exp(-kDt / std::max(p[CarveEase], 0.001f));
-	carve_in_ += (steer - carve_in_) * ease;
+	carve_in_ += (on_curve(kSteerCurve, steer) - carve_in_) * ease;
 	carve_ += (carve_in_ - carve_) * ease;
 	float rate = p[Carve] * carve_ * clampf(speed / 2.5f, 0.35f, 1.0f);
 	if (mode_ == SK8_MODE_SLIDE)
@@ -897,9 +976,11 @@ void Rider::follow_ground(World &w)
 
 // ---------------------------------------------------------------- air
 
+constexpr float kOllieLoadFull = 0.21f;
+
 void Rider::pop(const TrickDef &def, float share)
 {
-	float charge = std::max(crouch_, 0.35f);
+	float charge = crouch_charge(crouch_);
 	float v = (p[PopLow] + (p[PopHigh] - p[PopLow]) * charge) * share;
 	pop_y_ = pos_.y;
 	push_time_ = -1; // a stroke ends at the pop
@@ -908,7 +989,10 @@ void Rider::pop(const TrickDef &def, float share)
 	push_cooldown_ = 0;
 	mode_ = SK8_MODE_AIR;
 	ollie_ = up_.y > 0.95f ? 1 : 0; // (off flat ground: the ollie's own rise and fall)
-	ollie_load_ = clampf((charge - 0.35f) / 0.65f, 0, 1);
+	// (the ollie's rise-and-hang shape goes by how long the crouch was held: fitted against the port's
+	// arcs with a full load after kOllieLoadFull seconds)
+	float held = std::min(1.0f, crouch_ * p[CrouchCharge] / kOllieLoadFull);
+	ollie_load_ = clampf((std::max(held, 0.35f) - 0.35f) / 0.65f, 0, 1);
 	if (ollie_)
 		v *= kOllieFlatTap + (kOllieFlatFull - kOllieFlatTap) * ollie_load_;
 	// (an ollie's board comes up off the tail over a few ticks, not at once)
@@ -990,7 +1074,7 @@ void Rider::flick_dir(float out[2]) const
 bool Rider::opposite_flick(const float dir[2]) const
 {
 	float r = std::sqrt(last_flick_[0] * last_flick_[0] + last_flick_[1] * last_flick_[1]);
-	if (r < kRimIn || std::fabs(dir[0]) < 0.3f)
+	if (r < kHeldIn || std::fabs(dir[0]) < 0.3f)
 		return false;
 	return (-last_flick_[0] * dir[0] + last_flick_[1] * dir[1]) / r > 0.87f;
 }
@@ -1129,7 +1213,7 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	bool shifting = grab_ && in.flick[1] < -0.5f;
 	// as the port (probed): the stick has to be held over a moment before a spin starts (a tap
 	// does nothing), then it comes up to speed quickly, and let go it carries on, slowing gradually
-	float stick = by_rail || shifting ? 0.0f : clampf(in.steer[0], -1, 1);
+	float stick = by_rail || shifting ? 0.0f : on_curve(kSpinCurve, clampf(steer_pad_[0], -1, 1));
 	bool varial = in.buttons & SK8_FOOT_OFF;
 	// (as the port, probed: the board answers the stick a couple of ticks late, going over and
 	// letting go alike - so even a tap turns it some; a body varial, ours, answers at once)
@@ -1138,7 +1222,7 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	spin_lag_[0] = stick;
 	if (!varial)
 		stick = late;
-	bool over = std::fabs(stick) > 0.3f;
+	bool over = std::fabs(stick) > 0.02f; // (the pad dead zone already keeps a resting stick out)
 	spin_hold_ = over && (spin_hold_ == 0 || (stick > 0) == (spin_dir_ > 0)) ? spin_hold_ + kDt : 0;
 	if (over)
 		spin_dir_ = stick > 0 ? 1.0f : -1.0f;
@@ -1286,7 +1370,7 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		if (flip_turns_ - flip_angle_ < 0.003f)
 			flip_angle_ = flip_turns_;
 		float r = std::sqrt(last_flick_[0] * last_flick_[0] + last_flick_[1] * last_flick_[1]);
-		bool held = r >= kRimIn &&
+		bool held = r >= kHeldIn &&
 			(last_flick_[0] * flip_dir_[0] + last_flick_[1] * flip_dir_[1]) / r > 0.87f;
 		if (held && flip_extra_ < 3 && flip_turns_ - flip_angle_ < 0.5f && under_a0_ < 0)
 			extend_flip();
@@ -1369,7 +1453,7 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	{
 		bool free = flip_ < 0 && !grab_ && !foot_air_ && air_time_ > 0.08f;
 		float r = std::sqrt(in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1]);
-		float tx = free && r > 0.6f ? in.flick[0] / std::max(r, 1.0f) : 0, ty = free && r > 0.6f ? in.flick[1] / std::max(r, 1.0f) : 0;
+		float tx = free && r > 0.6f ? flick_pad_[0] : 0, ty = free && r > 0.6f ? flick_pad_[1] : 0;
 		if (shifty_ != 0) // a shifty swings the board under the feet the way the left stick went
 			tx = shifty_;
 		float k = 1 - std::exp(-kDt / 0.08f);
@@ -1583,7 +1667,7 @@ constexpr float kWalkSpeed = 1.437f, kRunSpeed = 3.7f, kWalkTurn = 2.6f; // m/s,
 // On foot: the left stick turns (x) and walks or runs (y, past 0.8 a run), the board in the hand.
 void Rider::walk(World &w, const sk8_input &in)
 {
-	float x = clampf(in.steer[0], -1, 1), y = clampf(in.steer[1], -1, 1);
+	float x = clampf(steer_pad_[0], -1, 1), y = clampf(steer_pad_[1], -1, 1);
 	// A: a jump on foot
 	if ((in.buttons & SK8_PUSH) && !(prev_buttons_ & SK8_PUSH)) {
 		mode_ = SK8_MODE_AIR;
@@ -2151,7 +2235,7 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 	rail_speed_ -= p[GrindDrag] * kDt;
 	grind_time_ += kDt;
 	if (p[GrindBalance] > 0) {
-		balance_ += (noise() * p[GrindBalance] + balance_ * 0.8f - in.steer[0] * 2.2f) * kDt;
+		balance_ += (noise() * p[GrindBalance] + balance_ * 0.8f - steer_pad_[0] * 2.2f) * kDt;
 		if (std::fabs(balance_) > 1) {
 			V3 off = unit(cross(kUp, t)) * (balance_ > 0 ? 1.5f : -1.5f);
 			leave_grind(t * rail_speed_ + off, false);
