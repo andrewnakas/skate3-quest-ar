@@ -21,9 +21,14 @@ pub(crate) fn lights(mut commands: Commands) {
         },
         Transform::from_xyz(2.0, 12.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+    // a soft fill from the open sky the other way: the shadows light, the body still shaped
+    commands.spawn((
+        DirectionalLight { illuminance: 2600.0, shadows_enabled: false, ..default() },
+        Transform::from_xyz(-3.0, 8.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
     commands.insert_resource(GlobalAmbientLight {
         color: Color::WHITE,
-        brightness: 450.0,
+        brightness: 320.0, // (the sun does more of the shaping)
         ..default()
     });
 }
@@ -109,7 +114,7 @@ pub(crate) fn desktop_world(
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(2.0 * f, 2.0 * f))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.6, 0.61, 0.65), // cool grey concrete
+            base_color: Color::srgb(0.5, 0.5, 0.5), // grey concrete
             perceptual_roughness: 0.95,
             ..default()
         })),

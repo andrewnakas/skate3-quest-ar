@@ -132,7 +132,7 @@ pub(crate) fn build(
     materials: &mut Assets<StandardMaterial>,
 ) {
     let wood = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.84, 0.6, 0.32),
+        base_color: Color::srgb(0.82, 0.78, 0.72), // a pale deck
         perceptual_roughness: 0.6,
         double_sided: true,
         cull_mode: None,

@@ -973,15 +973,20 @@ pub(crate) fn draw(
     mut shown: Local<(String, u32, f32)>,
 ) {
     // the trick being done, big; once it scores, its points under it a moment
-    for e in sim.events.iter().filter(|e| e.kind == EventKind::Trick) {
-        *shown = (e.name.clone(), e.points, 1.6);
+    for e in &sim.events {
+        match e.kind {
+            // named from the pop (as the port: OLLIE up as it leaves the ground), its points once it scores
+            EventKind::Pop => *shown = (e.name.clone(), 0, 1.6),
+            EventKind::Trick => *shown = (e.name.clone(), e.points, 1.6),
+            _ => {}
+        }
     }
     shown.2 -= time.delta_secs();
     let doing = sim.rider.trick();
     let (name, points) = if !doing.is_empty() {
         (doing.to_string(), String::new())
     } else if shown.2 > 0.0 {
-        (shown.0.clone(), shown.1.to_string())
+        (shown.0.clone(), if shown.1 > 0 { shown.1.to_string() } else { String::new() })
     } else {
         (String::new(), String::new())
     };

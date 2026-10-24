@@ -28,7 +28,7 @@ HumanService = importlib.import_module(M + "humanservice").HumanService
 LocationService = importlib.import_module(M + "locationservice").LocationService
 DATA = Path(LocationService.get_user_data())
 
-TANK_ARM = 0.12   # a shirt face this much on the arms is a sleeve (cut for the tank top)
+TANK_ARM = 0.09   # a shirt face this much on the arms is a sleeve (cut for the tank top)
 PANTS_DARK = 0.55  # the denim's brightness kept, made grey: dark charcoal pants
 
 # Our skater: a lean young adult, a little taller than average, long-limbed.
@@ -36,8 +36,8 @@ PRESET = {
     "phenotype": {
         "gender": 1.0,
         "age": 0.42,
-        "muscle": 0.6,
-        "weight": 0.41,
+        "muscle": 0.5,
+        "weight": 0.36,
         "height": 0.6,
         "proportions": 0.66,
         "cupsize": 0.5,
@@ -112,7 +112,10 @@ def finish(basemesh):
         dels = [g for g in ob.vertex_groups if g.name.startswith("Delete.")]
         if not arm or not dels:
             continue
-        keep = [v.index for v in ob.data.vertices if sum(e.weight for e in v.groups if e.group in arm) > 0.02]
+        collar = {g.index for g in ob.vertex_groups if g.name in ("collar.L", "collar.R")}
+        keep = [v.index for v in ob.data.vertices
+                if sum(e.weight for e in v.groups if e.group in arm) > 0.005
+                or sum(e.weight for e in v.groups if e.group in collar) > 0.25]
         for g in dels:
             g.remove(keep)
         print(f"SKATER tank top: {len(keep)} arm vertices kept out of the clothes' hiding")
@@ -187,7 +190,7 @@ def dark_pants():
             for c in range(3):
                 px[blue, c] = lum[blue] * PANTS_DARK
             # (the shirt's orange logo lifted off: plain)
-            logo = (r - b > 0.15) & ~blue
+            logo = ((r - b > 0.15) | (lum < 0.68)) & ~blue  # its colours and its dark lettering
             for c in range(3):
                 px[logo, c] = 0.86
             dark = img.copy()
