@@ -29,6 +29,7 @@ LocationService = importlib.import_module(M + "locationservice").LocationService
 DATA = Path(LocationService.get_user_data())
 
 TANK_ARM = 0.09   # a shirt face this much on the arms is a sleeve (cut for the tank top)
+SHIRT_SHARE = 0.44  # the suit texture's top share that is the shirt
 PANTS_DARK = 0.55  # the denim's brightness kept, made grey: dark charcoal pants
 
 # Our skater: a lean young adult, a little taller than average, long-limbed.
@@ -183,22 +184,24 @@ def dark_pants():
             if n.type != "TEX_IMAGE" or not n.image or "diffuse" not in n.image.name.lower():
                 continue
             img = n.image
-            px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
-            r, g, b = px[:, 0], px[:, 1], px[:, 2]
+            w, h = img.size
+            px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+            # the texture's top part (rows from the top: Blender's run bottom up) is the shirt: plain
+            # off-white, its prints gone; below, the jeans: their brightness kept, made charcoal
+            shirt_rows = int(h * (1 - SHIRT_SHARE))
+            px[shirt_rows:, :, :3] = 0.86
+            jeans = px[:shirt_rows]
+            r, g, b = jeans[..., 0], jeans[..., 1], jeans[..., 2]
             blue = (b - r > 0.05) & (b > 0.12)
             lum = 0.3 * r + 0.59 * g + 0.11 * b
             for c in range(3):
-                px[blue, c] = lum[blue] * PANTS_DARK
-            # (the shirt's orange logo lifted off: plain)
-            logo = ((r - b > 0.15) | (lum < 0.68)) & ~blue  # its colours and its dark lettering
-            for c in range(3):
-                px[logo, c] = 0.86
+                jeans[..., c] = np.where(blue, lum * PANTS_DARK, jeans[..., c])
             dark = img.copy()
             dark.name = "sk8_suit_dark"
             dark.pixels = px.ravel().tolist()
             dark.pack()
             n.image = dark
-            print(f"SKATER pants: {int(blue.sum())} denim texels darkened")
+            print(f"SKATER pants: {int(blue.sum())} denim texels darkened, shirt plain")
 
 
 def hide_covered_skin():

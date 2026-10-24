@@ -85,8 +85,8 @@ pub(crate) fn desktop_world(
     commands.spawn((
         ChaseCamera,
         Camera3d::default(),
-        // as wide as the port's (its ~75 degrees, across a 16:9 window)
-        Projection::Perspective(PerspectiveProjection { fov: 47f32.to_radians(), ..default() }),
+        // as wide as the port's: its camera's 75 degrees is the vertical field of view (three.js)
+        Projection::Perspective(PerspectiveProjection { fov: 75f32.to_radians(), ..default() }),
         Transform::from_xyz(0.0, 2.5, -5.0).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
     ));
     if three_views() {
@@ -114,7 +114,7 @@ pub(crate) fn desktop_world(
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(2.0 * f, 2.0 * f))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.5, 0.5, 0.5), // grey concrete
+            base_color: Color::srgb(0.4, 0.41, 0.44), // cool grey concrete
             perceptual_roughness: 0.95,
             ..default()
         })),
