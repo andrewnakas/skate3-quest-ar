@@ -141,7 +141,7 @@ pub(crate) fn build(
     let mut mat = |c: Color, rough: f32, metal: f32| {
         materials.add(StandardMaterial { base_color: c, perceptual_roughness: rough, metallic: metal, ..default() })
     };
-    let grip = mat(Color::srgb(0.07, 0.07, 0.08), 0.95, 0.0);
+    let grip = mat(Color::srgb(0.72, 0.71, 0.68), 0.95, 0.0); // light grey grip
     let metal = mat(Color::srgb(0.74, 0.75, 0.78), 0.35, 0.9);
     let urethane = mat(Color::srgb(0.95, 0.93, 0.86), 0.55, 0.0);
     let (grip_mesh, wood_mesh) = deck_meshes();

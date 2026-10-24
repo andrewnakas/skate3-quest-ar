@@ -15,11 +15,11 @@ pub(crate) fn lights(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             illuminance: 9000.0,
-            // On for the 3-view check: the shadow is what shows how high the board and rider go.
-            shadows_enabled: three_views(),
+            // a high sun, shadows on: the shadow under the rider shows how high the board goes
+            shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(4.0, 10.0, 6.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(2.0, 12.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
     commands.insert_resource(GlobalAmbientLight {
         color: Color::WHITE,
@@ -75,7 +75,8 @@ pub(crate) fn desktop_world(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut sim: ResMut<CleanSkate>,
 ) {
-    commands.insert_resource(ClearColor(Color::srgb(0.55, 0.72, 0.9)));
+    // a pale, hazy sky
+    commands.insert_resource(ClearColor(Color::srgb(0.79, 0.9, 0.99)));
     commands.spawn((
         ChaseCamera,
         Camera3d::default(),
@@ -108,7 +109,7 @@ pub(crate) fn desktop_world(
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(2.0 * f, 2.0 * f))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.62, 0.62, 0.6),
+            base_color: Color::srgb(0.6, 0.61, 0.65), // cool grey concrete
             perceptual_roughness: 0.95,
             ..default()
         })),
@@ -129,7 +130,7 @@ pub(crate) fn desktop_world(
         commands.spawn((
             Mesh3d(meshes.add(piece_mesh(&geometry))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: kind.color(),
+                base_color: desktop_color(kind),
                 double_sided: true,
                 cull_mode: None,
                 ..default()
@@ -373,5 +374,17 @@ pub(crate) fn views(
         cam.viewport = viewport(1 + v.0 as u32);
         let at = aim + if v.0 == 0 { beside } else { *d } * dist + Vec3::Y * 0.1;
         *tf = Transform::from_translation(at).looking_at(aim, Vec3::Y);
+    }
+}
+
+/// The desktop park's colours: peach transitions, light cool-grey boxes and kickers, coral ledges and
+/// rails (the headset's park builder keeps its own brighter set).
+fn desktop_color(kind: PieceKind) -> Color {
+    match kind {
+        PieceKind::QuarterPipe | PieceKind::HalfPipe | PieceKind::Spine | PieceKind::Bank => Color::srgb(0.92, 0.66, 0.55),
+        PieceKind::Kicker | PieceKind::FunBox | PieceKind::Platform | PieceKind::Stairs | PieceKind::Wall => {
+            Color::srgb(0.76, 0.77, 0.8)
+        }
+        PieceKind::Ledge | PieceKind::Rail => Color::srgb(0.9, 0.57, 0.48),
     }
 }

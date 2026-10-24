@@ -53,7 +53,7 @@ private:
 	void start_flip(int trick);
 	void land(const Hit &h);
 	bool try_grind(World &w);
-	bool classify_grind(V3 tangent);
+	bool classify_grind(V3 tangent, V3 from);
 	float air_left() const;
 	void leave_grind(V3 velocity, bool popped, bool off_end = false);
 	void move_on_ground(World &w, V3 delta);
@@ -168,6 +168,7 @@ private:
 	bool flip_landable() const { return flip_ < 0 || flip_turns_ - flip_angle_ <= (1 - p[FlipLenience]) * flip_base_turns_ + 1e-4f; }
 	float spin_speed_ = 0, spin_total_ = 0;
 	float air_time_ = 0;
+	float catch_body_ = 0, catch_board_ = 0; // drawn: rad the body / board still to turn to a board-adjusted catch
 	int ollie_ = 0;     // an ollie off flat ground: 1 rising, 2 pulled up short, 3 hanging, 4 pushed down
 	float hang_ = 0, ollie_kick_ = 0, ollie_load_ = 1;
 	bool catch_crouched_ = false;

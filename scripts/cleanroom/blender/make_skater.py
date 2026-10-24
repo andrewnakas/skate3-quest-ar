@@ -28,6 +28,9 @@ HumanService = importlib.import_module(M + "humanservice").HumanService
 LocationService = importlib.import_module(M + "locationservice").LocationService
 DATA = Path(LocationService.get_user_data())
 
+TANK_ARM = 0.12   # a shirt face this much on the arms is a sleeve (cut for the tank top)
+PANTS_DARK = 0.55  # the denim's brightness kept, made grey: dark charcoal pants
+
 # Our skater: a lean young adult, a little taller than average, long-limbed.
 PRESET = {
     "phenotype": {
@@ -39,18 +42,18 @@ PRESET = {
         "proportions": 0.66,
         "cupsize": 0.5,
         "firmness": 0.5,
-        "race": {"african": 0.25, "asian": 0.2, "caucasian": 0.55},
+        "race": {"african": 0.3, "asian": 0.2, "caucasian": 0.5},
     },
-    "skin_mhmat": "young_caucasian_male/young_caucasian_male.mhmat",
+    "skin_mhmat": "young_asian_male/young_asian_male.mhmat",  # tanned
     "skin_material_type": "MAKESKIN",
     "eyes": "high-poly/high-poly.mhclo",
     "eyes_material_type": "MAKESKIN",
     "eyebrows": "eyebrow001/eyebrow001.mhclo",
     "eyelashes": "eyelashes01/eyelashes01.mhclo",
-    "hair": "short02/short02.mhclo",
+    "hair": "short04/short04.mhclo",  # cropped close, dark
     "clothes": [
         "male_casualsuit06/male_casualsuit06.mhclo",
-        "shoes06/shoes06.mhclo",
+        "shoes05/shoes05.mhclo",  # white trainers
     ],
     "clothes_material_type": "MAKESKIN",
     "rig": "game_engine",
@@ -103,6 +106,16 @@ def finish(basemesh):
     for b in rig.data.bones:
         b.name = BONES.get(b.name, "sk_" + b.name)
     rig.name = rig.data.name = "skater_rig"
+    # (the tank top: the body keeps its skin where the shirt's sleeves would have hidden it)
+    for ob in [o for o in bpy.data.objects if o.type == "MESH"]:
+        arm = {g.index for g in ob.vertex_groups if g.name in ("arm.L", "arm.R", "elbow.L", "elbow.R")}
+        dels = [g for g in ob.vertex_groups if g.name.startswith("Delete.")]
+        if not arm or not dels:
+            continue
+        keep = [v.index for v in ob.data.vertices if sum(e.weight for e in v.groups if e.group in arm) > 0.02]
+        for g in dels:
+            g.remove(keep)
+        print(f"SKATER tank top: {len(keep)} arm vertices kept out of the clothes' hiding")
     # Bake shape keys / modifiers (except the armature) so the export is a plain skinned mesh.
     for ob in [o for o in bpy.data.objects if o.type == "MESH"]:
         bpy.context.view_layer.objects.active = ob
@@ -128,11 +141,61 @@ def finish(basemesh):
             for v in ob.data.vertices:
                 v.co += v.normal * CLOTH_OFFSET
         ob.name = "skater_" + ob.name.split(".")[0].lower()
+    tank_top()
+    dark_pants()
     hide_covered_skin()
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == "MESH")
     heights = [v.co.z for o in bpy.data.objects if o.type == "MESH" for v in o.data.vertices]
     print(f"SKATER meshes={sum(1 for o in bpy.data.objects if o.type == 'MESH')} tris={tris} "
           f"bones={len(rig.data.bones)} height={max(heights) - min(heights):.3f}")
+
+
+def tank_top():
+    """The T-shirt cut to a tank top: its faces on the arms (weighted to the upper / lower arm bones)
+    go, so the arms show bare to the shoulder."""
+    import bmesh
+    for ob in [o for o in bpy.data.objects if o.type == "MESH"]:
+        if not any(m and "suit" in m.name for m in ob.data.materials):
+            continue
+        arm = {g.index for g in ob.vertex_groups if g.name in ("arm.L", "arm.R", "elbow.L", "elbow.R")}
+        on_arm = [sum(e.weight for e in v.groups if e.group in arm) for v in ob.data.vertices]
+        bm = bmesh.new()
+        bm.from_mesh(ob.data)
+        bm.verts.ensure_lookup_table()
+        gone = [f for f in bm.faces if sum(on_arm[v.index] for v in f.verts) / len(f.verts) > TANK_ARM]
+        bmesh.ops.delete(bm, geom=gone, context="FACES")
+        bm.to_mesh(ob.data)
+        bm.free()
+        print(f"SKATER tank top: {len(gone)} sleeve faces removed")
+
+
+def dark_pants():
+    """Our own copy of the suit's texture with the denim taken down to a dark charcoal (the shirt,
+    near white, stays)."""
+    import numpy as np
+    for m in bpy.data.materials:
+        if "suit" not in m.name or not m.use_nodes:
+            continue
+        for n in m.node_tree.nodes:
+            if n.type != "TEX_IMAGE" or not n.image or "diffuse" not in n.image.name.lower():
+                continue
+            img = n.image
+            px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
+            r, g, b = px[:, 0], px[:, 1], px[:, 2]
+            blue = (b - r > 0.05) & (b > 0.12)
+            lum = 0.3 * r + 0.59 * g + 0.11 * b
+            for c in range(3):
+                px[blue, c] = lum[blue] * PANTS_DARK
+            # (the shirt's orange logo lifted off: plain)
+            logo = (r - b > 0.15) & ~blue
+            for c in range(3):
+                px[logo, c] = 0.86
+            dark = img.copy()
+            dark.name = "sk8_suit_dark"
+            dark.pixels = px.ravel().tolist()
+            dark.pack()
+            n.image = dark
+            print(f"SKATER pants: {int(blue.sum())} denim texels darkened")
 
 
 def hide_covered_skin():

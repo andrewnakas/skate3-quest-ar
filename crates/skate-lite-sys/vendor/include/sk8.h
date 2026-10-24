@@ -159,6 +159,7 @@ typedef struct sk8_state
 	unsigned best_tricks;  /* tricks in one line */
 	int dark;              /* 1: the board caught upside down under the feet in the air (a darkcatch) */
 	float kickturn;        /* seconds into a kickturn (nose up, pivoting), 0 none */
+	float varial;          /* radians the body has turned above the board in the air (a body varial: the feet off it), 0 none */
 } sk8_state;
 
 typedef enum sk8_plant_pose

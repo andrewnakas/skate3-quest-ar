@@ -189,6 +189,7 @@ constexpr float kKickturnRate = 3.1f; // rad/s once it's turning (it eases in ov
 constexpr float kKickturnEase = 0.45f;
 constexpr float kBigAir = 1.4f, kLongAir = 9.5f; // m: an air this high (above its lower end) / long scores  // s a foot held off in the air before it counts
 constexpr float kAdjustYaw = 1.1f, kAdjustPitch = 0.38f; // rad: a board adjust at full stick
+constexpr float kCatchEase = 0.12f;  // s: drawn, the body and board ease round to a board-adjusted catch
 constexpr float kAdjustCatch = 1.57f; // rad: how far a full sideways adjust turns the board for a rail
 constexpr float kUnderTurn = 0.34f;   // turns an underflip goes its first way before it turns back
 constexpr float kUnderWindow = 0.11f; // s into a flip the opposite flick still turns it into an underflip   // s: a boneless's wind-up, push pressed to the pop
@@ -1746,13 +1747,14 @@ std::string Rider::plant_variant(int bits) const
 }
 
 // A slide by the right stick centred / up / down (and the diagonals the port reads as the same
-// family: on the lip side up-right is a noseblunt, down-right a lipslide; on the board side up-left a
+// family: on the lip side up-right is a noseblunt, up-left a tailslide, down-right a lipslide; on the board side up-left a
 // noseslide), in the family the board was turned into.
 static int slide_kind(bool lip, float x, float y)
 {
 	bool up = y > 0.45f, down = y < -0.45f;
-	if (lip)
-		return up ? SK8_GRIND_NOSEBLUNT : down && x < 0.45f ? SK8_GRIND_TAILSLIDE : SK8_GRIND_LIPSLIDE;
+	if (lip) // (up-left well over: a tailslide, as the port's recorded one)
+		return up ? (x < -0.45f ? SK8_GRIND_TAILSLIDE : SK8_GRIND_NOSEBLUNT)
+			: down && x < 0.45f ? SK8_GRIND_TAILSLIDE : SK8_GRIND_LIPSLIDE;
 	return up ? SK8_GRIND_NOSESLIDE : down ? SK8_GRIND_BLUNTSLIDE : SK8_GRIND_BOARDSLIDE;
 }
 
@@ -1762,7 +1764,7 @@ static bool slide_family_stick(bool lip, float x, float y)
 {
 	if (std::fabs(x) < 0.45f)
 		return true;
-	return lip ? x > 0 && std::fabs(y) > 0.45f : x < 0 && y > 0.45f;
+	return lip ? (x > 0 && std::fabs(y) > 0.45f) || (x < 0 && y > 0.45f) : x < 0 && y > 0.45f;
 }
 
 // Which grab a trigger makes on a rail: the free end of the board, or the edge by that hand.
@@ -1800,7 +1802,7 @@ std::string Rider::grind_full_name() const
 
 // Which grind / slide the board is in, from how it lies on the rail and the right stick at the
 // catch. Returns whether it's ridden backwards along the rail.
-bool Rider::classify_grind(V3 tangent)
+bool Rider::classify_grind(V3 tangent, V3 from)
 {
 	V3 t = tangent * float(rail_dir_);
 	float a = angle_between(fwd_, unit(flatten(t, kUp), t));
@@ -1818,8 +1820,17 @@ bool Rider::classify_grind(V3 tangent)
 	// a slide with the right stick centred, down or up: which family by which way the board was
 	// turned onto the rail (as the port, probed: turned with the left stick left, the lip side - lipslide,
 	// tailslide, noseblunt; right, the board side - boardslide, bluntslide, noseslide)
-	// (measured from the rail's way along it, so a straight crossing counts by the side it came from)
-	grind_lip_ = (dot(cross(unit(flatten(t, kUp), t), fwd_), kUp) > 0) != switch_;
+	// The lip side is the hard way: the back of the board (the back foot's end: the nose in switch)
+	// swung over the rail, past it from the side it came from; the board side, the front end over.
+	// (coming straight along it, by which way the board was turned against the rail's direction)
+	{
+		V3 across = flatten(cross(unit(flatten(t, kUp), t), kUp), kUp);
+		float came = dot(flatten(from - pos_, kUp), across);
+		if (std::fabs(came) > 0.05f)
+			grind_lip_ = (dot(fwd_, across) * came > 0) != switch_;
+		else
+			grind_lip_ = (dot(cross(unit(flatten(t, kUp), t), fwd_), kUp) > 0) != switch_;
+	}
 	if (slide && slide_family_stick(grind_lip_, gx, gy))
 		grind_kind_ = slide_kind(grind_lip_, gx, gy);
 	// landed on it turned part way (not square across): the nose over one side - the board side,
@@ -1888,8 +1899,14 @@ bool Rider::try_grind(World &w)
 	// port's): the board lands turned that way on the rail - a slide set up without spinning the body
 	// (not with the left stick held back: then the right stick sideways picks a crouched grind)
 	// (the stick pushed up or down picks a grind, nosegrind / crooked / 5-0, and doesn't turn it)
-	if (std::fabs(adjust_[0]) > 0.3f && last_steer_[1] > -0.6f && std::fabs(last_flick_[1]) < 0.45f)
+	// (drawn, the body keeps facing where it was and the board stays where it showed in the air,
+	// both easing round to the catch's over a moment: a catch doesn't snap either)
+	catch_body_ = catch_board_ = 0;
+	if (std::fabs(adjust_[0]) > 0.3f && last_steer_[1] > -0.6f && std::fabs(last_flick_[1]) < 0.45f) {
 		fwd_ = unit(flatten(rotate(fwd_, up_, -adjust_[0] * kAdjustCatch), kUp), fwd_);
+		catch_body_ = adjust_[0] * kAdjustCatch;
+		catch_board_ = adjust_[0] * (kAdjustCatch - kAdjustYaw);
+	}
 	rail_ = s.rail;
 	seg_ = s.seg;
 	seg_u_ = s.u;
@@ -1900,7 +1917,7 @@ bool Rider::try_grind(World &w)
 	fwd_ = unit(flatten(fwd_, kUp), fwd_);
 	// crouched for the catch: loaded on the ground, or the left stick held back
 	catch_crouched_ = crouch_ > 0.5f || last_steer_[1] < -0.6f;
-	bool backwards = classify_grind(s.tangent);
+	bool backwards = classify_grind(s.tangent, mode_before == SK8_MODE_AIR ? launch_ : pre_pos);
 	spin_speed_ = 0; // (the board stops turning as it lands on the rail, as the port's)
 	bool slide = grind_slide_;
 	if (dark)
@@ -1963,6 +1980,7 @@ bool Rider::try_grind(World &w)
 
 void Rider::leave_grind(V3 velocity, bool popped, bool off_end)
 {
+	catch_body_ = catch_board_ = 0;
 	add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
 	unslide_ = grind_kind_ == SK8_GRIND_BOARDSLIDE || grind_kind_ == SK8_GRIND_DARKSLIDE ||
 		(grind_kind_ >= SK8_GRIND_NOSESLIDE && grind_kind_ <= SK8_GRIND_BLUNTSLIDE);
@@ -2035,6 +2053,8 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 		}
 		return;
 	}
+	catch_body_ *= std::exp(-kDt / kCatchEase);
+	catch_board_ *= std::exp(-kDt / kCatchEase);
 	const auto &r = w.rails[size_t(rail_)];
 	V3 tangent = unit(r[size_t(seg_) + 1] - r[size_t(seg_)]);
 	V3 t = tangent * float(rail_dir_);
@@ -2298,6 +2318,8 @@ void Rider::state(sk8_state &s) const
 		V3 r2 = unit(cross(lean_up, fwd_), right);
 		stance = from_basis(r2, lean_up, unit(cross(r2, lean_up), fwd));
 	}
+	if (mode_ == SK8_MODE_GRIND && catch_body_ != 0)
+		stance = stance * Q::axis_angle({0, 1, 0}, catch_body_);
 	stance.store(s.rider_rot);
 
 	if (flip_ >= 0) {
@@ -2331,6 +2353,8 @@ void Rider::state(sk8_state &s) const
 		board = board * Q::axis_angle({1, 0, 0}, -0.13f * float(manual_dir_));
 	if (mode_ == SK8_MODE_AIR && varial_ != 0)
 		board = board * Q::axis_angle({0, 1, 0}, -varial_); // the board stays while the body turns
+	if (mode_ == SK8_MODE_GRIND && catch_board_ != 0)
+		board = board * Q::axis_angle({0, 1, 0}, catch_board_);
 	if (mode_ == SK8_MODE_GRIND && grind_kind_ > 0) {
 		// the board sits on the rail the way this grind holds it, the rail under the part it
 		// rides on (local x right = heel edge, y up, z the nose)
@@ -2350,6 +2374,7 @@ void Rider::state(sk8_state &s) const
 	s.push_start = push_time_ >= 0 && push_time_ < push_lead_ ? push_time_ / push_lead_ : -1;
 	s.push_mongo = push_mongo_;
 	s.foot_off = foot_off_;
+	s.varial = mode_ == SK8_MODE_AIR ? varial_ : 0;
 	s.revert = revert_time_ >= 0 ? clampf(revert_time_ / 0.34f, 0, 1) : -1;
 	s.grab = ground_mode(mode_) ? ground_grab_ : grab_;
 	s.air_feet = mode_ == SK8_MODE_AIR ? air_feet_ : 0;

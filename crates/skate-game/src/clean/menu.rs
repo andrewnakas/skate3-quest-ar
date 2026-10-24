@@ -835,12 +835,19 @@ pub(crate) struct RowText(usize);
 pub(crate) struct FooterText;
 #[derive(Component)]
 pub(crate) struct HudText;
+/// The trick being done, big at the top middle, and under it the points the last one scored.
+#[derive(Component)]
+pub(crate) struct TrickName;
+#[derive(Component)]
+pub(crate) struct TrickPoints;
+/// The HUD's face: a heavy italic sans (Montserrat, OFL - assets/fonts/OFL.txt).
+const HUD_FONT: &str = "embedded://skate_game/clean/assets/fonts/Montserrat-Italic.ttf";
 
 /// The UI camera the menu draws to, when not the window's (the XR panel).
 #[derive(Resource, Clone, Copy)]
 pub(crate) struct MenuTarget(pub Entity);
 
-pub(crate) fn spawn_ui(mut commands: Commands, target: Option<Res<MenuTarget>>) {
+pub(crate) fn spawn_ui(mut commands: Commands, target: Option<Res<MenuTarget>>, assets: Res<AssetServer>) {
     let text = |s: &str, size: f32, color: Color| {
         (
             Text::new(s),
@@ -905,9 +912,39 @@ pub(crate) fn spawn_ui(mut commands: Commands, target: Option<Res<MenuTarget>>) 
     });
     // Score and the trick in progress (desktop only; XR shows them on the panel).
     if target.is_none() {
+        let font = assets.load(HUD_FONT);
+        let heavy = |size: f32| TextFont { font: font.clone(), font_size: size, weight: FontWeight(800), ..default() };
+        commands
+            .spawn(Node {
+                position_type: PositionType::Absolute,
+                top: percent(9),
+                width: percent(100),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                ..default()
+            })
+            .with_children(|c| {
+                c.spawn((
+                    TrickName,
+                    Text::new(""),
+                    heavy(46.0),
+                    TextColor(Color::WHITE),
+                    TextShadow { offset: Vec2::new(2.0, 3.0), color: Color::srgba(0.0, 0.0, 0.0, 0.45) },
+                ));
+                c.spawn((
+                    TrickPoints,
+                    Text::new(""),
+                    heavy(30.0),
+                    TextColor(Color::srgb(0.98, 0.82, 0.22)),
+                    TextShadow { offset: Vec2::new(1.5, 2.0), color: Color::srgba(0.0, 0.0, 0.0, 0.45) },
+                ));
+            });
         commands.spawn((
             HudText,
-            text("", 26.0, Color::WHITE),
+            Text::new(""),
+            heavy(24.0),
+            TextColor(Color::WHITE),
+            TextShadow { offset: Vec2::new(1.5, 2.0), color: Color::srgba(0.0, 0.0, 0.0, 0.4) },
             Node {
                 position_type: PositionType::Absolute,
                 left: px(16),
@@ -931,7 +968,29 @@ pub(crate) fn draw(
     mut hud: Query<&mut Text, (With<HudText>, Without<TitleText>, Without<TabsText>, Without<RowText>, Without<FooterText>)>,
     time: Res<Time<Real>>,
     mut news: Local<(String, f32)>,
+    mut trick_name: Query<&mut Text, (With<TrickName>, Without<HudText>, Without<TitleText>, Without<TabsText>, Without<RowText>, Without<FooterText>, Without<TrickPoints>)>,
+    mut trick_points: Query<&mut Text, (With<TrickPoints>, Without<HudText>, Without<TitleText>, Without<TabsText>, Without<RowText>, Without<FooterText>, Without<TrickName>)>,
+    mut shown: Local<(String, u32, f32)>,
 ) {
+    // the trick being done, big; once it scores, its points under it a moment
+    for e in sim.events.iter().filter(|e| e.kind == EventKind::Trick) {
+        *shown = (e.name.clone(), e.points, 1.6);
+    }
+    shown.2 -= time.delta_secs();
+    let doing = sim.rider.trick();
+    let (name, points) = if !doing.is_empty() {
+        (doing.to_string(), String::new())
+    } else if shown.2 > 0.0 {
+        (shown.0.clone(), shown.1.to_string())
+    } else {
+        (String::new(), String::new())
+    };
+    if let Ok(mut t) = trick_name.single_mut() {
+        **t = name.to_uppercase();
+    }
+    if let Ok(mut t) = trick_points.single_mut() {
+        **t = points;
+    }
     // a personal best beaten: said on the HUD for a few seconds
     for e in sim.events.iter().filter(|e| e.kind == EventKind::Best) {
         news.0 = format!("New best {}: {}", e.name.to_lowercase(), best_text(&e.name, e.points));
@@ -940,10 +999,9 @@ pub(crate) fn draw(
     news.1 -= time.delta_secs();
     if let Ok(mut hud) = hud.single_mut() {
         let s = &sim.current;
-        let trick = sim.rider.trick();
-        let combo = if s.combo_count > 0 { format!("  combo {} x{}", s.combo_points, s.combo_count) } else { String::new() };
+        let combo = if s.combo_count > 0 { format!("   combo {} x{}", s.combo_points, s.combo_count) } else { String::new() };
         let best = if news.1 > 0.0 { format!("\n{}", news.0) } else { String::new() };
-        **hud = format!("{}   {trick}{combo}{best}", s.score);
+        **hud = format!("{}{combo}{best}", s.score);
     }
     let Ok(mut node) = root.single_mut() else { return };
     let display = if menu.open { Display::Flex } else { Display::None };

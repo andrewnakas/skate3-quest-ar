@@ -123,6 +123,7 @@ struct RawState {
     best_tricks: u32,
     dark: c_int,
     kickturn: f32,
+    varial: f32,
 }
 
 /// A bail's stages (`sk8_bail_stage`).
@@ -222,6 +223,8 @@ pub struct State {
     pub dark: bool,
     /// Seconds into a kickturn (nose up, pivoting), 0 none.
     pub kickturn: f32,
+    /// Radians the body has turned above the board in the air (a body varial, the feet off it).
+    pub varial: f32,
     /// 0 none, 1 axle, 2 board slide, 3 nose, 4 tail.
     pub grind_kind: u32,
     pub combo_points: u32,
@@ -274,6 +277,7 @@ impl From<RawState> for State {
             best_tricks: r.best_tricks,
             dark: r.dark != 0,
             kickturn: r.kickturn,
+            varial: r.varial,
             grind_kind: r.grind_kind as u32,
             combo_points: r.combo_points,
             combo_count: r.combo_count,

@@ -51,22 +51,25 @@ def P(**kw):
     return pose
 
 
-STANCE = P()
+# riding: knees well bent, leaning on into the ride, the hands hanging loose a little out (as the
+# port's skater rides)
+RIDE_HIPS, RIDE_PITCH = 0.79, 15.0
+STANCE = P(hips=(0.0, 0.03, RIDE_HIPS), hips_rot=(RIDE_PITCH, 0, 0), lh=(0.3, -0.16, 0.74), rh=(-0.3, -0.12, 0.72))
 # Key poses fitted to median measurements of pose-estimated reference clips (scripts/cleanroom/
 # reference, many skaters): crouch leg extension ~0.8 of leg length with ~80 deg knees and the trunk
 # leaning 30-50 deg; pop fully extended; in the air the body stays tall (extension ~0.85, knees
 # ~65-70 deg) and the board comes up ~15 cm; hands around chest height, a little out to the sides.
-CROUCH = P(hips=(0.0, 0.05, 0.74), hips_rot=(22, 0, 0), spine=(20, 0, 12), head=(-20, 0, 55),
-           lh=(0.34, -0.28, 0.72), rh=(-0.34, -0.22, 0.7))
+CROUCH = P(hips=(0.0, 0.05, 0.68), hips_rot=(18, 0, 0), spine=(20, 0, 12), head=(-20, 0, 55),
+           lh=(0.36, -0.24, 0.66), rh=(-0.36, -0.2, 0.64))
 # The pop: the back leg snaps straight to slam the tail, the front knee drives up and the front foot
 # drags toward the nose, the arms lift and open.
 POP_TOP = P(hips=(-0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 8), head=(-18, 0, 55),
             lf=foot(FRONT_X + 0.1, 0.0, 0.16, yaw=10, pitch=14), rf=foot(BACK_X - 0.02, 0.0, 0.0, yaw=0),
             # hands up and out but elbows kept bent: a near-straight arm lets the elbow flip about
-            lh=(0.58, -0.14, 1.07), rh=(-0.56, -0.08, 1.04), knee_out=0.55)
+            lh=(0.64, -0.12, 1.26), rh=(-0.62, -0.06, 1.24), knee_out=0.55)
 AIR_TUCK = P(hips=(0.0, 0.03, 0.92), hips_rot=(16, 0, 0), spine=(16, 0, 10), head=(-20, 0, 55),
              lf=foot(FRONT_X, 0.0, 0.22, yaw=15), rf=foot(BACK_X, 0.0, 0.21, yaw=0),
-             lh=(0.68, -0.1, 1.2), rh=(-0.66, -0.04, 1.17), knee_out=0.6)
+             lh=(0.68, -0.1, 1.32), rh=(-0.66, -0.04, 1.29), knee_out=0.6)
 # Flip tricks: the legs split up and out of the way and the board turns underneath, arms up and
 # open, then the feet come back down onto it. Kickflips kick the front foot out forward over the toe
 # side, heelflips forward over the heel side; shove-its lift both feet straight up.
@@ -219,15 +222,15 @@ POP_DRIVE = P(hips=(-0.02, 0.03, 0.86), hips_rot=(16, 0, 0), spine=(14, 0, 10), 
               lh=(0.5, -0.2, 0.95), rh=(-0.49, -0.14, 0.93), knee_out=0.45)  # arms on their way up
 POP_SLIDE = P(hips=(0.0, 0.02, 0.95), hips_rot=(12, 0, 0), spine=(12, 0, 9), head=(-20, 0, 55),
               lf=foot(FRONT_X + 0.06, 0.0, 0.17, yaw=13, pitch=4), rf=foot(BACK_X, 0.0, 0.1, yaw=0),
-              lh=(0.68, -0.1, 1.22), rh=(-0.66, -0.04, 1.19), knee_out=0.6)
+              lh=(0.68, -0.1, 1.32), rh=(-0.66, -0.04, 1.29), knee_out=0.6)
 # Gameplay footage (3 fixed angles, pose-tracked): knees ~82 deg in the tuck and the tuck deepest late
 # in the air, held into the landing (no reaching the legs down first); pop to landing ~0.8 s.
-AIR_PEAK = P(hips=(0.0, 0.05, 0.84), hips_rot=(26, 0, 0), spine=(26, 0, 10), head=(-26, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.4, yaw=15), rf=foot(BACK_X, 0.0, 0.39, yaw=0),
-             lh=(0.7, -0.1, 1.2), rh=(-0.68, -0.04, 1.17), knee_out=0.65)  # arms wide for balance
+AIR_PEAK = P(hips=(0.0, 0.05, 0.86), hips_rot=(26, 0, 0), spine=(26, 0, 10), head=(-26, 0, 55),
+             lf=foot(FRONT_X, 0.0, 0.47, yaw=15), rf=foot(BACK_X, 0.0, 0.46, yaw=0),
+             lh=(0.7, -0.1, 1.3), rh=(-0.68, -0.04, 1.27), knee_out=0.65)  # arms wide for balance
 AIR_HOLD = P(hips=(0.0, 0.05, 0.84), hips_rot=(24, 0, 0), spine=(24, 0, 10), head=(-24, 0, 55),
-             lf=foot(FRONT_X, 0.0, 0.37, yaw=15), rf=foot(BACK_X, 0.0, 0.36, yaw=0),
-             lh=(0.68, -0.12, 1.16), rh=(-0.66, -0.06, 1.13), knee_out=0.65)
+             lf=foot(FRONT_X, 0.0, 0.44, yaw=15), rf=foot(BACK_X, 0.0, 0.43, yaw=0),
+             lh=(0.68, -0.12, 1.26), rh=(-0.66, -0.06, 1.23), knee_out=0.65)
 AIR_REACH = P(hips=(0.0, 0.03, 0.94), hips_rot=(14, 0, 0), spine=(16, 0, 10), head=(-22, 0, 55),
               lf=foot(FRONT_X, 0.0, 0.07, yaw=15), rf=foot(BACK_X, 0.0, 0.06, yaw=0),
               lh=(0.48, -0.18, 0.98), rh=(-0.46, -0.12, 0.95), knee_out=0.5)
@@ -658,9 +661,9 @@ def ride_frame(t):
     """Rolling along, loose: a knee bounce twice a loop, the weight rocking between the feet, the
     arms swinging a little out of time with it and the head easy."""
     s, b = math.sin(2 * math.pi * t), math.sin(4 * math.pi * t)
-    base = P()
+    base = STANCE
     lh, rh = base["lh"], base["rh"]
-    return P(hips=(0.018 * s, 0.01, 0.85 + 0.014 * b), hips_rot=(9 + 1.5 * b, 0.8 * s, 0),
+    return P(hips=(0.018 * s, 0.03, RIDE_HIPS + 0.014 * b), hips_rot=(RIDE_PITCH + 1.5 * b, 0.8 * s, 0),
              spine=(18 + 2.5 * s, 2 + 1.5 * math.sin(2 * math.pi * t + 0.8), 10 + 2 * s),
              head=(-6 + 2 * math.sin(4 * math.pi * t + 1.4), 3, 55 + 4 * math.sin(2 * math.pi * t + 1.0)),
              lh=(lh[0] + 0.03 * math.sin(2 * math.pi * t + 0.6), lh[1], lh[2] + 0.025 * math.sin(2 * math.pi * t + 1.2)),

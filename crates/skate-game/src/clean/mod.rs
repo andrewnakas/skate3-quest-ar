@@ -146,6 +146,7 @@ fn build(options: Options) -> App {
         .add_systems(PostStartup, menu::spawn_ui);
     crate::skate_audio::clean::install_sk8(&mut app);
     bevy::asset::embedded_asset!(app, "assets/skater.glb");
+    bevy::asset::embedded_asset!(app, "assets/fonts/Montserrat-Italic.ttf");
 
     let xr = options.xr.is_some();
     #[cfg(feature = "xr")]

@@ -60,6 +60,8 @@ const PLANT_HALF_STANCE: f32 = 0.21;
 const PLANT_GRIP_X: f32 = 0.11;
 /// s the free hand takes to let go of the board after a handplant
 const GRIP_RELEASE: f32 = 0.3;
+/// s the pinned feet take to follow the deck's turn against the body
+const FOOT_TURN_EASE: f32 = 0.03;
 const PLANT_GRIP_Y: f32 = -0.02;
 const PLANT_GRIP_Z: f32 = 0.24;
 /// Hips drop per m/s of landing speed (initial velocity of the spring), and the spring itself.
@@ -131,6 +133,8 @@ pub(crate) struct Motion {
     free_hand: Option<usize>,
     plant_hold: Option<(Vec3, Quat)>,
     grip: f32,
+    /// the pinned feet's turn with the deck, eased
+    foot_turn: [Option<Quat>; 2],
     /// where the free hand holds it, on the board (deck space)
     grip_at: Vec3,
     /// the free hand's reach from the clip's hand to that hold (body frame)
@@ -615,7 +619,9 @@ pub(crate) fn layer(
     };
     // the back foot pushes (the front one mongo); mirrored, the left leg is the back one
     let pusher = if s.push_mongo != mirrored { 0 } else { 1 };
-    let deck_turned = s.mode == Mode::Air && {
+    // the body turned above the board (a body varial): the feet are off it. The board turned under
+    // the feet (a board adjust, a spin catching up, a slide's turn) keeps them on, turning with it.
+    let deck_turned = s.mode == Mode::Air && s.varial.abs() > 0.3 && {
         let nose = (rider_rot.inverse() * deck) * Vec3::Z;
         nose.z.abs() < 0.95 // more than ~18 degrees off the body's heading, either end
     };
@@ -683,7 +689,16 @@ pub(crate) fn layer(
         let u = local.x / (super::board::DECK_WIDTH * 0.5);
         local.y = super::board::deck_top(local.z, u) + skater::ANKLE;
         let target = base.lerp(deck_m.transform_point3(local), w);
-        two_bone(*chain, target, Quat::IDENTITY.slerp(tilt, w), rider, &mut bones);
+        // (the foot's turn with the deck eased over a few frames: leaving a slide the deck's turn
+        // against the body jumps, and an ankle copying it at once snapped)
+        let want_turn = Quat::IDENTITY.slerp(tilt, w);
+        let turn = match motion.foot_turn[i] {
+            Some(q) if dt > 0.0 => q.slerp(want_turn, 1.0 - (-dt / FOOT_TURN_EASE).exp()),
+            Some(q) => q,
+            None => want_turn,
+        };
+        motion.foot_turn[i] = Some(turn);
+        two_bone(*chain, target, turn, rider, &mut bones);
     }
 
     // The pushing foot on the ground: from the plant it stays where it touched down while the board
