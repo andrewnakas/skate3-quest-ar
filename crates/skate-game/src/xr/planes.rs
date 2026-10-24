@@ -109,6 +109,13 @@ pub(crate) struct SceneCapture {
     auto_requested: bool,
 }
 
+impl SceneCapture {
+    /// Space Setup is running (asked for, or not finished).
+    pub(crate) fn busy(&self) -> bool {
+        self.requested || self.pending.is_some()
+    }
+}
+
 #[derive(Resource, Default)]
 struct SceneQuery {
     pending: Option<sys::AsyncRequestIdFB>,
@@ -143,6 +150,10 @@ pub(crate) const REFRESH_SECONDS: f32 = 15.0;
 const MAX_RESULTS: u32 = 128;
 /// Fallback floor when Space Setup has no FLOOR entity.
 const FLOOR_HALF_EXTENT_M: f32 = 10.0;
+/// Free roam: the floor is this big (half extent, real metres) and is moved
+/// under the skater, a grid cell of this size at a time.
+const FREE_FLOOR_HALF_M: f32 = 24.0;
+const FREE_FLOOR_CELL_M: f32 = 8.0;
 const UPWARD_MIN_COS: f32 = 0.9;
 /// Anything bigger is the room-sized global mesh, not furniture.
 const MAX_OBJECT_HALF_M: f32 = 2.0;
@@ -305,6 +316,7 @@ fn on_scene_event(
     session: Option<Res<OxrSession>>,
     mut query: ResMut<SceneQuery>,
     mut capture: ResMut<SceneCapture>,
+    settings: Res<super::ar_settings::ArSettings>,
 ) {
     match *event {
         openxr::Event::SceneCaptureCompleteFB(e) if capture.pending == Some(e.request_id()) => {
@@ -373,7 +385,8 @@ fn on_scene_event(
                 info!("Scene: {} entities", query.surfaces.len());
             }
             let scanned = query.surfaces.iter().any(|s| s.label.contains("FLOOR"));
-            if !scanned && !capture.auto_requested {
+            // Free roam (outside) never wants a room scan.
+            if !scanned && !capture.auto_requested && !settings.free_roam() {
                 capture.auto_requested = true;
                 capture.requested = true;
                 info!("Room scan: no room scan found, starting Space Setup");
@@ -608,10 +621,49 @@ fn locate_surfaces(
     mut room: ResMut<RoomMesh>,
     mut revision: ResMut<SceneRevision>,
     mut was_located: Local<Vec<Option<bool>>>,
+    settings: Res<super::ar_settings::ArSettings>,
+    rig: Res<super::rig::Rig>,
+    link: Res<super::link::SkaterLink>,
+    mut free_floor: Local<Option<(bool, [i32; 2], u32)>>,
 ) {
     let Some(frame_state) = frame_state else { return };
     if query.changed {
         query.changed = false;
+        was_located.clear();
+        revision.0 += 1;
+    }
+    if settings.free_roam() {
+        // Outside: one big floor under the skater, nothing from the room.
+        let to_tracking = rig.root_transform().map(|r| r.compute_affine().inverse());
+        let at = to_tracking.zip(link.deck).map_or(Vec3::ZERO, |(t, (deck, _))| t.transform_point3(deck));
+        let cell = [(at.x / FREE_FLOOR_CELL_M).round() as i32, (at.z / FREE_FLOOR_CELL_M).round() as i32];
+        let key = (true, cell, settings.floor_offset.to_bits());
+        if *free_floor != Some(key) {
+            *free_floor = Some(key);
+            revision.0 += 1;
+            info!("PLANES free-roam floor at cell {cell:?}, height {:.2} m", settings.floor_offset);
+        }
+        let floor = Shape::Plane {
+            pose: Transform::from_xyz(
+                cell[0] as f32 * FREE_FLOOR_CELL_M,
+                settings.floor_offset,
+                cell[1] as f32 * FREE_FLOOR_CELL_M,
+            ),
+            half: Vec2::splat(FREE_FLOOR_HALF_M),
+            floor: true,
+        };
+        room.0 = None;
+        planes.0 = upward_surface(&floor).into_iter().collect();
+        if labels.0.len() != 1 {
+            labels.0 = vec!["FLOOR".into()];
+        }
+        if shapes.0 != [floor] {
+            shapes.0 = vec![floor];
+        }
+        return;
+    }
+    if free_floor.take().is_some() {
+        // Back from free roam: the room's surfaces again.
         was_located.clear();
         revision.0 += 1;
     }

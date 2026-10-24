@@ -5,13 +5,20 @@
 //! plane or box already covers it: the mesh is lumpy, so the flat faces are
 //! what gets ridden wherever they exist. The player's placed pieces
 //! (`xr::build`) are added on top. Rebuilt whenever the set of located Scene
-//! entities changes or the layout is edited.
+//! entities changes, the layout is edited or the AR settings change.
+//!
+//! The AR settings pick which layers are ridden: floors, planes (walls,
+//! furniture, table tops, flat patches of the mesh) and the 3D room mesh.
+//! A layer that is turned off is simply left out; the room mesh under a
+//! plane that is turned off stays out too (the plane still "covers" it), so
+//! turning planes off never brings back the lumpy scan under them.
 use super::planes::{LocatedMesh, RoomMesh, SceneRevision, SceneShapes, Shape};
 use super::build::PlacedPieces;
 use super::plane_view::MeshPlanes;
 use super::build::pieces::PieceKind;
 use crate::skate_audio::clean::SurfaceHints;
 use super::link::{ArWorld, PieceSurfaces, SkaterLink};
+use super::ar_settings::ArSettings;
 use super::rig::Rig;
 use bevy::prelude::*;
 
@@ -42,9 +49,10 @@ fn rebuild_collision(
     placed: Res<PlacedPieces>,
     mesh_planes: Res<MeshPlanes>,
     link: Res<SkaterLink>,
+    settings: Res<ArSettings>,
     mut world: ResMut<ArWorld>,
     hints: Option<ResMut<SurfaceHints>>,
-    mut built: Local<Option<((Vec3, f32), u64, u64)>>,
+    mut built: Local<Option<((Vec3, f32), u64, u64, u64)>>,
 ) {
     let (Some(anchor), Some(root)) = (rig.anchor, rig.root_transform()) else {
         return;
@@ -53,7 +61,7 @@ fn rebuild_collision(
     // anchor, a different set of entities or an edited layout is worth a
     // rebuild. A piece being dragged rebuilds when it is dropped, and grind
     // state refers to the current rails, so a grind finishes first.
-    let key = (anchor, revision.0, placed.revision);
+    let key = (anchor, revision.0, placed.revision, settings.revision);
     if shapes.0.is_empty() || *built == Some(key) || placed.busy() || link.grinding {
         return;
     }
@@ -62,10 +70,12 @@ fn rebuild_collision(
     // Flat surfaces found in the room mesh ride like Scene planes, with
     // grindable edges, and replace the lumpy triangles under them.
     let all_shapes: Vec<Shape> = shapes.0.iter().copied().chain(mesh_planes.solid_shapes()).collect();
-    let (quads, real_edges) = real_geometry(&all_shapes);
+    let ridden: Vec<Shape> = all_shapes.iter().copied().filter(|s| layer_on(s, &settings)).collect();
+    let (quads, real_edges) = real_geometry(&ridden);
     let triangles = room
         .0
         .as_ref()
+        .filter(|_| settings.mesh.collide)
         .map(|mesh| mesh_triangles(mesh, &all_shapes))
         .unwrap_or_default();
     let to_world = |p: Vec3| root.transform_point(p);
@@ -123,11 +133,24 @@ fn rebuild_collision(
         *hints = sound;
     }
     info!(
-        "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} shapes ({} mesh planes), {piece_count} placed pieces, {rail_count} grind rails ({:.1} ms)",
+        "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} of {} shapes ({} mesh planes), {piece_count} placed pieces, {rail_count} grind rails, layers floor={} planes={} mesh={} ({:.1} ms)",
+        ridden.len(),
         shapes.0.len(),
         all_shapes.len() - shapes.0.len(),
+        settings.floor.collide,
+        settings.planes.collide,
+        settings.mesh.collide,
         started.elapsed().as_secs_f32() * 1000.0
     );
+}
+
+/// Whether the layer `shape` belongs to is ridden: floors, or everything
+/// else (walls, furniture, mesh planes).
+pub(crate) fn layer_on(shape: &Shape, settings: &ArSettings) -> bool {
+    match shape {
+        Shape::Plane { floor: true, .. } => settings.floor.collide,
+        _ => settings.planes.collide,
+    }
 }
 
 /// Tracking-space room-mesh triangles not already covered by a Scene plane

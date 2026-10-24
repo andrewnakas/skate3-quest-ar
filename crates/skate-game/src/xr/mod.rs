@@ -13,17 +13,19 @@ use bevy_mod_openxr::{
 };
 
 pub(crate) mod actions;
+pub(crate) mod ar_settings;
 pub(crate) mod build;
 pub(crate) mod link;
 mod mesh_planes;
 pub(crate) mod panel;
 mod plane_view;
-mod planes;
+pub(crate) mod planes;
 mod real_world;
 pub(crate) mod rig;
 mod spatial_audio;
 pub(crate) mod spawn;
 pub(crate) mod touch;
+pub(crate) mod ui;
 
 pub(crate) use crate::config::XrOptions;
 
@@ -87,11 +89,16 @@ pub(crate) struct XrPlugin {
 impl Plugin for XrPlugin {
     fn build(&self, app: &mut App) {
         if self.retail {
-            app.add_plugins(link::RetailLinkPlugin);
-        } else {
-            app.add_plugins(panel::PanelPlugin);
+            app.add_plugins(link::RetailLinkPlugin)
+                .insert_resource(ui::ControlsSheet(retail_controls()));
         }
         app.insert_resource(XrFiles(self.files.clone()))
+            .insert_resource(ui::pages::UiTier { retail: self.retail })
+            .add_plugins((
+                ar_settings::ArSettingsPlugin,
+                panel::PanelPlugin,
+                ui::XrUiPlugin { retail: self.retail },
+            ))
             .add_plugins(link::LinkPlugin)
             .add_plugins(bevy_mod_openxr::features::fb_passthrough::OxrFbPassthroughPlugin)
             .insert_resource(OxrSessionConfig {
@@ -124,6 +131,28 @@ impl Plugin for XrPlugin {
             .add_observer(no_eye_occlusion_culling)
             .add_observer(no_eye_indirect_drawing);
     }
+}
+
+/// The imported-disc tier's controls: the Touch controllers stand in for the
+/// game's pad.
+fn retail_controls() -> Vec<(String, String)> {
+    [
+        ("Right stick", "flick it: ollies and flip tricks"),
+        ("Left stick", "steer; in the air, spin"),
+        ("A / X", "push / mongo push"),
+        ("B", "brake"),
+        ("Y", "off / on the board"),
+        ("Triggers", "grabs (LT / RT)"),
+        ("Grips", "LB / RB"),
+        ("Stick clicks", "LS / RS"),
+        ("Left menu held + left stick", "D-pad"),
+        ("Left menu held + X", "Back"),
+        ("Left grip + trigger", "aim, let go to put the skater there"),
+        ("Left menu (tap)", "this menu"),
+        ("Left menu (hold 1 s)", "build mode"),
+    ]
+    .map(|(a, b)| (a.to_string(), b.to_string()))
+    .into()
 }
 
 fn log_scene_extensions(exts: Option<Res<bevy_mod_openxr::exts::OxrEnabledExtensions>>) {

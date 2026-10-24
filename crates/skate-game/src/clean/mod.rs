@@ -13,6 +13,8 @@ mod mirror;
 pub(crate) mod sim;
 mod procedural;
 mod skater;
+#[cfg(feature = "xr")]
+mod skater_page;
 mod view;
 #[cfg(feature = "xr")]
 mod xr_menu;
@@ -32,12 +34,23 @@ pub(crate) struct Options {
     pub files: std::path::PathBuf,
 }
 
+/// The HUD and menu face (Montserrat, OFL), at
+/// `embedded://skate_game/clean/assets/fonts/Montserrat-Italic.ttf`. The
+/// retail tier's headset menu uses it too.
+pub(crate) fn embed_font(app: &mut App) {
+    bevy::asset::embedded_asset!(app, "assets/fonts/Montserrat-Italic.ttf");
+}
+
 /// Whether this launch runs the clean tier.
 pub(crate) fn wanted() -> bool {
     #[cfg(target_os = "android")]
     {
+        // Retail only with the marker AND the imported data, so a marker
+        // left without data can't strand the player outside the menus.
         match crate::android::files_dir() {
-            Ok(files) => !files.join("use-retail-data").exists(),
+            Ok(files) => {
+                !(files.join("use-retail-data").exists() && files.join("assets/private/game.json").is_file())
+            }
             Err(_) => true,
         }
     }
@@ -141,12 +154,13 @@ fn build(options: Options) -> App {
         .insert_resource(CleanSkate::new())
         .insert_resource(menu::Menu::new(options.files.clone(), options.xr.is_some()))
         .init_resource::<menu::MenuNav>()
+        .init_resource::<menu::HudLines>()
         .init_resource::<UiCapture>()
         .add_systems(Startup, (view::lights, skater::spawn))
         .add_systems(PostStartup, menu::spawn_ui);
     crate::skate_audio::clean::install_sk8(&mut app);
     bevy::asset::embedded_asset!(app, "assets/skater.glb");
-    bevy::asset::embedded_asset!(app, "assets/fonts/Montserrat-Italic.ttf");
+    embed_font(&mut app);
 
     let xr = options.xr.is_some();
     #[cfg(feature = "xr")]
@@ -156,6 +170,9 @@ fn build(options: Options) -> App {
             files: options.files.clone(),
             retail: false,
         })
+        .insert_resource(crate::xr::ui::ControlsSheet(
+            menu::XR_CONTROLS.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(),
+        ))
         .add_systems(Startup, |panel: Res<crate::xr::panel::XrPanel>, mut commands: Commands| {
             commands.insert_resource(menu::MenuTarget(panel.camera));
         })
@@ -172,8 +189,14 @@ fn build(options: Options) -> App {
                 sim::publish_link,
             )
                 .chain()
+                .after(crate::xr::ui::UiSet)
                 .before(feed_sounds),
-        );
+        )
+        .add_systems(Update, xr_menu::feed_hud.after(menu::draw));
+        app.world_mut()
+            .resource_mut::<crate::xr::ui::UiProviders>()
+            .0
+            .push(std::sync::Arc::new(skater_page::CleanPages));
     }
     if !xr {
         app.add_systems(Startup, view::desktop_world).add_systems(

@@ -155,6 +155,7 @@ fn read(
     mut mapper: Local<TouchMapper>,
     mut latest: ResMut<LatestTouch>,
     mut pad: ResMut<ExternalPad>,
+    ui: Option<Res<super::ui::UiOwnsControllers>>,
 ) {
     let session: &openxr::Session<openxr::AnyGraphics> = &session;
     let null = openxr::Path::NULL;
@@ -187,5 +188,9 @@ fn read(
     // A menu tap is Start, which opens the flat pause menu; its camera is off
     // in XR, so the game would freeze behind a menu nobody can see.
     state.buttons &= !super::touch::START;
+    // A headset menu owns the controllers: the skater gets a neutral pad.
+    if ui.is_some_and(|ui| ui.0) {
+        state = skate_core::input::xbox::XboxState { buttons: 0, triggers: [0, 0], left: [0, 0], right: [0, 0] };
+    }
     pad.set(state);
 }

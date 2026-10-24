@@ -147,6 +147,27 @@ impl Menu {
         self.status = (text.into(), 3.0);
     }
 
+    /// Open on the SK8 sheet (the headset menu's "Advanced tuning").
+    pub(crate) fn open_sk8(&mut self) {
+        self.open = true;
+        self.page = Page::Sk8;
+        self.cursor = 0;
+    }
+
+    pub(crate) fn never_bail(&self) -> bool {
+        self.never_bail
+    }
+
+    pub(crate) fn set_never_bail(&mut self, on: bool) {
+        self.never_bail = on;
+        self.dirty = true;
+    }
+
+    /// Engine values changed elsewhere (the skater page): save them.
+    pub(crate) fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
     fn path(&self) -> PathBuf {
         self.files.join(SAVE_FILE)
     }
@@ -312,41 +333,44 @@ const START: [&str; 6] = ["Skate", "Build a park", "How to play", "SK8 menu", "P
 
 const HOWTO_TITLES: [&str; 4] = ["Skating", "Tricks", "Building a park", "SK8 menu"];
 
+/// The Touch controls, the basics first (the intro shows the first nine).
+pub(crate) const XR_CONTROLS: [(&str, &str); 30] = [
+    ("Left stick", "steer; in the air, spin"),
+    ("Right stick", "hold down to crouch, flick to pop"),
+    ("A (hold)", "push"),
+    ("X (hold)", "mongo push"),
+    ("B", "brake"),
+    ("Y", "get off / back on the board (on foot: A jumps)"),
+    ("Triggers (in the air)", "grab; right stick held first picks it"),
+    ("Right stick half down/up", "manual / nose manual (depth balances)"),
+    ("Left stick back + side", "powerslide (or right grip + steer)"),
+    ("Left stick click + flick", "old school: no comply, boneless, 180s"),
+    ("Left stick click in the air", "+ left stick: body varial"),
+    ("Left stick click + half down/up", "primo / casper"),
+    ("Right grip as you land", "revert"),
+    ("Right grip up a ramp", "handplant on the lip (hold; A/X/B: feet off)"),
+    ("Trigger + A (on the ground)", "boneless (X: fastplant; left trigger FS)"),
+    ("Trigger (rolling / on a rail)", "a hand on the board / a grind grab"),
+    ("A / X (in the air)", "front / back foot off (one-foot ollie or grab)"),
+    ("B while grabbing", "let go of the board (dismount bail)"),
+    ("Flick back the other way", "just after a kick/heelflip: underflip"),
+    ("Right grip during a flip", "catch it upside down (flick again: dark to light)"),
+    ("Left stick hard over, slow", "kickturn"),
+    ("Grab + right stick swirl", "finger flip"),
+    ("Grab + R down + left stick", "shifty"),
+    ("B in a nose/tail / double grab", "airwalk / superman"),
+    ("Right stick (plain air)", "board adjust"),
+    ("Left grip", "nose manual"),
+    ("Left grip + trigger", "aim, let go to put the skater there"),
+    ("Left menu (tap)", "this menu"),
+    ("Left menu (hold 1 s)", "build mode"),
+    ("Left menu + both grips", "SK8 menu"),
+];
+
 fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
     let pair = |a: &str, b: &str| info_row(format!("{a:<24} {b}"));
     match page {
-        0 if xr => vec![
-            pair("Left stick", "steer; in the air, spin"),
-            pair("Right stick", "hold down to crouch, flick to pop"),
-            pair("Right stick half down/up", "manual / nose manual (depth balances)"),
-            pair("Left stick click + flick", "old school: no comply, boneless, 180s"),
-            pair("Left stick click in the air", "+ left stick: body varial"),
-            pair("Left stick click + half down/up", "primo / casper"),
-            pair("A (hold)", "push"),
-            pair("X (hold)", "mongo push"),
-            pair("B", "brake"),
-            pair("Y", "get off / back on the board (on foot: A jumps)"),
-            pair("Left stick back + side", "powerslide (or right grip + steer)"),
-            pair("Right grip as you land", "revert"),
-            pair("Right grip up a ramp", "handplant on the lip (hold; A/X/B: feet off)"),
-            pair("Trigger + A (on the ground)", "boneless (X: fastplant; left trigger FS)"),
-            pair("Trigger (rolling / on a rail)", "a hand on the board / a grind grab"),
-            pair("A / X (in the air)", "front / back foot off (one-foot ollie or grab)"),
-            pair("B while grabbing", "let go of the board (dismount bail)"),
-            pair("Flick back the other way", "just after a kick/heelflip: underflip"),
-            pair("Right grip during a flip", "catch it upside down (flick again: dark to light)"),
-            pair("Left stick hard over, slow", "kickturn"),
-            pair("Grab + right stick swirl", "finger flip"),
-            pair("Grab + R down + left stick", "shifty"),
-            pair("B in a nose/tail / double grab", "airwalk / superman"),
-            pair("Right stick (plain air)", "board adjust"),
-            pair("Left grip", "nose manual"),
-            pair("Triggers (in the air)", "grab; right stick held first picks it"),
-            pair("Left grip + trigger", "aim, let go to put the skater there"),
-            pair("Left menu (tap)", "this menu"),
-            pair("Left menu (hold 1 s)", "build mode"),
-            pair("Left menu + both grips", "SK8 menu"),
-        ],
+        0 if xr => XR_CONTROLS.iter().map(|(a, b)| pair(a, b)).collect(),
         0 => vec![
             pair("A / D", "steer; in the air, spin"),
             pair("Arrow keys", "right stick: hold down, flick to pop"),
@@ -843,6 +867,15 @@ pub(crate) struct TrickPoints;
 /// The HUD's face: a heavy italic sans (Montserrat, OFL - assets/fonts/OFL.txt).
 const HUD_FONT: &str = "embedded://skate_game/clean/assets/fonts/Montserrat-Italic.ttf";
 
+/// The trick readout's text, for the headset's corner readout (the desktop
+/// draws it itself).
+#[derive(Resource, Default, Clone)]
+pub(crate) struct HudLines {
+    pub name: String,
+    pub points: String,
+    pub line: String,
+}
+
 /// The UI camera the menu draws to, when not the window's (the XR panel).
 #[derive(Resource, Clone, Copy)]
 pub(crate) struct MenuTarget(pub Entity);
@@ -971,6 +1004,7 @@ pub(crate) fn draw(
     mut trick_name: Query<&mut Text, (With<TrickName>, Without<HudText>, Without<TitleText>, Without<TabsText>, Without<RowText>, Without<FooterText>, Without<TrickPoints>)>,
     mut trick_points: Query<&mut Text, (With<TrickPoints>, Without<HudText>, Without<TitleText>, Without<TabsText>, Without<RowText>, Without<FooterText>, Without<TrickName>)>,
     mut shown: Local<(String, u32, f32)>,
+    mut lines: ResMut<HudLines>,
 ) {
     // the trick being done, big; once it scores, its points under it a moment
     for e in &sim.events {
@@ -994,8 +1028,10 @@ pub(crate) fn draw(
         **t = name.to_uppercase();
     }
     if let Ok(mut t) = trick_points.single_mut() {
-        **t = points;
+        **t = points.clone();
     }
+    lines.name = name;
+    lines.points = points;
     // a personal best beaten: said on the HUD for a few seconds
     for e in sim.events.iter().filter(|e| e.kind == EventKind::Best) {
         news.0 = format!("New best {}: {}", e.name.to_lowercase(), best_text(&e.name, e.points));
@@ -1007,6 +1043,12 @@ pub(crate) fn draw(
         let combo = if s.combo_count > 0 { format!("   combo {} x{}", s.combo_points, s.combo_count) } else { String::new() };
         let best = if news.1 > 0.0 { format!("\n{}", news.0) } else { String::new() };
         **hud = format!("{}{combo}{best}", s.score);
+    }
+    {
+        let s = &sim.current;
+        let combo = if s.combo_count > 0 { format!("  combo {} x{}", s.combo_points, s.combo_count) } else { String::new() };
+        let best = if news.1 > 0.0 { format!("  {}", news.0) } else { String::new() };
+        lines.line = format!("{}{combo}{best}", s.score);
     }
     let Ok(mut node) = root.single_mut() else { return };
     let display = if menu.open { Display::Flex } else { Display::None };

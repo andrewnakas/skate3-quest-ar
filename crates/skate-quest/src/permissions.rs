@@ -84,3 +84,63 @@ pub fn request_scene_permissions() {
         Err(e) => eprintln!("skate_quest: requestPermissions failed: {e}"),
     }
 }
+
+/// "All files access" (`MANAGE_EXTERNAL_STORAGE`): the in-app Skate 3 import
+/// reads the player's bundle from `Download/Skate3`. Android grants it only
+/// from a Settings page, so `request_all_files_access` opens that page for
+/// this app; the player switches it on and comes back.
+pub fn has_all_files_access() -> bool {
+    let Some(app) = bevy::android::ANDROID_APP.get() else {
+        return false;
+    };
+    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) };
+    let result = vm.attach_current_thread(|env| -> jni::errors::Result<bool> {
+        env.call_static_method(
+            jni_str!("android/os/Environment"),
+            jni_str!("isExternalStorageManager"),
+            jni_sig!("()Z"),
+            &[],
+        )?
+        .z()
+    });
+    result.unwrap_or_else(|e| {
+        eprintln!("skate_quest: isExternalStorageManager failed: {e}");
+        false
+    })
+}
+
+pub fn request_all_files_access() {
+    let Some(app) = bevy::android::ANDROID_APP.get() else {
+        return;
+    };
+    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) };
+    let result = vm.attach_current_thread(|env| -> jni::errors::Result<()> {
+        let activity = unsafe { JObject::from_raw(&*env, app.activity_as_ptr().cast()) };
+        let action = JString::from_str(env, "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION")?;
+        let package = JString::from_str(env, "package:com.andrewnakas.skate3ar")?;
+        let uri = env
+            .call_static_method(
+                jni_str!("android/net/Uri"),
+                jni_str!("parse"),
+                jni_sig!("(Ljava/lang/String;)Landroid/net/Uri;"),
+                &[JValue::from(&package)],
+            )?
+            .l()?;
+        let intent = env.new_object(
+            jni_str!("android/content/Intent"),
+            jni_sig!("(Ljava/lang/String;Landroid/net/Uri;)V"),
+            &[JValue::from(&action), JValue::from(&uri)],
+        )?;
+        env.call_method(
+            &activity,
+            jni_str!("startActivity"),
+            jni_sig!("(Landroid/content/Intent;)V"),
+            &[JValue::from(&intent)],
+        )?;
+        Ok(())
+    });
+    match result {
+        Ok(()) => eprintln!("skate_quest: opened the All files access settings"),
+        Err(e) => eprintln!("skate_quest: could not open All files access settings: {e}"),
+    }
+}

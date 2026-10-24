@@ -4877,6 +4877,7 @@ dependencies = [
  "skate-vehicles",
  "tracing-log",
  "wgpu",
+ "zip",
 ]
 
 [[package]]

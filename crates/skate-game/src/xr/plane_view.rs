@@ -8,11 +8,17 @@
 //!
 //! The overlay draws every detected plane as a translucent fill with a bright
 //! outline, coloured by what it is: floor blue, furniture green, walls grey,
-//! mesh-found surfaces orange (yellow when only shown, not ridden). It is on
-//! in build mode, flashes for a few seconds whenever the detected set
-//! changes, and A in build mode keeps it on everywhere.
+//! mesh-found surfaces orange (yellow when only shown, not ridden). The
+//! scanned 3D room mesh has its own view, tinted by which way each face
+//! looks.
+//!
+//! What is drawn follows the AR settings ([`ArSettings`]): each layer
+//! (floors, planes, 3D mesh) is drawn when its "show" is on. Build mode also
+//! draws the floor and plane layers being skated. A pointing at nothing in
+//! build mode shows or hides every layer. Drawing never changes collision.
 use super::actions::LatestTouch;
-use super::build::BuildMode;
+use super::ar_settings::ArSettings;
+use super::build::{BuildMode, PlacedPieces};
 use super::mesh_planes::{FitPlane, fit_planes};
 use super::planes::{RoomMesh, SceneLabels, SceneRevision, SceneShapes, Shape, up_axis};
 use super::real_world::covers;
@@ -22,8 +28,6 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future};
 
-/// How long the overlay shows after the detected planes change, seconds.
-const FLASH_SECONDS: f32 = 4.0;
 /// Overlays float this far above their surface, metres (no z-fighting with
 /// pieces or the real-surface depth).
 const LIFT_M: f32 = 0.004;
@@ -49,14 +53,26 @@ impl MeshPlanes {
 
 #[derive(Resource, Default)]
 struct PlaneOverlay {
-    always: bool,
-    flash_until: f32,
-    built: Option<(u64, u64)>,
+    /// (scene revision, mesh-plane revision, floors drawn, planes drawn).
+    built: Option<(u64, u64, bool, bool)>,
+    /// The room mesh drawn (its vertex buffer), if any.
+    mesh_built: Option<usize>,
     previous_a: bool,
 }
 
 #[derive(Component)]
 struct OverlayRoot;
+#[derive(Component)]
+struct RoomMeshView;
+
+/// Which overlay layers are drawn now: (floors, planes, 3D mesh).
+fn drawn(settings: &ArSettings, building: bool) -> (bool, bool, bool) {
+    (
+        settings.floor.show || (building && settings.floor.collide),
+        settings.planes.show || (building && settings.planes.collide),
+        settings.mesh.show,
+    )
+}
 
 pub(crate) struct PlaneViewPlugin;
 
@@ -65,7 +81,10 @@ impl Plugin for PlaneViewPlugin {
         app.init_resource::<MeshPlanes>()
             .init_resource::<PlaneOverlay>()
             .add_systems(Startup, spawn_root)
-            .add_systems(Update, (fit_room_planes, toggle, rebuild_overlay, place_overlay).chain());
+            .add_systems(
+                Update,
+                (fit_room_planes, toggle, rebuild_overlay, rebuild_mesh_view, place_overlay).chain(),
+            );
     }
 }
 
@@ -122,15 +141,21 @@ fn fit_room_planes(
     }));
 }
 
+/// A in build mode, pointing at no piece (A on a piece hides it): show or
+/// hide every layer.
 fn toggle(
     touch: Res<LatestTouch>,
     mode: Res<BuildMode>,
+    placed: Res<PlacedPieces>,
+    mut settings: ResMut<ArSettings>,
     mut overlay: ResMut<PlaneOverlay>,
 ) {
     let a = touch.0.a;
-    if mode.active && a && !overlay.previous_a {
-        overlay.always = !overlay.always;
-        info!("PLANES overlay always on: {}", overlay.always);
+    if mode.active && a && !overlay.previous_a && placed.pointed.is_none() {
+        let show = !settings.any_shown();
+        settings.set_all_shown(show);
+        settings.revision += 1;
+        info!("PLANES every layer shown: {show}");
     }
     overlay.previous_a = a;
 }
@@ -150,10 +175,11 @@ fn spawn_root(
     commands.spawn((
         OverlayRoot,
         Mesh3d(Handle::default()),
-        MeshMaterial3d(material),
+        MeshMaterial3d(material.clone()),
         Transform::default(),
         Visibility::Hidden,
     ));
+    commands.spawn((RoomMeshView, Mesh3d(Handle::default()), MeshMaterial3d(material), Transform::default(), Visibility::Hidden));
 }
 
 #[derive(Clone, Copy)]
@@ -242,29 +268,31 @@ fn scene_look(shape: &Shape, label: &str) -> Look {
 
 /// Rebuilds the overlay mesh when the detected planes change, in tracking
 /// space (the root entity carries the rig transform).
+#[allow(clippy::too_many_arguments)]
 fn rebuild_overlay(
     shapes: Res<SceneShapes>,
     labels: Res<SceneLabels>,
     mesh_planes: Res<MeshPlanes>,
     revision: Res<SceneRevision>,
-    time: Res<Time<Real>>,
+    settings: Res<ArSettings>,
+    mode: Res<BuildMode>,
     mut overlay: ResMut<PlaneOverlay>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut root: Query<&mut Mesh3d, With<OverlayRoot>>,
 ) {
-    let key = (revision.0, mesh_planes.revision);
+    let (floors, planes, _) = drawn(&settings, mode.active);
+    let key = (revision.0, mesh_planes.revision, floors, planes);
     if overlay.built == Some(key) || shapes.0.is_empty() {
         return;
     }
     let Ok(mut handle) = root.single_mut() else { return };
-    let first = overlay.built.is_none();
     overlay.built = Some(key);
-    if !first {
-        overlay.flash_until = time.elapsed_secs() + FLASH_SECONDS;
-    }
     let mut out = OverlayMesh::default();
     for (i, shape) in shapes.0.iter().enumerate() {
         let look = scene_look(shape, labels.0.get(i).map_or("", String::as_str));
+        if !(if matches!(look, Look::Floor) { floors } else { planes }) {
+            continue;
+        }
         match *shape {
             Shape::Plane { pose, half, .. } => out.rect(pose, half, look),
             Shape::Box { pose, half } => {
@@ -282,7 +310,7 @@ fn rebuild_overlay(
             }
         }
     }
-    for plane in &mesh_planes.planes {
+    for plane in mesh_planes.planes.iter().filter(|_| planes) {
         let look = if plane.solid { Look::MeshSolid } else { Look::MeshShown };
         if plane.solid {
             out.rect(plane.pose(), plane.half, look);
@@ -294,26 +322,81 @@ fn rebuild_overlay(
     handle.0 = meshes.add(out.into_mesh());
 }
 
+/// The scanned room mesh, one flat-tinted triangle per face (blue for floor,
+/// grey for walls, orange for everything else), in tracking space.
+fn rebuild_mesh_view(
+    room: Res<RoomMesh>,
+    settings: Res<ArSettings>,
+    mode: Res<BuildMode>,
+    mut overlay: ResMut<PlaneOverlay>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut view: Query<&mut Mesh3d, With<RoomMeshView>>,
+) {
+    let (_, _, show) = drawn(&settings, mode.active);
+    let Some(mesh) = room.0.as_ref().filter(|_| show) else { return };
+    let key = mesh.vertices.as_ptr() as usize;
+    if overlay.mesh_built == Some(key) {
+        return;
+    }
+    let Ok(mut handle) = view.single_mut() else { return };
+    overlay.mesh_built = Some(key);
+    handle.0 = meshes.add(room_mesh_view(mesh));
+}
+
+pub(crate) fn room_mesh_view(mesh: &super::planes::LocatedMesh) -> Mesh {
+    let mut positions = Vec::with_capacity(mesh.indices.len());
+    let mut colors = Vec::with_capacity(mesh.indices.len());
+    for tri in mesh.indices.chunks_exact(3) {
+        let [a, b, c] = [0, 1, 2].map(|k| {
+            let v = mesh.vertices.get(tri[k] as usize).copied().unwrap_or_default();
+            mesh.pose.transform_point(v)
+        });
+        let up = (b - a).cross(c - a).normalize_or_zero().y.abs();
+        let color = if up > 0.9 {
+            [0.25, 0.6, 1.0, 0.22]
+        } else if up < 0.3 {
+            [0.8, 0.82, 0.88, 0.14]
+        } else {
+            [1.0, 0.6, 0.2, 0.25]
+        };
+        positions.extend([a, b, c].map(|p| p.to_array()));
+        colors.extend([color; 3]);
+    }
+    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
+}
+
+#[allow(clippy::type_complexity)]
 fn place_overlay(
     rig: Res<Rig>,
     mode: Res<BuildMode>,
+    settings: Res<ArSettings>,
     overlay: Res<PlaneOverlay>,
-    time: Res<Time<Real>>,
-    mut root: Query<(&mut Transform, &mut Visibility), With<OverlayRoot>>,
+    room: Res<RoomMesh>,
+    mut root: Query<(&mut Transform, &mut Visibility), (With<OverlayRoot>, Without<RoomMeshView>)>,
+    mut view: Query<(&mut Transform, &mut Visibility), (With<RoomMeshView>, Without<OverlayRoot>)>,
 ) {
-    let Ok((mut transform, mut visibility)) = root.single_mut() else { return };
-    let show = overlay.built.is_some()
-        && (mode.active || overlay.always || time.elapsed_secs() < overlay.flash_until);
-    let target = match rig.root_transform() {
-        Some(root) if show => {
-            if *transform != root {
-                *transform = root;
+    let (floors, planes, mesh) = drawn(&settings, mode.active);
+    let root_tf = rig.root_transform();
+    let place = |transform: &mut Transform, visibility: &mut Visibility, show: bool| {
+        let target = match root_tf {
+            Some(root) if show => {
+                if *transform != root {
+                    *transform = root;
+                }
+                Visibility::Visible
             }
-            Visibility::Visible
+            _ => Visibility::Hidden,
+        };
+        if *visibility != target {
+            *visibility = target;
         }
-        _ => Visibility::Hidden,
     };
-    if *visibility != target {
-        *visibility = target;
+    if let Ok((mut transform, mut visibility)) = root.single_mut() {
+        place(&mut transform, &mut visibility, overlay.built.is_some() && (floors || planes));
+    }
+    if let Ok((mut transform, mut visibility)) = view.single_mut() {
+        place(&mut transform, &mut visibility, mesh && room.0.is_some() && overlay.mesh_built.is_some());
     }
 }

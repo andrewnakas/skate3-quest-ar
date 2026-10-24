@@ -21,6 +21,11 @@ pub fn main() {
         // attempted; the consent dialog, if any, happens in parallel with
         // engine startup.
         permissions::request_scene_permissions();
+        // The in-app Skate 3 import reads Download/Skate3.
+        skate_game::set_storage_hooks(skate_game::StorageHooks {
+            has_access: permissions::has_all_files_access,
+            request_access: permissions::request_all_files_access,
+        });
     }
     #[cfg(target_os = "android")]
     let exit = {

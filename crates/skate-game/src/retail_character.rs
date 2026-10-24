@@ -621,6 +621,7 @@ mod tests {
             check_assets: false,
             start_paused: false,
             teleport: None,
+            xr: None,
             multiplayer: Default::default(),
             map_fingerprint: 0,
         });

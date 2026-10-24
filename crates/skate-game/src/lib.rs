@@ -56,6 +56,34 @@ mod world;
 mod xr;
 mod clean;
 
+/// Platform hooks for shared storage (the headset's `Download` folder),
+/// set by the Android entry point: whether the app may read it, and asking
+/// the player for it ("All files access").
+#[derive(Clone, Copy)]
+pub struct StorageHooks {
+    pub has_access: fn() -> bool,
+    pub request_access: fn(),
+}
+
+static STORAGE_HOOKS: std::sync::OnceLock<StorageHooks> = std::sync::OnceLock::new();
+
+pub fn set_storage_hooks(hooks: StorageHooks) {
+    let _ = STORAGE_HOOKS.set(hooks);
+}
+
+/// Shared storage can be read (always, without hooks: the desktop).
+#[cfg_attr(not(feature = "xr"), allow(dead_code))]
+pub(crate) fn storage_access() -> bool {
+    STORAGE_HOOKS.get().is_none_or(|h| (h.has_access)())
+}
+
+#[cfg_attr(not(feature = "xr"), allow(dead_code))]
+pub(crate) fn request_storage_access() {
+    if let Some(h) = STORAGE_HOOKS.get() {
+        (h.request_access)();
+    }
+}
+
 /// Startup loading. `Err` is the exit to return, including the asset
 /// check's success.
 fn load() -> Result<Loaded, bevy::app::AppExit> {

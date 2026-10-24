@@ -39,9 +39,20 @@ The APK carries no game data; the clean tier needs none.
 
 ## Imported disc (optional)
 
-Convert your own Skate 3 disc with the desktop engine, copy the transfer
-bundle (made by `scripts/quest/make-bundle.ps1` on the PC) and push it after
-installing the APK once:
+The app starts in the clean-room tier, which needs no game data. To play the
+full retail tier (the faithful port: retail controls, animations and skaters)
+convert your own Skate 3 disc with the desktop engine and make the transfer
+bundle with `scripts/quest/make-bundle.ps1` on the PC (`quest-data/` holds
+`assets/` and `audio-pcm-cache/`). Then either:
+
+- **In the headset:** copy `quest-data` (or a zip of it) to `Download/Skate3`
+  on the headset (USB file transfer, or `adb push quest-data /sdcard/Download/Skate3/`),
+  open the menu > Skate 3 data > Import. The first time, the app opens the
+  "All files access" setting for it; switch it on, come back and press Import
+  again (or `adb shell appops set com.andrewnakas.skate3ar MANAGE_EXTERNAL_STORAGE allow`).
+  A folder is moved in (copied if the storage won't move it), a zip unzipped.
+  Then "Close the app now" and open it again.
+- **With the script**, after installing the APK once:
 
 ```sh
 scripts/quest/push-assets.sh quest-data/assets quest-data/audio-pcm-cache
@@ -51,9 +62,9 @@ That lands in `/sdcard/Android/data/com.andrewnakas.skate3ar/files/`:
 `assets/` (the converted installation) and
 `Skate3RustEngine/audio-pcm-cache/` (pre-decoded player sound banks; the
 headset has no ffmpeg). `push-assets.sh` also creates `files/use-retail-data`,
-so the next launch runs the imported disc. Delete that file (or choose
-"Use my imported disc" again from the clean tier's start screen to create it)
-to switch:
+so the next launch runs the imported disc (only while `files/assets/private/game.json`
+exists, so a marker without data still starts the clean tier). Menu > Skate 3 data
+switches between the tiers in either one, or delete the file:
 
 ```sh
 adb shell rm /sdcard/Android/data/com.andrewnakas.skate3ar/files/use-retail-data
@@ -83,14 +94,39 @@ under the `skate3` tag.
 | Right grip / left grip | Manual / nose manual |
 | Triggers, in the air | Grab (left / right hand) |
 | Left grip + left trigger | Aim; let go to put the skater there |
-| Left menu (tap) | Start screen: skate, build, how to play, SK8 menu, put the skater in front of me |
-| Left menu held + both grips | SK8 menu |
+| Left menu (tap) | The menu (below) |
+| Left menu held + both grips | SK8 menu (advanced tuning) |
 | Left menu held 1 s (alone) | Build mode (see below) |
 
 Tricks (hold the right stick down first): through the centre to up = ollie,
 up-left = kickflip, up-right = heelflip; sweep along the rim to the left and
 let go = pop shove-it, sweep on to up-left = tre flip; start up for nollies.
 The in-app How to play page is generated from the engine's own trick table.
+
+### The headset menu (both tiers)
+
+A tap of the left menu button opens it; point with the right controller and
+pull the trigger (drag a slider), or use a stick and A, B to go back. The
+first launch opens the intro: room scan or free roam, put the skater down,
+the basic controls. Its pages:
+
+- **Skater** (clean tier): skater size, pop height, flip speed, spin speed,
+  grind lock-on (all as multiples of the engine's own values), no bail, the
+  controls, and "Advanced tuning" (the SK8 menu).
+- **AR settings**: free roam (outside: no room scan, one endless floor at
+  your feet that follows the skater; set its height with the slider or by
+  holding the right controller on the ground and pressing A), set up a room
+  scan, and for floors / walls, tables and furniture / the 3D room mesh: skate
+  on it, show it (each separately, so the planes can be hidden but still
+  ridden), show / hide everything, the trick and points readout, replay the
+  intro. Saved in `files/ar-settings.json`.
+- **Build a park**: start building, skater size, park size, the selected
+  piece's own size and invisible (still skated), show invisible pieces,
+  undo, clear.
+- **Controls**, **Skate 3 data** (import, switch tier).
+
+While skating, a small readout low in the right of the view shows the trick,
+its points and the score.
 
 ### SK8 menu
 
@@ -133,11 +169,13 @@ input while building:
 | Left trigger | Undo |
 | Right controller | Point; a ghost shows where the piece goes |
 | Right trigger | Drop it there |
-| Right stick left/right / up-down | Turn 15° (snaps to table edges) / resize; pointing at a placed piece, turns / resizes that piece |
-| Right stick click on a piece | Copy it (kind, size, turn) |
+| Right stick left/right / up-down | Turn 15° (snaps to table edges) / resize (length or height); pointing at a placed piece, turns / resizes that piece |
+| Left grip + right stick up/down | Scale the whole piece (0.25-4x; the piece pointed at, or the next one dropped) |
+| Right stick click on a piece | Copy it (kind, size, scale, turn) |
 | Right grip on a piece | Pick it up, release to put it down |
 | B on a piece | Delete it |
-| A | Keep the detected-planes overlay on outside build mode too |
+| A on a piece | Make it invisible (still skated; build mode shows it as a ghost) or visible again |
+| A on nothing | Show / hide every detected-surface layer (AR settings) |
 | Y | Rescan the room (Space Setup) |
 | Hold X | Clear every piece |
 

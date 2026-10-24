@@ -37,6 +37,9 @@ pub(super) fn load(files: Res<XrFiles>, mut placed: ResMut<PlacedPieces>, mut ri
         Ok(layout) if layout.version == VERSION => {
             info!("BUILD loaded {} pieces from {}", layout.pieces.len(), path.display());
             placed.items = layout.pieces;
+            for item in &mut placed.items {
+                item.scale = super::snap_scale(item.scale);
+            }
             placed.revision += 1;
             if let Some(scale) = layout.scale.filter(|s| (MIN_SCALE..=MAX_SCALE).contains(s)) {
                 info!("BUILD world scale {scale:.2} from the saved layout");
@@ -90,6 +93,8 @@ mod tests {
                 piece: Piece { kind: PieceKind::Rail, size: 1.5 },
                 position: [0.4, 0.75, -1.2],
                 yaw: 0.5,
+                scale: 1.75,
+                hidden: true,
             }],
             scale: Some(8.0),
             park_scale: Some(1.5),
@@ -102,5 +107,10 @@ mod tests {
         let old: Layout = serde_json::from_str(r#"{"version":1,"pieces":[]}"#).unwrap();
         assert_eq!(old.scale, None, "layouts from before the scale still load");
         assert_eq!(old.park_scale, None);
+        let old: Layout = serde_json::from_str(
+            r#"{"version":1,"pieces":[{"id":1,"piece":{"kind":"Rail","size":1.0},"position":[0,0,0],"yaw":0}]}"#,
+        )
+        .unwrap();
+        assert_eq!((old.pieces[0].scale, old.pieces[0].hidden), (1.0, false), "pieces from before 0.0.3 load");
     }
 }

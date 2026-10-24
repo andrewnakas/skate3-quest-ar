@@ -12,9 +12,10 @@ use bevy::render::render_resource::TextureFormat;
 use bevy_mod_xr::camera::XrCamera;
 
 /// Panel image size, pixels, and its real size, metres.
-const WIDTH_PX: u32 = 1000;
-const HEIGHT_PX: u32 = 900;
-const WIDTH_M: f32 = 0.62;
+pub(crate) const WIDTH_PX: u32 = 1000;
+pub(crate) const HEIGHT_PX: u32 = 900;
+pub(crate) const WIDTH_M: f32 = 0.62;
+pub(crate) const HEIGHT_M: f32 = WIDTH_M * HEIGHT_PX as f32 / WIDTH_PX as f32;
 /// How far in front of the eyes it opens, and how far below them, metres.
 const DISTANCE_M: f32 = 0.7;
 const DROP_M: f32 = 0.12;
@@ -35,6 +36,14 @@ pub(crate) struct XrPanel {
     pub recenter: bool,
     /// Tracking-space pose of the quad.
     pose: Transform,
+}
+
+impl XrPanel {
+    /// Tracking-space pose of the quad: its front (+Z) faces the player,
+    /// +X is their right.
+    pub(crate) fn pose(&self) -> Transform {
+        self.pose
+    }
 }
 
 pub(crate) struct PanelPlugin;
@@ -67,10 +76,9 @@ fn setup(
             RenderTarget::Image(image.clone().into()),
         ))
         .id();
-    let height_m = WIDTH_M * HEIGHT_PX as f32 / WIDTH_PX as f32;
     commands.spawn((
         PanelQuad,
-        Mesh3d(meshes.add(Rectangle::new(WIDTH_M, height_m))),
+        Mesh3d(meshes.add(Rectangle::new(WIDTH_M, HEIGHT_M))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color_texture: Some(image),
             unlit: true,
@@ -84,7 +92,7 @@ fn setup(
     ));
     commands.insert_resource(XrPanel {
         camera,
-        visible: true,
+        visible: false,
         recenter: true,
         pose: Transform::from_xyz(0.0, 1.2, -DISTANCE_M),
     });
@@ -97,7 +105,7 @@ fn place(
     mut quad: Query<(&mut Transform, &mut Visibility), With<PanelQuad>>,
     mut cameras: Query<&mut Camera, With<XrPanelCamera>>,
 ) {
-    if let Ok(mut camera) = cameras.single_mut() {
+    if let Ok(mut camera) = cameras.get_mut(panel.camera) {
         if camera.is_active != panel.visible {
             camera.is_active = panel.visible;
         }

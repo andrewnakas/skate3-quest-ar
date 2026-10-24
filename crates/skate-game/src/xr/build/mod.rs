@@ -14,11 +14,15 @@
 //! - right controller: point; a ghost of the piece shows where it would go
 //! - right trigger: drop it there
 //! - right stick left/right: turn it in 15° steps (it lines up with a table
-//!   edge when within 10°); up/down: resize it. Pointing at a placed piece,
-//!   the stick turns and resizes that piece instead
-//! - right stick click on a placed piece: copy it (kind, size, turn)
+//!   edge when within 10°); up/down: resize it (its length or height). With
+//!   the left grip held, up/down scales the whole piece instead. Pointing at
+//!   a placed piece, the stick turns, resizes and scales that piece
+//! - right stick click on a placed piece: copy it (kind, size, scale, turn)
 //! - right grip on a placed piece: pick it up, release to put it down
 //! - B on a placed piece: delete it
+//! - A on a placed piece: make it invisible (it is still skated; build mode
+//!   shows it as a ghost) or visible again. A pointing at nothing shows the
+//!   detected planes
 //! - Y: rescan the room (Quest Space Setup)
 //! - hold X: clear every piece
 //!
@@ -60,6 +64,9 @@ pub(crate) const MIN_PARK_SCALE: f32 = 0.25;
 pub(crate) const MAX_PARK_SCALE: f32 = 4.0;
 /// A grip counts as held for the park-scale chord past this pull.
 const PARK_CHORD_GRIP: f32 = 0.6;
+/// One piece's own uniform scale, on top of the park scale.
+pub(crate) const MIN_PIECE_SCALE: f32 = 0.25;
+pub(crate) const MAX_PIECE_SCALE: f32 = 4.0;
 /// Game metres per real metre: 1 is life size, 60 is a tiny toy.
 pub(crate) const MIN_SCALE: f32 = 1.0;
 pub(crate) const MAX_SCALE: f32 = 60.0;
@@ -88,17 +95,32 @@ pub(crate) struct Placed {
     pub position: [f32; 3],
     /// Turn about +Y in tracking space.
     pub yaw: f32,
+    /// This piece's uniform scale ([`MIN_PIECE_SCALE`]..[`MAX_PIECE_SCALE`]);
+    /// absent in layouts from before 0.0.3.
+    #[serde(default = "unit_scale")]
+    pub scale: f32,
+    /// Not drawn (outside build mode), still skated.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
+}
+
+fn unit_scale() -> f32 {
+    1.0
 }
 
 impl Placed {
-    /// Pose of the piece in the game world; `park_scale` grows it about its
-    /// base centre, which stays on the same real spot.
+    /// Pose of the piece in the game world; `park_scale` and its own scale
+    /// grow it about its base centre, which stays on the same real spot.
     pub(crate) fn world_transform(&self, root: &Transform, park_scale: f32) -> Transform {
         Transform {
             translation: root.transform_point(Vec3::from_array(self.position)),
             rotation: root.rotation * Quat::from_rotation_y(self.yaw),
-            scale: Vec3::splat(park_scale),
+            scale: Vec3::splat(park_scale * self.scale),
         }
+    }
+
+    pub(crate) fn name(&self) -> String {
+        format!("{:?} {}", self.piece.kind, self.id)
     }
 }
 
@@ -116,6 +138,12 @@ pub(crate) struct PlacedPieces {
     pub dragging: Option<u64>,
     pub resizing: Option<u64>,
     pub rescaling: bool,
+    /// The piece last pointed at or placed in build mode (the menu edits it).
+    pub selected: Option<u64>,
+    /// The piece the build ray is on right now.
+    pub pointed: Option<u64>,
+    /// Draw invisible pieces as ghosts outside build mode too.
+    pub show_hidden: bool,
     /// Earlier layouts, newest last, for undo.
     history: Vec<Vec<Placed>>,
 }
@@ -129,6 +157,9 @@ impl Default for PlacedPieces {
             dragging: None,
             resizing: None,
             rescaling: false,
+            selected: None,
+            pointed: None,
+            show_hidden: false,
             history: Vec::new(),
         }
     }
@@ -140,14 +171,14 @@ impl PlacedPieces {
     }
 
     /// Remember the current layout before an edit.
-    fn checkpoint(&mut self) {
+    pub(crate) fn checkpoint(&mut self) {
         if self.history.len() == UNDO_DEPTH {
             self.history.remove(0);
         }
         self.history.push(self.items.clone());
     }
 
-    fn undo(&mut self) -> bool {
+    pub(crate) fn undo(&mut self) -> bool {
         let Some(items) = self.history.pop() else {
             return false;
         };
@@ -158,24 +189,41 @@ impl PlacedPieces {
         true
     }
 
-    fn add(&mut self, piece: Piece, position: Vec3, yaw: f32) -> u64 {
+    fn add(&mut self, piece: Piece, position: Vec3, yaw: f32, scale: f32) -> u64 {
         self.checkpoint();
-        self.insert(piece, position, yaw)
+        self.insert(piece, position, yaw, scale)
     }
 
-    fn insert(&mut self, piece: Piece, position: Vec3, yaw: f32) -> u64 {
+    fn insert(&mut self, piece: Piece, position: Vec3, yaw: f32, scale: f32) -> u64 {
         let id = self.items.iter().map(|p| p.id).max().map_or(1, |m| m + 1);
         self.items.push(Placed {
             id,
             piece,
             position: position.to_array(),
             yaw,
+            scale,
+            hidden: false,
         });
         self.revision += 1;
+        self.selected = Some(id);
         id
     }
 
-    fn remove(&mut self, id: u64) -> Option<Placed> {
+    pub(crate) fn get_mut(&mut self, id: u64) -> Option<&mut Placed> {
+        self.items.iter_mut().find(|p| p.id == id)
+    }
+
+    /// Every piece removed (undoable).
+    pub(crate) fn clear(&mut self) {
+        self.checkpoint();
+        self.items.clear();
+        self.dragging = None;
+        self.resizing = None;
+        self.selected = None;
+        self.revision += 1;
+    }
+
+    pub(crate) fn remove(&mut self, id: u64) -> Option<Placed> {
         let at = self.items.iter().position(|p| p.id == id)?;
         self.checkpoint();
         self.revision += 1;
@@ -206,8 +254,12 @@ struct BuildState {
     /// The park was resized: once collision is rebuilt, drop the skater onto
     /// whatever is now under this real (tracking) spot.
     drop_after_rebuild: Option<(Vec3, Vec3, u64)>,
-    /// Unsnapped size of the placed piece being resized.
+    /// Unsnapped size (or scale) of the placed piece being resized.
     resize_size: f32,
+    /// The resize in progress is the piece's uniform scale.
+    resize_scale: bool,
+    /// Uniform scale of the piece to drop.
+    scale: f32,
     previous: Buttons,
 }
 
@@ -228,6 +280,8 @@ impl Default for BuildState {
             park_rescale: false,
             drop_after_rebuild: None,
             resize_size: 1.0,
+            resize_scale: false,
+            scale: 1.0,
             previous: Buttons::default(),
         }
     }
@@ -246,6 +300,7 @@ impl BuildState {
 struct Buttons {
     trigger: bool,
     grip: bool,
+    a: bool,
     b: bool,
     y: bool,
     undo: bool,
@@ -328,6 +383,7 @@ fn build_controls(
         state.ray = None;
         state.ghost = None;
         state.target = None;
+        placed.pointed = None;
         if placed.rescaling {
             finish_rescale(&rig, &mut teleport, &mut state, &mut placed);
         }
@@ -350,6 +406,7 @@ fn build_controls(
     let now = Buttons {
         trigger: if previous.trigger { touch.right_trigger > RELEASE } else { touch.right_trigger > PRESS },
         grip: if previous.grip { touch.right_grip > RELEASE } else { touch.right_grip > PRESS },
+        a: touch.a,
         b: touch.b,
         y: touch.y,
         undo: if previous.undo { touch.left_trigger > RELEASE } else { touch.left_trigger > PRESS },
@@ -379,11 +436,7 @@ fn build_controls(
     if touch.x {
         state.clear_hold += time.delta_secs();
         if state.clear_hold >= CLEAR_HOLD_SECONDS && !placed.items.is_empty() {
-            placed.checkpoint();
-            placed.items.clear();
-            placed.dragging = None;
-            placed.resizing = None;
-            placed.revision += 1;
+            placed.clear();
             info!("BUILD cleared");
         }
     } else {
@@ -431,6 +484,7 @@ fn build_controls(
     let to_tracking = root.compute_affine().inverse();
     // A piece being resized keeps the stick until it is let go.
     state.target = placed.resizing.or(hit.and_then(|h| h.piece));
+    placed.pointed = state.target;
     let valid = hit.filter(|h| h.normal.y >= MIN_UP);
     state.ray = Some(match hit {
         Some(h) => (origin, h.point, valid.is_some()),
@@ -444,11 +498,16 @@ fn build_controls(
     let turn = (now.right_flick != 0 && now.right_flick != previous.right_flick)
         .then(|| -ROTATE_STEP * now.right_flick as f32);
     let factor = (resize * RESIZE_RATE * time.delta_secs()).exp();
+    // Left grip held: the stick scales the whole piece rather than its length.
+    let scaling = touch.left_grip > PARK_CHORD_GRIP;
+    if let Some(id) = state.target {
+        placed.selected = Some(id);
+    }
     match state.target.filter(|_| placed.dragging.is_none()) {
         Some(id) => {
             if let Some(turn) = turn {
                 placed.checkpoint();
-                if let Some(item) = placed.items.iter_mut().find(|p| p.id == id) {
+                if let Some(item) = placed.get_mut(id) {
                     item.yaw += turn;
                 }
                 placed.revision += 1;
@@ -458,12 +517,20 @@ fn build_controls(
                 if placed.resizing.is_none() {
                     placed.checkpoint();
                     placed.resizing = Some(id);
-                    state.resize_size = placed.items.iter().find(|p| p.id == id).map_or(1.0, |p| p.piece.size);
+                    state.resize_scale = scaling;
+                    let item = placed.items.iter().find(|p| p.id == id);
+                    state.resize_size = item.map_or(1.0, |p| if scaling { p.scale } else { p.piece.size });
                 }
-                state.resize_size = (state.resize_size * factor).clamp(MIN_SIZE, MAX_SIZE);
-                let size = snap_size(state.resize_size);
-                if let Some(item) = placed.items.iter_mut().find(|p| p.id == id) {
-                    item.piece.size = size;
+                let scale_mode = state.resize_scale;
+                let (lo, hi) = if scale_mode { (MIN_PIECE_SCALE, MAX_PIECE_SCALE) } else { (MIN_SIZE, MAX_SIZE) };
+                state.resize_size = (state.resize_size * factor).clamp(lo, hi);
+                let value = state.resize_size;
+                if let Some(item) = placed.get_mut(id) {
+                    if scale_mode {
+                        item.scale = snap_scale(value);
+                    } else {
+                        item.piece.size = snap_size(value);
+                    }
                 }
             }
         }
@@ -471,7 +538,9 @@ fn build_controls(
             if let Some(turn) = turn {
                 state.yaw += turn;
             }
-            if resizing {
+            if resizing && scaling {
+                state.scale = (state.scale * factor).clamp(MIN_PIECE_SCALE, MAX_PIECE_SCALE);
+            } else if resizing {
                 let selected = state.selected;
                 state.sizes[selected] = (state.sizes[selected] * factor).clamp(MIN_SIZE, MAX_SIZE);
             }
@@ -529,6 +598,7 @@ fn build_controls(
             let selected = PieceKind::ALL.iter().position(|&k| k == item.piece.kind).unwrap_or(0);
             state.selected = selected;
             state.sizes[selected] = item.piece.size;
+            state.scale = item.scale;
             state.yaw = item.yaw;
             info!("BUILD copied piece {} ({:?})", item.id, item.piece.kind);
         }
@@ -540,6 +610,17 @@ fn build_controls(
         }
         return;
     }
+    if pressed(now.a, previous.a) {
+        if let Some(id) = state.target {
+            placed.checkpoint();
+            if let Some(item) = placed.get_mut(id) {
+                item.hidden = !item.hidden;
+                info!("BUILD piece {id} hidden={}", item.hidden);
+            }
+            placed.revision += 1;
+        }
+        return;
+    }
     if pressed(now.park, previous.park) {
         if let Some((position, _)) = state.ghost {
             placed.checkpoint();
@@ -548,7 +629,7 @@ fn build_controls(
                 // Offsets are game metres in the park's frame; positions are
                 // tracking metres.
                 let at = position + Quat::from_rotation_y(yaw) * Vec3::from_array(offset) * placed.park_scale / rig.scale;
-                placed.insert(Piece { kind, size }, at, yaw + turn);
+                placed.insert(Piece { kind, size }, at, yaw + turn, 1.0);
             }
             info!("BUILD starter park at {position:?} ({} pieces)", placed.items.len());
         }
@@ -558,8 +639,9 @@ fn build_controls(
         if let Some((position, _)) = state.ghost {
             let piece = state.piece();
             let yaw = state.placed_yaw;
-            let id = placed.add(piece, position, yaw);
-            info!("BUILD placed {:?} size {:.2} as piece {id} at {position:?}", piece.kind, piece.size);
+            let scale = snap_scale(state.scale);
+            let id = placed.add(piece, position, yaw, scale);
+            info!("BUILD placed {:?} size {:.2} scale {scale:.2} as piece {id} at {position:?}", piece.kind, piece.size);
         }
     }
 }
@@ -577,6 +659,10 @@ const STARTER_PARK: [(PieceKind, f32, [f32; 3], f32); 5] = [
 
 fn snap_size(size: f32) -> f32 {
     ((size / SIZE_STEP).round() * SIZE_STEP).clamp(MIN_SIZE, MAX_SIZE)
+}
+
+pub(crate) fn snap_scale(scale: f32) -> f32 {
+    ((scale / SIZE_STEP).round() * SIZE_STEP).clamp(MIN_PIECE_SCALE, MAX_PIECE_SCALE)
 }
 
 /// The scale stick was let go: put the skater back on the same real spot at
@@ -695,6 +781,8 @@ struct PieceAssets {
     meshes: HashMap<(PieceKind, u32), Handle<Mesh>>,
     solid: HashMap<PieceKind, Handle<StandardMaterial>>,
     ghost: Option<Handle<StandardMaterial>>,
+    /// Invisible pieces, when shown.
+    hidden: Option<Handle<StandardMaterial>>,
 }
 
 impl PieceAssets {
@@ -735,8 +823,9 @@ fn piece_mesh(geometry: &PieceGeometry) -> Mesh {
     mesh
 }
 
+/// A placed piece's entity: its id, shape and whether it is drawn as a ghost.
 #[derive(Component)]
-struct PlacedVisual(u64, Piece);
+struct PlacedVisual(u64, Piece, bool);
 #[derive(Component)]
 struct GhostVisual(Option<Piece>);
 #[derive(Component)]
@@ -762,6 +851,10 @@ fn spawn_visuals(
     assets.ghost = Some(materials.add(StandardMaterial {
         alpha_mode: AlphaMode::Blend,
         ..unlit(Color::srgba(0.3, 1.0, 0.5, 0.45))
+    }));
+    assets.hidden = Some(materials.add(StandardMaterial {
+        alpha_mode: AlphaMode::Blend,
+        ..unlit(Color::srgba(0.75, 0.85, 1.0, 0.22))
     }));
     commands.spawn((
         BuildRay,
@@ -792,38 +885,50 @@ fn spawn_visuals(
     }
 }
 
-/// One entity per placed piece, kept at its world pose.
+/// One entity per placed piece, kept at its world pose. Invisible pieces are
+/// ghosts in build mode (or with "show invisible pieces") and not drawn
+/// otherwise.
+#[allow(clippy::too_many_arguments)]
 fn sync_pieces(
     mut commands: Commands,
     placed: Res<PlacedPieces>,
+    mode: Res<BuildMode>,
     rig: Res<Rig>,
     mut assets: ResMut<PieceAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut visuals: Query<(Entity, &PlacedVisual, &mut Transform)>,
+    mut visuals: Query<(Entity, &PlacedVisual, &mut Transform, &mut Visibility)>,
 ) {
     let Some(root) = rig.root_transform() else {
         return;
     };
+    let see_hidden = mode.active || placed.show_hidden;
     let mut shown = Vec::with_capacity(placed.items.len());
-    for (entity, visual, mut transform) in &mut visuals {
+    for (entity, visual, mut transform, mut visibility) in &mut visuals {
         match placed.items.iter().find(|p| p.id == visual.0) {
-            Some(item) if item.piece == visual.1 => {
+            Some(item) if item.piece == visual.1 && item.hidden == visual.2 => {
                 let target = item.world_transform(&root, placed.park_scale);
                 if *transform != target {
                     *transform = target;
                 }
+                visibility.set_if_neq(if item.hidden && !see_hidden { Visibility::Hidden } else { Visibility::Inherited });
                 shown.push(item.id);
             }
             _ => commands.entity(entity).despawn(),
         }
     }
     for item in placed.items.iter().filter(|p| !shown.contains(&p.id)) {
+        let material = if item.hidden {
+            assets.hidden.clone().unwrap_or_default()
+        } else {
+            assets.solid(item.piece.kind, &mut materials)
+        };
         commands.spawn((
-            PlacedVisual(item.id, item.piece),
+            PlacedVisual(item.id, item.piece, item.hidden),
             Mesh3d(assets.mesh(item.piece, &mut meshes)),
-            MeshMaterial3d(assets.solid(item.piece.kind, &mut materials)),
+            MeshMaterial3d(material),
             item.world_transform(&root, placed.park_scale),
+            if item.hidden && !see_hidden { Visibility::Hidden } else { Visibility::Inherited },
         ));
     }
 }
@@ -890,7 +995,7 @@ fn show_build(
             *ghost_tf = Transform {
                 translation: point,
                 rotation: root.rotation * Quat::from_rotation_y(state.placed_yaw),
-                scale: Vec3::splat(placed.park_scale),
+                scale: Vec3::splat(placed.park_scale * snap_scale(state.scale)),
             };
             *ghost_vis = Visibility::Visible;
         }

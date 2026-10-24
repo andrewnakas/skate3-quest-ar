@@ -70,6 +70,14 @@ name = "com.oculus.permission.HAND_TRACKING"
 [[package.metadata.android.uses_permission]]
 name = "com.oculus.permission.USE_SCENE"
 
+# The in-app Skate 3 import reads the player's bundle from Download/Skate3
+# ("All files access", granted from a Settings page the app opens).
+[[package.metadata.android.uses_permission]]
+name = "android.permission.MANAGE_EXTERNAL_STORAGE"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.READ_EXTERNAL_STORAGE"
+
 [[package.metadata.android.uses_permission]]
 name = "com.oculus.permission.USE_ANCHOR_API"
 

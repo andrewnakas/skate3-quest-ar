@@ -87,7 +87,7 @@ pub(crate) struct RetailLinkPlugin;
 
 impl Plugin for RetailLinkPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (apply_world, teleport, publish_pose).chain());
+        app.add_systems(Update, (apply_world, teleport, publish_pose, publish_hud).chain());
     }
 }
 
@@ -156,4 +156,28 @@ fn publish_pose(
     let f = deck.basis.columns[2];
     link.deck = Some((Vec3::new(t.x, t.y, t.z), Vec3::new(f[0], f[1], f[2])));
     link.grinding = skater.is_grinding();
+}
+
+/// The port's scoring for the corner readout: the trick being composed, the
+/// sequence's points and the line.
+fn publish_hud(skater: Option<Res<SkaterRuntime>>, mut hud: ResMut<super::ui::hud::TrickHud>) {
+    let Some(skater) = skater else { return };
+    let input = skater.scoring.hud_input();
+    let points = if input.sequence_score > 0 {
+        if input.multiplier > 1.0 {
+            format!("{} x{:.1}", input.sequence_score, input.multiplier)
+        } else {
+            input.sequence_score.to_string()
+        }
+    } else {
+        String::new()
+    };
+    let next = super::ui::hud::TrickHud {
+        name: input.trick_name,
+        points,
+        line: if input.line_score > 0 { format!("line {}", input.line_score) } else { String::new() },
+    };
+    if *hud != next {
+        *hud = next;
+    }
 }
