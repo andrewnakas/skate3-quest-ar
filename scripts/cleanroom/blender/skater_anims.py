@@ -100,11 +100,12 @@ NOSE_MANUAL = P(hips=(0.13, 0.0, 0.8), hips_rot=(14, 0, 0), spine=(18, 0, 14), h
 GRIND = P(hips=(0.0, 0.02, 0.74), hips_rot=(12, 0, 0), spine=(18, 0, 12), lh=(0.62, -0.05, 1.08), rh=(-0.62, -0.05, 1.04))
 BOARDSLIDE = P(hips=(0.0, 0.03, 0.74), hips_rot=(12, 0, 30), spine=(16, 0, 30), head=(-6, 0, 70),
                lh=(0.6, -0.15, 1.06), rh=(-0.58, 0.1, 1.04))
-# Powerslide: sat right back over the heel edge against the slide, knees bent, both arms spread wide
-# at shoulder height for balance (as the port's)
-POWERSLIDE = P(hips=(0.0, 0.2, 0.64), hips_rot=(-24, 0, 12), spine=(-8, 0, 22), head=(4, 0, 70),
-               lf=foot(FRONT_X, 0.03, 0.0, yaw=10), rf=foot(BACK_X, 0.03, 0.0, yaw=-3),
-               lh=(0.7, 0.02, 1.1), rh=(-0.66, 0.1, 1.06), knee_out=0.5)
+# Powerslide: squatted down low with the hips right over the middle of the board, knees bent out,
+# the trunk a little forward and the arms out low to the sides (as the port's 3-angle footage: the
+# board goes across the way of travel with the skater on it, not under a skater leaning away)
+POWERSLIDE = P(hips=(0.0, 0.04, 0.56), hips_rot=(14, 0, 8), spine=(16, 0, 16), head=(-4, 0, 66),
+               lf=foot(FRONT_X + 0.02, 0.0, 0.0, yaw=12), rf=foot(BACK_X - 0.01, 0.0, 0.0, yaw=-2),
+               lh=(0.46, -0.06, 0.64), rh=(-0.46, 0.02, 0.62), knee_out=0.6)
 # Grabs: a compact tuck with the board pulled up under the feet and a hand on the deck. The deck top is
 # at GRAB_DECK (the soles), its toe edge at y -0.11 and heel edge at +0.11, nose x +0.4, tail x -0.4.
 # Shapes after the 3-angle grab footage; every number our own. Judo kicks the front foot off, and in

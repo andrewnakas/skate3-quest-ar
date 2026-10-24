@@ -98,6 +98,8 @@ private:
 	// the board's tip in a manual / a 5-0 or nosegrind, degrees (eased to the stick's reach)
 	float manual_tilt_ = 0, grind_tilt_ = 0;
 	int tip_kind_ = -1;
+	// a powerslide: the board's lead on the way it's going (radians) and the side it swings to
+	float slide_off_ = 0, slide_side_ = 1;
 
 	bool unslide_ = false;
 	V3 plant_in_; // the way it was going when it planted (a foot/handplant pops back off that way)

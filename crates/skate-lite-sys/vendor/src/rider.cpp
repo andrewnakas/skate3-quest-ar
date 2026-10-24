@@ -421,6 +421,17 @@ static float ease_tilt(float tilt, float target, float tau)
 	return tilt + clampf(d, -kTiltRate * kDt, kTiltRate * kDt);
 }
 
+// ---------------------------------------------------------------- powerslide
+
+// as the port, probed with the left stick held at many reaches and angles while rolling
+constexpr float kSlideReach = 0.9f;                   // pad-read reach it takes
+constexpr float kSlideFromBack[2] = {21.0f, 52.0f};   // degrees off straight back
+constexpr float kSlideGrip = 10.92f;                   // m/s^2 the way it's going swings round
+constexpr float kSlideLead = 0.8f;                    // board lead per radian of the stick above level
+constexpr float kSlideButtonLead = 0.68f;             // radians, slid with the button
+constexpr float kSlideEase = 0.22f;                   // s
+constexpr float kSlideOut = 2.6f;                     // rad/s easing back in line
+
 // ---------------------------------------------------------------- crouch
 
 // How much pop a crouch has charged, by how far it got (crouch_: the share of crouch_charge held).
@@ -735,14 +746,18 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		}
 	}
 
-	// powerslide: the left stick pulled back to a diagonal (the port's way: back-right slides
-	// right), or the slide button held while steering
-	bool stick_slide = in.steer[1] < -0.45f && std::fabs(in.steer[0]) > 0.4f;
+	// powerslide: the left stick pushed right out to a back diagonal (the port's way, probed: back-
+	// right slides right; part-way, or swung round toward the side, it's only a carve), or the
+	// slide button held while steering
+	float slide_reach = std::sqrt(steer_pad_[0] * steer_pad_[0] + steer_pad_[1] * steer_pad_[1]);
+	float from_back = std::atan2(std::fabs(steer_pad_[0]), -steer_pad_[1]) / kDeg; // 0 straight back
+	bool stick_slide = slide_reach >= kSlideReach && from_back >= kSlideFromBack[0] && from_back <= kSlideFromBack[1];
 	// (the button only on the flat: held riding up a ramp, it's for a handplant at the top)
 	bool want_slide = stick_slide || ((in.buttons & SK8_SLIDE) && std::fabs(steer) > 0.4f && up_.y > 0.95f);
 	if (mode_ == SK8_MODE_RIDE && want_slide && speed > 1.8f) {
 		mode_ = SK8_MODE_SLIDE;
 		slide_time_ = 0;
+		slide_side_ = (stick_slide ? steer_pad_[0] : steer) > 0 ? 1.0f : -1.0f;
 		// named as the port does: swung out to the left (the stick back-left), backside
 		slide_name_ = (steer < 0) != fakie_ ? "Backside Powerslide" : "Powerslide";
 	} else if (mode_ == SK8_MODE_SLIDE && ((!want_slide && !(in.buttons & SK8_SLIDE)) || speed < 0.6f)) {
@@ -759,7 +774,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	carve_ += (carve_in_ - carve_) * ease;
 	float rate = p[Carve] * carve_ * clampf(speed / 2.5f, 0.35f, 1.0f);
 	if (mode_ == SK8_MODE_SLIDE)
-		rate *= 0.5f;
+		rate = 0; // (a powerslide turns by its own rule, below)
 	// a kickturn (as the port: slow, the left stick hard over): the nose lifts and the board pivots
 	// on its back wheels, easing in, then turning steadily for as long as it's held
 	if (mode_ == SK8_MODE_RIDE && speed < kKickturnTop && std::fabs(steer) > 0.7f && push_time_ < 0 &&
@@ -775,6 +790,35 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	// The wheels carry the motion round with the board (a carve keeps its speed).
 	if (mode_ != SK8_MODE_SLIDE)
 		vel_ = rotate(vel_, up_, -rate * kDt);
+
+	// A powerslide (as the port, measured): the way it's going swings round with a steady sideways
+	// pull, quicker the slower it goes, and the board (the skater with it) leads that way round by
+	// an angle the stick sets - the further back the stick, the further across - eased in; let go,
+	// it eases back in line.
+	{
+		V3 going = flatten(vel_, up_);
+		float v = len(going);
+		if (mode_ == SK8_MODE_SLIDE && v > 0.3f) {
+			float side = slide_side_;
+			float above = std::atan2(std::fabs(steer_pad_[1]), std::fabs(steer_pad_[0]));
+			float target = in.buttons & SK8_SLIDE && !stick_slide ? kSlideButtonLead : kSlideLead * above;
+			slide_off_ += (target - slide_off_) * (1 - std::exp(-kDt / kSlideEase));
+			vel_ = rotate(vel_, up_, -side * kSlideGrip / std::max(v, 1.0f) * kDt);
+			going = unit(flatten(vel_, up_), travel);
+			V3 lead = unit(rotate(going, up_, -side * slide_off_), going);
+			fwd_ = fakie_ ? -lead : lead;
+		} else if (slide_off_ > 0) {
+			float back = std::min(slide_off_, kSlideOut * kDt);
+			slide_off_ -= back;
+			if (v > 0.3f) {
+				V3 g = unit(going, travel);
+				float turn = dot(cross(g, travel), up_) >= 0 ? -1.0f : 1.0f; // toward the way it's going
+				fwd_ = unit(rotate(fwd_, up_, turn * back), fwd_);
+			}
+		}
+		if (mode_ != SK8_MODE_SLIDE && slide_off_ <= 0)
+			slide_off_ = 0;
+	}
 
 	// gravity along the surface
 	vel_ += flatten(V3{0, -p[Gravity] * p[SlopeGravity], 0}, up_) * kDt; // rolling: less than the air's pull
@@ -878,8 +922,10 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		dec += skid_ * kDt;
 		skid_time_ -= kDt;
 	}
-	if (mode_ == SK8_MODE_SLIDE) // bites in as the board turns across, eases off as it slows
-		dec += p[SlideDrag] * slide_amount_ * slide_amount_ * std::min(1.0f, speed / p[SlideSoft]) * kDt;
+	if (mode_ == SK8_MODE_SLIDE) { // bites in as the board turns across, eases off as it slows
+		float across = std::sin(slide_off_);
+		dec += p[SlideDrag] * across * across * std::min(1.0f, speed / p[SlideSoft]) * kDt;
+	}
 	if (mode_ == SK8_MODE_MANUAL)
 		dec += (manual_style_ == 1 ? 2.7f : p[ManualDrag]) * kDt; // two wheels rolling; a primo scrapes its edge
 	vel_ = speed > dec ? vel_ * ((speed - dec) / speed) : V3{};
@@ -901,7 +947,9 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	// wheels resist sideways motion
 	V3 side = unit(cross(up_, fwd_), V3{1, 0, 0});
 	float lateral = dot(vel_, side);
-	float grip = 1 - std::exp(-p[Grip] * kDt * (mode_ == SK8_MODE_SLIDE || reverting ? 0.08f : 1.0f));
+	float grip = mode_ == SK8_MODE_SLIDE || slide_off_ > 0
+		? 0.0f // (sliding, the board's way is the slide's own, above)
+		: 1 - std::exp(-p[Grip] * kDt * (reverting ? 0.08f : 1.0f));
 	vel_ -= side * (lateral * grip);
 	vel_ = flatten(vel_, up_);
 
@@ -2470,8 +2518,6 @@ void Rider::state(sk8_state &s) const
 		board = board * Q::axis_angle({1, 0, 0}, -std::min(kickturn_ / 0.15f, 1.0f) * 0.32f);
 	if (mode_ == SK8_MODE_AIR && (adjust_[0] != 0 || adjust_[1] != 0)) // a board adjust: nose up / swung
 		board = board * Q::axis_angle({0, 1, 0}, -adjust_[0] * kAdjustYaw) * Q::axis_angle({1, 0, 0}, -adjust_[1] * kAdjustPitch);
-	if (slide_amount_ > 0)
-		board = board * Q::axis_angle({0, 1, 0}, (lean_ >= 0 ? -1.0f : 1.0f) * slide_amount_ * 1.4f);
 	if (mode_ == SK8_MODE_MANUAL && manual_style_ == 1)
 		board = board * Q::axis_angle({0, 0, 1}, (switch_ ? -kPi : kPi) / 2); // primo: on its side, heel edge up
 	else if (mode_ == SK8_MODE_MANUAL && manual_style_ == 2)
