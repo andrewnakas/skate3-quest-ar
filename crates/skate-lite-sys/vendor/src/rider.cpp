@@ -421,6 +421,22 @@ static float ease_tilt(float tilt, float target, float tau)
 	return tilt + clampf(d, -kTiltRate * kDt, kTiltRate * kDt);
 }
 
+// ---------------------------------------------------------------- ramps
+
+// Popping up a ramp (as the port, measured on its quarter pipes): popped on the face it hardly
+// changes the air, popped at the lip (just off it) it lifts the air by about half an ollie.
+constexpr float kRampPopLift = 0.6f;   // share of a ramp-face pop turned to straight up
+constexpr float kRampPop = 0.06f;      // a ramp-face pop's size, of an ollie's
+constexpr float kLipPop = 0.28f;        // a lip pop's (straight up), of an ollie's
+constexpr float kLipPopWindow = 0.22f; // s off a lip in which a flick (or its takeoff) still pops
+
+// The pump down a transition (see ground)
+constexpr float kPumpBend = 0.15f;  // rad per metre: the surface curving (a radius under ~7 m)
+constexpr float kPumpSteep = 0.995f; // (not on the flat)
+constexpr float kPumpGain = 0.35f;  // speed stored per unit of the curve's press (v^2 * bend)
+constexpr float kPumpRate = 8.0f;   // m/s^2 it comes out at
+
+
 // ---------------------------------------------------------------- powerslide
 
 // as the port, probed with the left stick held at many reaches and angles while rolling
@@ -508,6 +524,16 @@ void Rider::step(World &w, const sk8_input &in)
 		}
 	}
 	since_lead_ = flick_.holding_lead() ? 0 : since_lead_ + 1;
+	// how far down the skater crouches, to see: with the stick, part-way too (the pop's charge,
+	// crouch_, only builds pulled right down)
+	{
+		float look = flick_.holding_lead() && (lead == TDown || lead == TUp) && ground_mode(mode_)
+			? clampf((flick_r - kLeadIn) / (kDeepIn - kLeadIn), 0, 1)
+			: 0.0f;
+		if (takeoff_trick_ >= 0)
+			look = crouch_look_; // (held through the takeoff)
+		crouch_look_ = approach(crouch_look_, std::max(look, crouch_), 9 * kDt);
+	}
 	lean_ = approach(lean_, clampf(steer_pad_[0], -1, 1), 5 * kDt);
 	if (grind_cooldown_ > 0)
 		grind_cooldown_ -= kDt;
@@ -567,7 +593,7 @@ void Rider::step(World &w, const sk8_input &in)
 		stick_manual_depth_ = clampf((r - kManualIn) / (kDeepIn - kManualIn), 0, 1);
 	}
 
-	if (!ground_mode(mode_))
+	if (!ground_mode(mode_) && (popped_air_ || mode_ != SK8_MODE_AIR || air_time_ > kLipPopWindow))
 		takeoff_trick_ = -1;
 	// a stroke cut short (a pop, a grind, a bail) is over: it doesn't pick up again on landing
 	if (mode_ != SK8_MODE_RIDE && push_time_ >= 0) {
@@ -822,6 +848,27 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 
 	// gravity along the surface
 	vel_ += flatten(V3{0, -p[Gravity] * p[SlopeGravity], 0}, up_) * kDt; // rolling: less than the air's pull
+	// Coming down a curved transition the skater pumps it (as the port, measured on its half pipe:
+	// it comes out of the bottom faster than it went up; a straight slope gives nothing extra)
+	{
+		float moved = len(pos_ - pump_pos_);
+		float bend = moved > 1e-3f ? angle_between(pump_up_, up_) / moved : 0.0f; // rad per metre
+		V3 going = flatten(vel_, up_);
+		float v = len(going);
+		// it builds with how hard the curve presses the board (speed squared by the bend) on the
+		// way down, and comes out as speed over the next moments, the last of it on the flat
+		if (bend > kPumpBend && vel_.y < -0.2f && up_.y < kPumpSteep && v > 0.5f)
+			pump_store_ += kPumpGain * v * v * bend * kDt;
+		else if (vel_.y > 0.3f)
+			pump_store_ = 0; // (climbing again: nothing carried up the next wall)
+		float give = std::min(pump_store_, kPumpRate * kDt);
+		if (give > 0 && v > 0.5f) {
+			vel_ += unit(going, travel) * give;
+			pump_store_ -= give;
+		}
+		pump_pos_ = pos_;
+		pump_up_ = up_;
+	}
 
 	// push: a step off the board (first stroke only), then strokes; the speed comes on while the
 	// foot is on the ground driving back, not the moment the button goes down
@@ -1063,6 +1110,7 @@ void Rider::follow_ground(World &w)
 	air_time_ = 0;
 	spin_total_ = 0;
 	spin_speed_ = 0;
+	popped_air_ = false;
 }
 
 // ---------------------------------------------------------------- air
@@ -1071,6 +1119,7 @@ constexpr float kOllieLoadFull = 0.21f;
 
 void Rider::pop(const TrickDef &def, float share)
 {
+	bool from_air = mode_ == SK8_MODE_AIR; // (a lip pop, just off a ramp)
 	float charge = crouch_charge(crouch_);
 	float v = (p[PopLow] + (p[PopHigh] - p[PopLow]) * charge) * share;
 	pop_y_ = pos_.y;
@@ -1080,6 +1129,7 @@ void Rider::pop(const TrickDef &def, float share)
 	push_cooldown_ = 0;
 	mode_ = SK8_MODE_AIR;
 	ollie_ = up_.y > 0.95f ? 1 : 0; // (off flat ground: the ollie's own rise and fall)
+	popped_air_ = true;
 	// (the ollie's rise-and-hang shape goes by how long the crouch was held: fitted against the port's
 	// arcs with a full load after kOllieLoadFull seconds)
 	float held = std::min(1.0f, crouch_ * p[CrouchCharge] / kOllieLoadFull);
@@ -1088,7 +1138,18 @@ void Rider::pop(const TrickDef &def, float share)
 		v *= kOllieFlatTap + (kOllieFlatFull - kOllieFlatTap) * ollie_load_;
 	// (an ollie's board comes up off the tail over a few ticks, not at once)
 	ollie_kick_ = ollie_ ? v * (1 - kOllieKickNow) : 0;
-	vel_ += up_ * (v - ollie_kick_);
+	// (up a ramp, see kRampPop: on the face a small pop mostly up, just off the lip a lift)
+	V3 dir = up_;
+	if (from_air) {
+		dir = kUp;
+		v *= kLipPop;
+		ollie_kick_ = 0;
+	} else if (up_.y <= 0.95f) {
+		dir = unit(up_ * (1 - kRampPopLift) + kUp * kRampPopLift, up_);
+		v *= kRampPop;
+		ollie_kick_ = 0;
+	}
+	vel_ += dir * (v - ollie_kick_);
 	pos_ += up_ * 0.02f;
 	air_time_ = 0;
 	spin_total_ = 0;
@@ -1283,6 +1344,37 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	}
 	air_time_ += kDt;
 	peak_ = std::max(peak_, pos_.y);
+	// Just off a lip (rolled off, not popped): a flick there, or one whose takeoff began on the
+	// ramp, still pops (as the port, probed on its quarter pipes) - straight up, as from the lip.
+	if (!popped_air_ && air_time_ <= kLipPopWindow) {
+		if (takeoff_trick_ < 0 && f.trick >= 0) {
+			takeoff_trick_ = f.trick;
+			takeoff_share_ = trick_table()[size_t(f.trick)].nollie ? p[NolliePop] : 1.0f;
+			takeoff_time_ = 0;
+			takeoff_crouch_ = crouch_;
+			flick_dir(takeoff_dir_);
+		}
+		if (takeoff_trick_ >= 0) {
+			takeoff_time_ += kDt;
+			if (takeoff_time_ >= p[PopWait]) {
+				int trick = takeoff_trick_;
+				takeoff_trick_ = -1;
+				bool vert = vert_air_;
+				V3 vert_in = vert_in_;
+				crouch_ = takeoff_crouch_;
+				const TrickDef &def = trick_table()[size_t(trick)];
+				pop(def, takeoff_share_);
+				vert_air_ = vert, vert_in_ = vert_in; // (still a vert air: it comes back into the ramp)
+				if (flip_ < 0 && !def.flat)
+					start_flip(trick);
+				else if (def.flat)
+					pending_.push_back({staged(def.name), def.points});
+				return;
+			}
+		}
+	} else if (!popped_air_) {
+		takeoff_trick_ = -1; // too late: it's just an air
+	}
 	float pull = 1;
 	if (ollie_kick_ > 0) {
 		float add = std::min(ollie_kick_, (ollie_kick_ + 1e-3f) / std::max(kOllieKickTicks - air_time_ / kDt + 1, 1.0f));
@@ -1396,7 +1488,8 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	}
 	// flick a trick late
 	// (not while grabbing: the stick then tweaks the grab)
-	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && !grab_ && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat) {
+	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && !grab_ && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat &&
+		takeoff_trick_ < 0) {
 		// flicked from up (a nollie's way) in the air: the back foot flips it (a late backfoot flip)
 		const TrickDef &d = trick_table()[size_t(f.trick)];
 		bool backfoot = d.nollie && d.roll != 0 && d.wrap == 0;
@@ -2543,7 +2636,7 @@ void Rider::state(sk8_state &s) const
 
 	s.mode = mode_;
 	s.fakie = fakie_;
-	s.crouch = crouch_;
+	s.crouch = std::max(crouch_, crouch_look_);
 	s.lean = lean_;
 	s.push_phase = push_time_ >= push_lead_ ? clampf((push_time_ - push_lead_) / std::max(p[PushPeriod], 0.01f), 0, 1) : -1;
 	s.push_start = push_time_ >= 0 && push_time_ < push_lead_ ? push_time_ / push_lead_ : -1;

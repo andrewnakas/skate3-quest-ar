@@ -100,6 +100,12 @@ private:
 	int tip_kind_ = -1;
 	// a powerslide: the board's lead on the way it's going (radians) and the side it swings to
 	float slide_off_ = 0, slide_side_ = 1;
+	// this air began with a pop (not rolled off a lip)
+	bool popped_air_ = false;
+	// where the board was and which way was up last step (the pump: how the surface curves)
+	V3 pump_pos_{0, 0, 0}, pump_up_{0, 1, 0};
+	float pump_store_ = 0; // speed the pump has yet to give, m/s
+	float crouch_look_ = 0; // the crouch as it looks (see step)
 
 	bool unslide_ = false;
 	V3 plant_in_; // the way it was going when it planted (a foot/handplant pops back off that way)

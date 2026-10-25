@@ -60,8 +60,9 @@ STANCE = P(hips=(0.0, 0.03, RIDE_HIPS), hips_rot=(RIDE_PITCH, 0, 0), lh=(0.3, -0
 # reference, many skaters): crouch leg extension ~0.8 of leg length with ~80 deg knees and the trunk
 # leaning 30-50 deg; pop fully extended; in the air the body stays tall (extension ~0.85, knees
 # ~65-70 deg) and the board comes up ~15 cm; hands around chest height, a little out to the sides.
-CROUCH = P(hips=(0.0, 0.05, 0.68), hips_rot=(18, 0, 0), spine=(20, 0, 12), head=(-8, 0, 55),
-           lh=(0.36, -0.24, 0.66), rh=(-0.36, -0.2, 0.64))
+# (loaded right down for the pop, as the port's: hips low and back over the tail, knees well out)
+CROUCH = P(hips=(-0.03, 0.06, 0.6), hips_rot=(24, 0, 0), spine=(24, 0, 12), head=(-10, 0, 55),
+           lh=(0.36, -0.26, 0.6), rh=(-0.38, -0.2, 0.58), knee_out=0.45)
 # The pop: the back leg snaps straight to slam the tail, the front knee drives up and the front foot
 # drags toward the nose, the arms lift and open.
 POP_TOP = P(hips=(-0.03, 0.02, 0.94), hips_rot=(12, 0, 0), spine=(10, 0, 8), head=(-6, 0, 55),

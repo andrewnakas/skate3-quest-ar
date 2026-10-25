@@ -5,18 +5,16 @@
 //!
 //! - left stick left/right: choose a piece (the wrist palette above the left
 //!   controller shows them; the chosen one is raised)
-//! - left stick up/down: grow or shrink the whole world (skater and pieces
-//!   together) against the real room; the skater stays where it was
-//! - left grip held + left stick up/down: grow or shrink only the park (every
-//!   placed piece, about its own base), leaving the skater's size alone
+//! - left stick up/down: scale the piece pointed at (or the next one to drop)
+//!   as a whole; nothing else changes size (the skater's size and the whole
+//!   park's are in the menu: Build a park)
 //! - left stick click: drop a starter park where the right controller points
 //! - left trigger: undo
 //! - right controller: point; a ghost of the piece shows where it would go
 //! - right trigger: drop it there
 //! - right stick left/right: turn it in 15° steps (it lines up with a table
-//!   edge when within 10°); up/down: resize it (its length or height). With
-//!   the left grip held, up/down scales the whole piece instead. Pointing at
-//!   a placed piece, the stick turns, resizes and scales that piece
+//!   edge when within 10°); up/down: resize it (its length or height).
+//!   Pointing at a placed piece, the stick turns and resizes that piece
 //! - right stick click on a placed piece: copy it (kind, size, scale, turn)
 //! - right grip on a placed piece: pick it up, release to put it down
 //! - B on a placed piece: delete it
@@ -445,28 +443,9 @@ fn build_controls(
         state.clear_hold = 0.0;
     }
 
-    // World scale: up grows the skater and pieces in the room, down shrinks
-    // them. Collision and the skater follow once the stick is let go. With
-    // the left grip held the stick scales only the park.
-    let [scale_x, scale_y] = touch.left_stick;
-    let park_chord = touch.left_grip > PARK_CHORD_GRIP;
-    if scale_y.abs() > STICK_DEADZONE && scale_y.abs() > scale_x.abs() {
-        let factor = (-scale_y * SCALE_RATE * time.delta_secs()).exp();
-        if !placed.rescaling {
-            placed.rescaling = true;
-            state.rescale_from = rig.root_transform().zip(link.deck).map(|(root, (deck, forward))| {
-                let to_tracking = root.compute_affine().inverse();
-                (to_tracking.transform_point3(deck), to_tracking.transform_vector3(forward))
-            });
-        }
-        if park_chord {
-            // Up grows the pieces (stick up = away, as for the world scale).
-            placed.park_scale = (placed.park_scale / factor).clamp(MIN_PARK_SCALE, MAX_PARK_SCALE);
-            state.park_rescale = true;
-        } else {
-            rig.scale = (rig.scale * factor).clamp(MIN_SCALE, MAX_SCALE);
-        }
-    } else if placed.rescaling {
+    // (the skater's size and the whole park's are the menu's: Build a park; the sticks here only
+    // ever change one piece)
+    if placed.rescaling {
         finish_rescale(&rig, &mut teleport, &mut state, &mut placed);
     }
 
@@ -494,14 +473,15 @@ fn build_controls(
     });
     state.ghost = valid.map(|h| (to_tracking.transform_point3(h.point), h.point));
 
-    // Right stick: turn and resize the piece pointed at, or else the ghost.
-    let resize = touch.right_stick[1];
-    let resizing = resize.abs() > STICK_DEADZONE && resize.abs() > touch.right_stick[0].abs();
+    // Right stick: turn and resize (length / height) the piece pointed at, or else the ghost; left
+    // stick up/down: scale that one piece as a whole.
+    let [scale_x, scale_y] = touch.left_stick;
+    let scaling = scale_y.abs() > STICK_DEADZONE && scale_y.abs() > scale_x.abs();
+    let resize = if scaling { scale_y } else { touch.right_stick[1] };
+    let resizing = scaling || (resize.abs() > STICK_DEADZONE && resize.abs() > touch.right_stick[0].abs());
     let turn = (now.right_flick != 0 && now.right_flick != previous.right_flick)
         .then(|| -ROTATE_STEP * now.right_flick as f32);
     let factor = (resize * RESIZE_RATE * time.delta_secs()).exp();
-    // Left grip held: the stick scales the whole piece rather than its length.
-    let scaling = touch.left_grip > PARK_CHORD_GRIP;
     if let Some(id) = state.target {
         placed.selected = Some(id);
     }

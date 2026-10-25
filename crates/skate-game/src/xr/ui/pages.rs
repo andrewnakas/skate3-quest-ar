@@ -436,13 +436,13 @@ fn build_act(widget: &str, act: Act, world: &mut World) -> Option<Outcome> {
     })
 }
 
-const BUILD_HELP: [(&str, &str); 17] = [
+const BUILD_HELP: [(&str, &str); 16] = [
     ("Left menu (hold 1 s)", "enter / leave build mode"),
     ("Left stick left/right", "choose a piece"),
     ("Right controller", "point; trigger drops the piece"),
     ("Right stick left/right", "turn (the piece pointed at)"),
     ("Right stick up/down", "resize its length / height"),
-    ("Left grip + right stick up/down", "scale the whole piece"),
+    ("Left stick up/down", "scale the piece pointed at"),
     ("A on a piece", "make it invisible (still skated)"),
     ("A on nothing", "show / hide the detected planes"),
     ("Right grip on a piece", "pick it up"),
@@ -450,8 +450,6 @@ const BUILD_HELP: [(&str, &str); 17] = [
     ("Right stick click", "copy the piece pointed at"),
     ("Left trigger", "undo"),
     ("Left stick click", "drop a starter park"),
-    ("Left stick up/down", "grow / shrink everything"),
-    ("Left grip + left stick", "grow / shrink only the park"),
     ("Y", "rescan the room"),
     ("Hold X", "clear every piece"),
 ];
