@@ -152,6 +152,8 @@ namespace {
 
 constexpr float kPushBite = 0.12f; // s: how long a stroke's foot takes to give its speed
 constexpr float kSkidTime = 0.3f;
+constexpr float kVertLipUp = 0.1f; // the wall's up below this at the lip: a vert air (a 68 deg quarter pipe carries over onto its deck, as the port)
+constexpr float kLipCatch = 0.16f; // m: an air off a lip comes down this close to its coping to grind it
 constexpr float kVertIn = 0.15f; // m: a vert air comes back down this far inside the lip
 constexpr float kSettleFlip = 0.45f;
 constexpr float kCrookToBoard = 0.13f;  // s a crooked holds before turning across into a boardslide
@@ -1139,7 +1141,9 @@ void Rider::follow_ground(World &w)
 	// rolled off the top of a steep wall going up (a vert air): no drift out over the lip - the
 	// motion toward or away from the wall is let go, with a little back toward it, so it comes down
 	// into the transition again (as the port does)
-	if (up_.y < 0.5f && vel_.y > 0.5f) {
+	if (up_.y < 0.9f && vel_.y > 0.5f)
+		wall_off_ = true; // (up off a ramp's lip)
+	if (up_.y < kVertLipUp && vel_.y > 0.5f) {
 		V3 in = flatten(up_, kUp);
 		if (len(in) > 0.2f) {
 			in = unit(in, in);
@@ -1503,13 +1507,21 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		spin_total_ += a;
 
 	// level out gently unless this is a vert air
-	if (up_.y > 0.3f && p[AirLevel] > 0) {
+	if (!vert_air_ && p[AirLevel] > 0) {
 		float tilt = angle_between(up_, kUp);
 		if (tilt > 1e-3f) {
 			V3 axis = unit(cross(up_, kUp), V3{1, 0, 0});
 			float turn = std::min(tilt, p[AirLevel] * kDt);
+			V3 h0 = flatten(fwd_, kUp);
 			up_ = unit(rotate(up_, axis, turn));
 			fwd_ = unit(flatten(rotate(fwd_, axis, turn), up_), fwd_);
+			// (it levels without turning: the nose keeps pointing the way it did, as the port's off a
+			// steep lip - the shortest way level would swing it round)
+			V3 h1 = flatten(fwd_, kUp);
+			if (len(h0) > 0.2f && len(h1) > 0.2f) {
+				float yaw = std::atan2(dot(cross(h1, h0), kUp), dot(h1, h0));
+				fwd_ = unit(flatten(rotate(fwd_, up_, yaw), up_), fwd_);
+			}
 		}
 	}
 
@@ -1722,7 +1734,9 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	// grind assist (as the port: in a recorded session an ollie beside a ledge drifted ~0.8 m onto
 	// it with the stick centred): a rail running along the way it's going, below and within reach,
 	// pulls the board sideways onto its line
-	if (!foot_air_ && grind_cooldown_ <= 0 && !w.rails.empty() && p[GrindAssist] > 0) {
+	// (not up off a ramp's own lip: an air off a quarter pipe comes down where it goes, onto the deck
+	// past the coping, as the port - not drawn back onto the coping)
+	if (!foot_air_ && grind_cooldown_ <= 0 && !w.rails.empty() && p[GrindAssist] > 0 && !(wall_off_ && !popped_air_)) {
 		RailSpot s = w.nearest_rail(pos_, kAssistReach);
 		if (s.rail >= 0 && s.point.y < pos_.y + 0.1f) {
 			V3 flat_t = unit(flatten(s.tangent, kUp), s.tangent);
@@ -2187,6 +2201,10 @@ bool Rider::try_grind(World &w)
 		return false;
 	RailSpot s = w.nearest_rail(pos_, p[GrindCatch]);
 	if (s.rail < 0 || pos_.y - s.point.y < -0.15f)
+		return false;
+	// an air rolled up off a ramp's lip catches its coping only coming down right onto it (as the
+	// port: a little way past, onto the deck, it lands)
+	if (wall_off_ && !popped_air_ && !hand && len(flatten(s.point - pos_, kUp)) > kLipCatch)
 		return false;
 	// still rising past the rail (an ollie up beside it, or just over it at the top): not yet - it
 	// lands on it coming down (as the port, recorded: caught as the board comes down onto it)
