@@ -179,7 +179,12 @@ private:
 	std::string grind_side_; // "Backside " / "Frontside "
 	bool grind_lip_ = false;
 	bool catch_adjusted_ = false;
-	V3 lip_in_{};                 // in over the ramp, from the lip it last went up off // the board turned across onto the rail by the right stick in the air  // a slide's family: the board turned onto the rail the lip way
+	V3 lip_in_{};
+	V3 ground_trail_[16]{}, launch_from_{};
+	unsigned ground_trail_i_ = 0;
+	bool grind_fs_ = false;
+	bool regrind_ = false;
+	bool ramp_pop_ = false;      // this air was popped off a ramp's face       // popped off a rail, not yet back on the ground       // a frontside grind: the right stick's sides swapped (as the port's)                 // in over the ramp, from the lip it last went up off // the board turned across onto the rail by the right stick in the air  // a slide's family: the board turned onto the rail the lip way
 	// scoring: where the air began and its top; lengths ridden on the current rail / manual (m);
 	// personal bests (line points, air seconds, rail and manual metres, tricks in a line)
 	V3 launch_, launch_vel_;

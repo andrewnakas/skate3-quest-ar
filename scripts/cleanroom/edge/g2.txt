@@ -1,0 +1,13 @@
+ 90 ( 1.00, 0.00) port 60:T:BS_5_O 92:T:BS_SALAD 100:T:BS_FEEBLE 104:T:BS_BOARD | sk8 62:5-0 91:Salad Grind 101:Feeble Grind
+105 ( 0.97,-0.26) port 60:T:BS_5_O 93:T:BS_SALAD                            | sk8 62:5-0 91:Salad Grind 101:Feeble Grind
+120 ( 0.87,-0.50) port 60:T:BS_5_O 99:T:BS_SALAD                            | sk8 62:5-0 91:Salad Grind 101:Feeble Grind
+135 ( 0.71,-0.71) port 60:T:BS_5_O                                          | sk8 62:5-0
+150 ( 0.50,-0.87) port 60:T:BS_5_O                                          | sk8 62:5-0
+165 ( 0.26,-0.97) port 60:T:BS_5_O                                          | sk8 62:5-0
+180 ( 0.00,-1.00) port 60:T:BS_5_O                                          | sk8 62:5-0
+195 (-0.26,-0.97) port 60:T:BS_5_O                                          | sk8 62:5-0
+210 (-0.50,-0.87) port 60:T:BS_5_O                                          | sk8 62:5-0
+225 (-0.71,-0.71) port 60:T:BS_5_O                                          | sk8 62:5-0
+240 (-0.87,-0.50) port 60:T:BS_5_O                                          | sk8 62:5-0
+255 (-0.97,-0.26) port 60:T:BS_5_O                                          | sk8 62:5-0
+270 (-1.00,-0.00) port 60:T:BS_5_O 101:T:BS_SMITH                           | sk8 62:5-0 100:Smith Grind
