@@ -28,7 +28,7 @@ const sk8_param kTable[ParamCount] = {
 	{"slope_gravity", "Share of gravity rolling on a slope", kSpeed, 0.1f, 1.5f, 0.78f, 0.01f},
 	{"push_kick", "Push strength, share of the way to top speed", kSpeed, 0.0f, 1.0f, 0.64f, 0.01f},
 	{"push_period", "Time between pushes, s", kSpeed, 0.15f, 2.0f, 0.98f, 0.01f},
-	{"push_top", "Top pushing speed, m/s", kSpeed, 1.0f, 30.0f, 9.15f, 0.05f},
+	{"push_top", "Top pushing speed, m/s", kSpeed, 1.0f, 30.0f, 10.75f, 0.05f},
 	{"push_cap", "Most one stroke gives, m/s", kSpeed, 0.5f, 10.0f, 3.6f, 0.05f},
 	{"push_lead", "Step off before the first push, s", kSpeed, 0.0f, 1.0f, 0.4f, 0.01f},
 	{"push_mongo", "Mongo push (0 off, 1 on)", kSpeed, 0.0f, 1.0f, 0.0f, 1.0f},
@@ -67,7 +67,7 @@ const sk8_param kTable[ParamCount] = {
 	{"bail_slide", "Body sliding along the ground, m/s^2", kBails, 0.5f, 30.0f, 5.35f, 0.05f},
 	{"get_up", "Getting up at the end of a bail, s", kBails, 0.2f, 4.0f, 1.6f, 0.05f},
 
-	{"grind_catch", "Rail catch distance, m", kGrinds, 0.05f, 2.0f, 0.42f, 0.01f},
+	{"grind_catch", "Rail catch distance, m", kGrinds, 0.05f, 2.0f, 0.245f, 0.01f},
 	{"grind_drag", "Rail drag, m/s^2", kGrinds, 0.0f, 10.0f, 0.83f, 0.01f},
 	{"grind_balance", "Rail balance (0 off)", kGrinds, 0.0f, 3.0f, 0.0f, 0.05f},
 	{"grind_keep", "Speed kept catching a rail", kGrinds, 0.5f, 1.5f, 1.027f, 0.005f},

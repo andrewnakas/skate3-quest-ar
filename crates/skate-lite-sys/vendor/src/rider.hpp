@@ -87,6 +87,9 @@ private:
 	float crouch_ = 0, crouch_time_ = 0, lean_ = 0;
 	float push_cooldown_ = 0, push_time_ = -1, push_lead_ = 0, since_stroke_ = 9;
 	bool push_mongo_ = false;
+	int push_held_ = 0;          // steps the button's been held into this push
+	bool push_counting_ = false;
+	bool push_turn_ = false;     // this push goes the board's way out of a crawl backwards
 	bool foot_off_ = false;
 	float last_steer_[2] = {0, 0};
 	// The sticks as a pad reads them (see stick_pad in rider.cpp): steering, spin, balance and
@@ -165,7 +168,8 @@ private:
 	float kickturn_ = 0;       // s into a kickturn (0 none)
 	float slide_time_ = 0;     // s into a powerslide, and its name
 	std::string slide_name_;
-	float lean_time_ = 0;      // the left stick held over on a tail grind
+	float lean_time_ = 0;      // (unused)
+	bool grind_lean_ = false;  // the left stick leaning the grind over a step
 	float air_up_ = 0, air_down_in_ = 0; // in the air: the right stick held up, and since it left up
 	float spin_lag_[2] = {0, 0};       // the left stick the last two ticks (the spin answers it late)
 	float spin_hold_ = 0, spin_dir_ = 0;  // the left stick held over for a spin (s), and which way
@@ -173,7 +177,9 @@ private:
 	int grind_grab_ = 0, grind_grab_want_ = 0;
 	float grind_grab_time_ = 0;
 	std::string grind_side_; // "Backside " / "Frontside "
-	bool grind_lip_ = false;  // a slide's family: the board turned onto the rail the lip way
+	bool grind_lip_ = false;
+	bool catch_adjusted_ = false;
+	V3 lip_in_{};                 // in over the ramp, from the lip it last went up off // the board turned across onto the rail by the right stick in the air  // a slide's family: the board turned onto the rail the lip way
 	// scoring: where the air began and its top; lengths ridden on the current rail / manual (m);
 	// personal bests (line points, air seconds, rail and manual metres, tricks in a line)
 	V3 launch_, launch_vel_;
