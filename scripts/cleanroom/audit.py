@@ -111,15 +111,29 @@ def window_set(data):
     return out
 
 
+def blank_boilerplate(data):
+    """Zero the bytes every file of its format shares (they say nothing of the content): a .glb's
+    JSON chunk (key names, accessor layout) and each embedded PNG's signature + IHDR header."""
+    b = bytearray(data)
+    if b[:4] == b"glTF" and len(b) >= 20:
+        n = int.from_bytes(b[12:16], "little")
+        b[20:20 + n] = bytes(n)
+    i = b.find(b"\x89PNG\r\n\x1a\n")
+    while i >= 0:
+        b[i:i + 33] = bytes(min(33, len(b) - i))
+        i = b.find(b"\x89PNG\r\n\x1a\n", i + 33)
+    return bytes(b)
+
+
 def check_bytes(retail, blob_dirs, apk):
     clean = {}
     for f in walk(blob_dirs):
-        clean[str(f)] = f.read_bytes()
+        clean[str(f)] = blank_boilerplate(f.read_bytes())
     if apk:
         with zipfile.ZipFile(apk) as z:
             for info in z.infolist():
                 if info.filename.startswith("assets/"):
-                    clean["apk:" + info.filename] = z.read(info.filename)
+                    clean["apk:" + info.filename] = blank_boilerplate(z.read(info.filename))
     index = {}
     for name, data in clean.items():
         for h in window_set(data):

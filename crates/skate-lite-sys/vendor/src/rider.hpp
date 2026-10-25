@@ -41,7 +41,7 @@ private:
 	void leave_wall(bool popped);
 	void walk(World &w, const sk8_input &in);
 
-	void pop(const TrickDef &def, float share);
+	void pop(const TrickDef &def, float share, bool off_rail = false);
 	void flick_dir(float out[2]) const;
 	bool opposite_flick(const float dir[2]) const;
 	void start_underflip();
@@ -106,6 +106,7 @@ private:
 	V3 pump_pos_{0, 0, 0}, pump_up_{0, 1, 0};
 	float pump_store_ = 0; // speed the pump has yet to give, m/s
 	float crouch_look_ = 0; // the crouch as it looks (see step)
+	bool grab_held_through_flip_ = false;
 
 	bool unslide_ = false;
 	V3 plant_in_; // the way it was going when it planted (a foot/handplant pops back off that way)
@@ -144,6 +145,7 @@ private:
 	float takeoff_time_ = 0, takeoff_share_ = 1, takeoff_crouch_ = 0;
 	// held flicks: the stick kept at the flick's last direction adds turns (double .. quad)
 	float flip_mult_ = 1, flip_dir_[2] = {0, 0}, last_flick_[2] = {0, 0};
+	int flick_zone_ = -1, flick_zone_steps_ = 0;
 	int flip_extra_ = 0;
 	// an underflip: the angle (turns) the board turned back at (-1 none), and how much faster it goes
 	// round to land when the flip would have; the flick's way kept through the takeoff, and the
@@ -188,7 +190,7 @@ private:
 	float air_time_ = 0;
 	float catch_body_ = 0, catch_board_ = 0; // drawn: rad the body / board still to turn to a board-adjusted catch
 	int ollie_ = 0;     // an ollie off flat ground: 1 rising, 2 pulled up short, 3 hanging, 4 pushed down
-	float hang_ = 0, ollie_kick_ = 0, ollie_load_ = 1;
+	float hang_ = 0, ollie_kick_ = 0, ollie_load_ = 1, ollie_hang_ = 0.25f;
 	bool catch_crouched_ = false;
 
 	// manual / grind

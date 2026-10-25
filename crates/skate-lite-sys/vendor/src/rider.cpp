@@ -177,6 +177,7 @@ constexpr float kOllieBrake = 3.4f;     // times gravity, pulled up short
 constexpr float kOllieHangVy = 0.4f;    // m/s up when it's hanging
 constexpr float kOllieHang = 0.25f;     // s it hangs at the top
 constexpr float kOllieHangTap = 0.16f;  // s longer, a quick flick's
+constexpr float kRailHang = 0.1f;       // s it hangs, popped off a rail
 constexpr float kOllieHangPull = 0.45f; // times gravity, hanging
 constexpr float kOllieDrop = 3.0f;      // times gravity, pushed back down
 constexpr float kOllieDropTo = 4.2f;    // m/s down, then falling as any air
@@ -196,7 +197,9 @@ constexpr float kAdjustCatch = 1.57f; // rad: how far a full sideways adjust tur
 constexpr float kUnderTurn = 0.34f;   // turns an underflip goes its first way before it turns back
 constexpr float kUnderWindow = 0.11f; // s into a flip the opposite flick still turns it into an underflip   // s: a boneless's wind-up, push pressed to the pop
 constexpr float kPlantVariant = 0.15f; // s a handplant variant's buttons / stick hold before it changes
-constexpr float kGrindTransfer = 0.12f; // s the right stick holds a new way before the grind changes // s for a whole flip's worth of settling (the last bit: a few ticks)  // s: a crooked landing scrubs its speed off over this
+constexpr float kGrindTransfer = 0.1525f; // s the right stick holds a new way before the grind changes
+constexpr float kGrindSettle = 0.1525f;  // s into a grind before the stick can change it
+constexpr int kCatchStick = 8;          // steps the stick held its way before a catch, to pick the grind // s for a whole flip's worth of settling (the last bit: a few ticks)  // s: a crooked landing scrubs its speed off over this
 constexpr float kSettleClean = 0.8f, kSettleSketchy = 1.26f; // s: riding away from a landing before it's settled
 
 constexpr float kDt = SK8_DT;
@@ -421,6 +424,8 @@ static float ease_tilt(float tilt, float target, float tau)
 	return tilt + clampf(d, -kTiltRate * kDt, kTiltRate * kDt);
 }
 
+constexpr float kPopAfterLand = 9.5f / 60; // s after touching down before a flick pops
+
 // ---------------------------------------------------------------- ramps
 
 // Popping up a ramp (as the port, measured on its quarter pipes): popped on the face it hardly
@@ -576,6 +581,13 @@ void Rider::step(World &w, const sk8_input &in)
 			emit(SK8_EV_LAND, "on board", 0, 0, surface_);
 		}
 	}
+	{
+		// how long the right stick has pointed the same grind's way (a grind takes the stick only
+		// once it has been held a moment, as the port, probed)
+		const int zone = grind_kind_for(false, in.flick[0], in.flick[1], false);
+		flick_zone_steps_ = zone == flick_zone_ ? flick_zone_steps_ + 1 : 0;
+		flick_zone_ = zone;
+	}
 	last_flick_[0] = in.flick[0];
 	last_flick_[1] = in.flick[1];
 	last_steer_[0] = in.steer[0];
@@ -660,6 +672,10 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			return;
 		}
 	}
+	// just landed, a flick doesn't pop yet: one finished within kPopAfterLand of touching down is
+	// dropped (as the port, probed: up 9 ticks after landing pops nothing, 10 ticks after pops)
+	if (f.trick >= 0 && since_land_ >= 0 && since_land_ < kPopAfterLand && takeoff_trick_ < 0)
+		return;
 	if (f.trick >= 0) {
 		if (mode_ == SK8_MODE_MANUAL) {
 			add_trick(manual_name(),
@@ -1117,9 +1133,9 @@ void Rider::follow_ground(World &w)
 
 constexpr float kOllieLoadFull = 0.21f;
 
-void Rider::pop(const TrickDef &def, float share)
+void Rider::pop(const TrickDef &def, float share, bool off_rail)
 {
-	bool from_air = mode_ == SK8_MODE_AIR; // (a lip pop, just off a ramp)
+	bool from_air = mode_ == SK8_MODE_AIR && !off_rail; // (a lip pop, just off a ramp)
 	float charge = crouch_charge(crouch_);
 	float v = (p[PopLow] + (p[PopHigh] - p[PopLow]) * charge) * share;
 	pop_y_ = pos_.y;
@@ -1136,6 +1152,8 @@ void Rider::pop(const TrickDef &def, float share)
 	ollie_load_ = clampf((std::max(held, 0.35f) - 0.35f) / 0.65f, 0, 1);
 	if (ollie_)
 		v *= kOllieFlatTap + (kOllieFlatFull - kOllieFlatTap) * ollie_load_;
+	// (off a rail it hangs only a moment at the top and comes back down onto it, as the port)
+	ollie_hang_ = off_rail ? kRailHang : kOllieHang + (1 - ollie_load_) * kOllieHangTap;
 	// (an ollie's board comes up off the tail over a few ticks, not at once)
 	ollie_kick_ = ollie_ ? v * (1 - kOllieKickNow) : 0;
 	// (up a ramp, see kRampPop: on the face a small pop mostly up, just off the lip a lift)
@@ -1303,7 +1321,7 @@ void Rider::extend_flip()
 }
 
 // The pull of gravity through an ollie off flat ground (as a share of it), stepping its phase on.
-static float ollie_pull(int &ollie, float &hang, float air_time, float vy, float load)
+static float ollie_pull(int &ollie, float &hang, float air_time, float vy, float load, float hang_for)
 {
 	if (ollie <= 0)
 		return 1;
@@ -1313,7 +1331,7 @@ static float ollie_pull(int &ollie, float &hang, float air_time, float vy, float
 		ollie = 3;
 		hang = 0;
 	}
-	if (ollie == 3 && (hang += kDt) > kOllieHang + (1 - load) * kOllieHangTap)
+	if (ollie == 3 && (hang += kDt) > hang_for)
 		ollie = 4;
 	if (ollie == 4 && vy < -kOllieDropTo)
 		ollie = 0;
@@ -1328,7 +1346,7 @@ float Rider::air_left() const
 	float hang = hang_, t = air_time_, vy = vel_.y + ollie_kick_, y = pos_.y, g = p[Gravity], left = 0;
 	while (left < 4 && (vy > 0 || y > pop_y_)) {
 		t += kDt;
-		vy -= g * ollie_pull(ollie, hang, t, vy, ollie_load_) * kDt;
+		vy -= g * ollie_pull(ollie, hang, t, vy, ollie_load_, ollie_hang_) * kDt;
 		y += vy * kDt;
 		left += kDt;
 	}
@@ -1381,7 +1399,7 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		vel_.y += add;
 		ollie_kick_ -= add;
 	}
-	pull = ollie_pull(ollie_, hang_, air_time_, vel_.y, ollie_load_);
+	pull = ollie_pull(ollie_, hang_, air_time_, vel_.y, ollie_load_, ollie_hang_);
 	vel_ += V3{0, -p[Gravity] * pull, 0} * kDt;
 	float sp = len(vel_);
 	if (sp > 0)
@@ -1566,6 +1584,14 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	if (switch_)
 		std::swap(lt, rt);
 	int hands = (lt ? 1 : 0) | (rt ? 2 : 0);
+	// a trigger already down while the board flips doesn't grab: only a fresh pull once the flip is
+	// caught does (as the port, probed: held through the flip, no grab; pulled after it, a grab)
+	if (flip_ >= 0 && hands && !grab_)
+		grab_held_through_flip_ = true;
+	if (!hands)
+		grab_held_through_flip_ = false;
+	if (grab_held_through_flip_)
+		hands = 0;
 	if (hands && hands != grab_) {
 		grab_style_ = grab_style_for(hands, in.flick[0], in.flick[1]);
 		grab_tweakable_ = in.flick[0] * in.flick[0] + in.flick[1] * in.flick[1] <= 0.25f;
@@ -2083,7 +2109,11 @@ bool Rider::classify_grind(V3 tangent, V3 from)
 	grind_slide_ = slide;
 	grind_transfer_ = 0;
 	// (in switch the stick's sides swap, as the port reads a switch flick mirrored)
-	const float gx = switch_ ? -last_flick_[0] : last_flick_[0], gy = last_flick_[1];
+	float gx = switch_ ? -last_flick_[0] : last_flick_[0], gy = last_flick_[1];
+	// a stick only just pushed at the catch doesn't pick the grind yet (it changes over a moment
+	// later, as the port: pushed 6 steps before the catch is a 50-50 first, 8 is the 5-0 straight away)
+	if (!slide && flick_zone_steps_ < kCatchStick)
+		gx = gy = 0;
 	grind_kind_ = grind_kind_for(slide, gx, gy, crouched);
 	// a slide with the right stick centred, down or up: which family by which way the board was
 	// turned onto the rail (as the port, probed: turned with the left stick left, the lip side - lipslide,
@@ -2333,7 +2363,7 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 		const TrickDef &def = trick_table()[size_t(f.trick)];
 		bool was_dark = grind_kind_ == SK8_GRIND_DARKSLIDE;
 		leave_grind(t * rail_speed_, true);
-		pop(def, p[GrindPop]);
+		pop(def, p[GrindPop], true);
 		if (was_dark) {
 			// off a darkslide: the board flipped back over the rest of the way (a darkslide out)
 			int roll = def.roll != 0 && def.wrap == 0 ? f.trick : find_trick("Kickflip");
@@ -2400,7 +2430,7 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 			want = SK8_GRIND_BOARDSLIDE;
 		if (want != grind_kind_) {
 			grind_transfer_ += kDt;
-			if (grind_transfer_ >= kGrindTransfer) {
+			if (grind_transfer_ >= kGrindTransfer && grind_time_ >= kGrindSettle) {
 				add_trick(grind_name_, kGrindDefs[grind_kind_].points + unsigned(grind_time_ * p[GrindRate]));
 				grind_kind_ = want;
 				grind_name_ = grind_full_name();
