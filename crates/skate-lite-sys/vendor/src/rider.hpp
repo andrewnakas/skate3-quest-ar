@@ -104,7 +104,7 @@ private:
 	bool popped_air_ = false;
 	// where the board was and which way was up last step (the pump: how the surface curves)
 	V3 pump_pos_{0, 0, 0}, pump_up_{0, 1, 0};
-	float pump_store_ = 0; // speed the pump has yet to give, m/s
+	float pump_store_ = 0, pump_top_y_ = 0, pump_top_v_ = 0; // speed the pump has yet to give, m/s
 	float crouch_look_ = 0; // the crouch as it looks (see step)
 	bool grab_held_through_flip_ = false;
 

@@ -182,6 +182,10 @@ constexpr float kOllieHangPull = 0.45f; // times gravity, hanging
 constexpr float kOllieDrop = 3.0f;      // times gravity, pushed back down
 constexpr float kOllieDropTo = 4.2f;    // m/s down, then falling as any air
 constexpr float kPlantDropIn = 6.2f; // m/s down the wall dropping back in off a handplant (the port's fall from ~1.5 m over the coping)
+constexpr float kWallUp = 0.97f;    // the surface's up below this: a ramp's face
+constexpr float kWallYaw = 1.335f;   // rad/s the board turns after the way it's going across one
+constexpr float kWallScrub = 6.0f;  // m/s^2 the wheels take off sideways scrubbing across one
+constexpr float kWallDrag = 0.3f;   // of a powerslide's drag, scrubbing across one
 constexpr float kSlideAngle = 1.2f;  // rad (~69 deg) off the rail: a slide, not a grind
 constexpr float kSpinCoast = 0.42f;  // s: a spin let go slows over about this long
 constexpr float kAngledGrind = 0.44f; // rad (~25 deg): a board landing this far off the rail is a turned grind (19 off was still a nosegrind, recorded)
@@ -438,7 +442,7 @@ constexpr float kLipPopWindow = 0.22f; // s off a lip in which a flick (or its t
 // The pump down a transition (see ground)
 constexpr float kPumpBend = 0.15f;  // rad per metre: the surface curving (a radius under ~7 m)
 constexpr float kPumpSteep = 0.995f; // (not on the flat)
-constexpr float kPumpGain = 0.35f;  // speed stored per unit of the curve's press (v^2 * bend)
+constexpr float kPumpGain = 0.58f;  // speed stored per unit of the curve's press (v^2 * bend)
 constexpr float kPumpRate = 8.0f;   // m/s^2 it comes out at
 
 
@@ -873,8 +877,16 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		float v = len(going);
 		// it builds with how hard the curve presses the board (speed squared by the bend) on the
 		// way down, and comes out as speed over the next moments, the last of it on the flat
+		// (by the speed the drop gives, from the top of the climb: scrubbed off sideways coming round
+		// at the top, it still comes out of the bottom as fast, as the port)
+		if (vel_.y > 0 || up_.y >= kPumpSteep) {
+			pump_top_y_ = pos_.y;
+			pump_top_v_ = len(vel_);
+		}
+		float fall = std::sqrt(pump_top_v_ * pump_top_v_ + 2 * p[Gravity] * p[SlopeGravity] * std::max(0.0f, pump_top_y_ - pos_.y));
+		float vp = std::max(v, fall);
 		if (bend > kPumpBend && vel_.y < -0.2f && up_.y < kPumpSteep && v > 0.5f)
-			pump_store_ += kPumpGain * v * v * bend * kDt;
+			pump_store_ += kPumpGain * vp * vp * bend * kDt;
 		else if (vel_.y > 0.3f)
 			pump_store_ = 0; // (climbing again: nothing carried up the next wall)
 		float give = std::min(pump_store_, kPumpRate * kDt);
@@ -988,6 +1000,11 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	if (mode_ == SK8_MODE_SLIDE) { // bites in as the board turns across, eases off as it slows
 		float across = std::sin(slide_off_);
 		dec += p[SlideDrag] * across * across * std::min(1.0f, speed / p[SlideSoft]) * kDt;
+	} else if (mode_ == SK8_MODE_RIDE && up_.y < kWallUp && speed > 0.2f) {
+		// scrubbing sideways across a ramp's face drags the same way (as the port: slow at the top of a
+		// quarter pipe, ridden up at an angle, it comes round and down without gathering speed)
+		float across = len(cross(unit(flatten(vel_, up_), fwd_), fwd_));
+		dec += kWallDrag * p[SlideDrag] * across * across * std::min(1.0f, speed / p[SlideSoft]) * kDt;
 	}
 	if (mode_ == SK8_MODE_MANUAL)
 		dec += (manual_style_ == 1 ? 2.7f : p[ManualDrag]) * kDt; // two wheels rolling; a primo scrapes its edge
@@ -1007,13 +1024,31 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		revert_time_ = -1;
 	}
 
+	// Across a ramp's face the board turns after the way it's going (as the port, measured on its
+	// quarter pipe: ridden up at an angle it comes round downhill at a steady rate and rides back
+	// down forward; ridden straight up it rolls back fakie). Slow at the top, the way it's going
+	// swings round quicker than the board: it scrubs sideways until the board catches up.
+	bool on_wall = up_.y < kWallUp && mode_ == SK8_MODE_RIDE && !reverting && slide_off_ <= 0 && kickturn_ <= 0;
+	if (on_wall) {
+		V3 going = flatten(vel_, up_), travel = fakie_ ? -fwd_ : fwd_;
+		if (len(going) > 0.2f) {
+			float off = std::atan2(dot(cross(travel, going), up_), dot(travel, unit(going, travel)) * len(going));
+			if (std::fabs(off) < kPi / 2) {
+				float turn = std::copysign(std::min(std::fabs(off), kWallYaw * kDt), off);
+				fwd_ = unit(flatten(rotate(fwd_, up_, turn), up_), fwd_);
+			}
+		}
+	}
 	// wheels resist sideways motion
 	V3 side = unit(cross(up_, fwd_), V3{1, 0, 0});
 	float lateral = dot(vel_, side);
 	float grip = mode_ == SK8_MODE_SLIDE || slide_off_ > 0
 		? 0.0f // (sliding, the board's way is the slide's own, above)
 		: 1 - std::exp(-p[Grip] * kDt * (reverting ? 0.08f : 1.0f));
-	vel_ -= side * (lateral * grip);
+	float take = lateral * grip;
+	if (on_wall) // (scrubbing across the face: as much as the wheels' sideways friction takes)
+		take = std::copysign(std::min(std::fabs(take), kWallScrub * kDt), take);
+	vel_ -= side * take;
 	vel_ = flatten(vel_, up_);
 
 	move_on_ground(w, vel_ * kDt);

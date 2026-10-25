@@ -436,7 +436,7 @@ fn build_act(widget: &str, act: Act, world: &mut World) -> Option<Outcome> {
     })
 }
 
-const BUILD_HELP: [(&str, &str); 16] = [
+const BUILD_HELP: [(&str, &str); 15] = [
     ("Left menu (hold 1 s)", "enter / leave build mode"),
     ("Left stick left/right", "choose a piece"),
     ("Right controller", "point; trigger drops the piece"),
