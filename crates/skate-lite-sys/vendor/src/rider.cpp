@@ -209,6 +209,7 @@ constexpr float kTipTime = 0.166f;  // s the right stick holds up or down before
 constexpr float kTurnFirst = 0.282f; // s held right out to a side before the board first turns round
 constexpr float kTurnStep = 0.134f;  // s each step round after that
 constexpr float kFakieTurnPush = 0.6f; // m/s rolling fakie under this, a push goes the board's way
+constexpr float kBoardslideDrag = 0.61f; // m/s^2 more a boardslide loses along the rail
 constexpr float kPushTap = 1.045f;   // m/s a tapped push gives (held, up to a full one)
 constexpr float kPushFull = 9.0f;
 constexpr float kPushRepeat = 0.61f; // a held-on stroke's share   // steps more the button's held for a full one
@@ -2667,6 +2668,8 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 	}
 	rail_speed_ += -p[Gravity] * t.y * kDt;
 	rail_speed_ -= p[GrindDrag] * kDt;
+	if (grind_kind_ == SK8_GRIND_BOARDSLIDE)
+		rail_speed_ -= kBoardslideDrag * kDt; // (the deck flat across the rail drags more: as the port's)
 	grind_time_ += kDt;
 	if (p[GrindBalance] > 0) {
 		balance_ += (noise() * p[GrindBalance] + balance_ * 0.8f - steer_pad_[0] * 2.2f) * kDt;
