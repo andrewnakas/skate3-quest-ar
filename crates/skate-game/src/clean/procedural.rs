@@ -691,7 +691,8 @@ pub(crate) fn layer(
     let ease = if dt > 0.0 { 1.0 - (-dt / FOOT_SHIFT_EASE).exp() } else { 0.0 };
     for k in 0..2 {
         let leg = if k == 0 { front_leg } else { 1 - front_leg };
-        motion.foot_shift[leg] += (shift_want[k] - motion.foot_shift[leg]) * ease;
+        let cur = motion.foot_shift[leg];
+        motion.foot_shift[leg] = cur + (shift_want[k] - cur) * ease;
     }
     for (i, chain) in set.legs.iter().enumerate() {
         let Some(ankle) = ankles.get(i).copied() else { continue };
