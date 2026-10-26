@@ -39,7 +39,7 @@ const sk8_param kTable[ParamCount] = {
 	{"brake_lead", "Foot down before braking, s", kSpeed, 0.0f, 1.0f, 0.2f, 0.01f},
 	{"brake_out", "Foot back up after braking, s", kSpeed, 0.0f, 1.0f, 0.42f, 0.01f},
 	{"carve", "Turning, rad/s", kSpeed, 0.2f, 8.0f, 1.855f, 0.01f},
-	{"carve_ease", "Turn coming on, s (each of two stages)", kSpeed, 0.0f, 0.5f, 0.11f, 0.01f},
+	{"carve_ease", "Turn coming on, s (each of two stages)", kSpeed, 0.0f, 0.5f, 0.046f, 0.01f},
 	{"grip", "Wheel grip", kSpeed, 0.5f, 40.0f, 8.4f, 0.1f},
 	{"slide_drag", "Powerslide drag, m/s^2", kSpeed, 0.0f, 25.0f, 15.45f, 0.05f},
 	{"slide_soft", "Powerslide eases off below, m/s", kSpeed, 0.5f, 20.0f, 4.5f, 0.1f},

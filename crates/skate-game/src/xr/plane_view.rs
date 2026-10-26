@@ -141,17 +141,17 @@ fn fit_room_planes(
     }));
 }
 
-/// A in build mode, pointing at no piece (A on a piece hides it): show or
-/// hide every layer.
+/// Left grip held + B in build mode (B alone deletes the piece pointed at):
+/// show or hide every layer.
 fn toggle(
     touch: Res<LatestTouch>,
     mode: Res<BuildMode>,
-    placed: Res<PlacedPieces>,
+    _placed: Res<PlacedPieces>,
     mut settings: ResMut<ArSettings>,
     mut overlay: ResMut<PlaneOverlay>,
 ) {
-    let a = touch.0.a;
-    if mode.active && a && !overlay.previous_a && placed.pointed.is_none() {
+    let a = touch.0.b && touch.0.left_grip > 0.6;
+    if mode.active && a && !overlay.previous_a {
         let show = !settings.any_shown();
         settings.set_all_shown(show);
         settings.revision += 1;

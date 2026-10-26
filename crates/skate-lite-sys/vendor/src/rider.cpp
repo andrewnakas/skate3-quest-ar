@@ -200,10 +200,15 @@ constexpr float kSkidTime = 0.3f;
 constexpr float kVertLipUp = 0.1f; // the wall's up below this at the lip: a vert air (a 68 deg quarter pipe carries over onto its deck, as the port)
 constexpr float kLipCatch = 0.16f; // m: an air off a lip comes down this close to its coping to grind it
 constexpr float kLipAlongKeep = 0.33f; // of the way along the coping kept, popped off the lip
-constexpr float kLipInSpeed = 0.45f;   // m/s back in over the ramp, popped off the lip
 constexpr float kLipVertLift = 0.7f; // of a lip pop's lift, turned back in as a vert air
+constexpr float kReentryReach = 1.2f; // m: how far the wall can be, coming back down a vert air
+constexpr float kReentrySpeed = 1.9f; // m/s at most toward it
+constexpr float kReentryAccel = 28.0f; // m/s^2
+constexpr float kLandLookEvery = 0.05f; // s between looks ahead for where it lands
+constexpr int kLandLookSteps = 60;      // two-step looks ahead (2 s)
+constexpr float kLandAlignMax = 7.0f;   // rad/s at most, lining up to land
 constexpr float kVertPull = 0.8f;   // of gravity on a vert air
-constexpr float kVertIn = 0.15f; // m: a vert air comes back down this far inside the lip
+constexpr float kVertIn = 0.31f; // m: a vert air comes back down this far inside the lip (as the port's)
 constexpr float kSettleFlip = 0.45f;
 constexpr float kTipTime = 0.166f;  // s the right stick holds up or down before it's over onto that truck
 constexpr float kTurnFirst = 0.282f; // s held right out to a side before the board first turns round
@@ -256,9 +261,11 @@ constexpr float kAssistSpeed = 0.47f; // m/s at most it drifts across toward the
 constexpr float kCrossCatch = 1.7f;  // the catch distance's reach for a board coming across the rail
 constexpr float kAssistAlong = 0.976f; // cos: going this near along the rail (~12 deg) for it to aim
 constexpr float kBackfootHold = 0.1f, kBackfootSnap = 0.14f; // s held up, s to get down from there
-constexpr float kKickturnTop = 4.6f;  // m/s: slower than this, the stick hard over is a kickturn
+constexpr float kKickturnTop = 3.9f;  // m/s: slower than this, the stick hard over is a kickturn
 constexpr float kKickturnRate = 3.1f; // rad/s once it's turning (it eases in over kKickturnEase)
 constexpr float kKickturnEase = 0.45f;
+constexpr float kCarveBySpeed = 0.06f; // the carve's share gained per m/s
+constexpr float kKickturnSlow = 0.29f; // rad/s less per m/s
 constexpr float kBigAir = 1.4f, kLongAir = 9.5f; // m: an air this high (above its lower end) / long scores  // s a foot held off in the air before it counts
 constexpr float kAdjustYaw = 1.1f, kAdjustPitch = 0.38f; // rad: a board adjust at full stick
 constexpr float kCatchEase = 0.12f;  // s: drawn, the body and board ease round to a board-adjusted catch
@@ -460,9 +467,9 @@ template <size_t N> static float on_curve(const float (&curve)[N][2], float x)
 // How hard the board turns for the (pad-read) left stick: barely at all part-way, coming on fast
 // toward full. Measured on the port as the turn rate held at each stick deflection while rolling.
 static const float kSteerCurve[][2] = {
-	{0.0f, 0.0f}, {0.143f, 0.0019f}, {0.214f, 0.0079f}, {0.286f, 0.0268f}, {0.357f, 0.0587f},
-	{0.429f, 0.1206f}, {0.5f, 0.2073f}, {0.571f, 0.3296f}, {0.643f, 0.4609f}, {0.714f, 0.6098f},
-	{0.786f, 0.6655f}, {0.857f, 0.7508f}, {0.929f, 0.8797f}, {1.0f, 1.0f}};
+	{0.0f, 0.0000f}, {0.143f, 0.0017f}, {0.214f, 0.0072f}, {0.286f, 0.0244f}, {0.357f, 0.0534f},
+	{0.429f, 0.1097f}, {0.5f, 0.1886f}, {0.571f, 0.2999f}, {0.643f, 0.4194f}, {0.714f, 0.5549f},
+	{0.786f, 0.6056f}, {0.857f, 0.6848f}, {0.929f, 0.7997f}, {1.0f, 0.8650f}};
 
 // How hard an air spin goes for the (pad-read) left stick, measured on the port as how far it
 // spins through an ollie with the stick held at each deflection (less the turn after landing):
@@ -503,7 +510,9 @@ constexpr float kRampPopLift = 1.0f;   // share of a ramp-face pop turned to str
 constexpr float kRampPop = 0.15f;
 constexpr float kRampPopLow = 0.95f;
 constexpr float kRampPopFast = 8.5f; // m/s: going this fast up a ramp, only the small pop
-constexpr float kRampPopInto = 0.9f;  // of the way on into the wall taken off by a ramp pop
+constexpr float kRampPopUp = 0.985f;  // the surface's up under this: popping off a ramp, not the flat
+constexpr float kRampPopInto = 0.9f;
+constexpr float kRampPopIntoLow = 0.6f; // low on a transition: less of it turns up  // of the way on into the wall taken off by a ramp pop
 constexpr float kRampPopVert = 0.7f;  // a ramp this steep popped off: a vert air
 constexpr float kRampGlideGap = 0.04f; // m clear of the wall, riding up it in the air      // a ramp-face pop's size, of an ollie's
 constexpr float kLipPop = 0.28f;        // a lip pop's (straight up), of an ollie's
@@ -512,7 +521,8 @@ constexpr float kLipPopWindow = 0.22f; // s off a lip in which a flick (or its t
 // The pump down a transition (see ground)
 constexpr float kPumpBend = 0.15f;  // rad per metre: the surface curving (a radius under ~7 m)
 constexpr float kPumpSteep = 0.995f; // (not on the flat)
-constexpr float kPumpGain = 0.58f;  // speed stored per unit of the curve's press (v^2 * bend)
+constexpr float kPumpGain = 0.62f;  // speed stored per unit of the curve's press (v^2 * bend)
+constexpr float kPumpFallShare = 0.6f; // of the way from its speed to the drop's it pumps by
 constexpr float kPumpRate = 8.0f;   // m/s^2 it comes out at
 
 
@@ -893,16 +903,18 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	float ease = 1 - std::exp(-kDt / std::max(p[CarveEase], 0.001f));
 	carve_in_ += (on_curve(kSteerCurve, steer) - carve_in_) * ease;
 	carve_ += (carve_in_ - carve_) * ease;
-	float rate = p[Carve] * carve_ * clampf(speed / 2.5f, 0.35f, 1.0f);
+	// (and less the slower it rolls: as the port, measured held at each speed - ~0.7 at 4.6 m/s, ~0.95 at 8.8)
+	float rate = p[Carve] * carve_ * clampf(speed / 2.5f, 0.35f, 1.0f) * clampf(0.7f + kCarveBySpeed * (speed - 4.6f), 0.55f, 1.0f);
 	if (mode_ == SK8_MODE_SLIDE)
 		rate = 0; // (a powerslide turns by its own rule, below)
 	// a kickturn (as the port: slow, the left stick hard over): the nose lifts and the board pivots
 	// on its back wheels, easing in, then turning steadily for as long as it's held
-	if (mode_ == SK8_MODE_RIDE && speed < kKickturnTop && std::fabs(steer) > 0.7f && push_time_ < 0 &&
+	if (mode_ == SK8_MODE_RIDE && speed < kKickturnTop && std::fabs(steer) > 0.55f && push_time_ < 0 &&
 		plant_wind_ < 0 && takeoff_trick_ < 0) {
 		kickturn_ += kDt;
 		float k = std::min(kickturn_ / kKickturnEase, 1.0f);
-		rate = kKickturnRate * k * k * (steer > 0 ? 1.0f : -1.0f);
+		// (quicker the slower it's going: as the port's, ~2 rad/s just under the top, ~3 near a stop)
+		rate = (kKickturnRate - kKickturnSlow * speed) * k * k * (steer > 0 ? 1.0f : -1.0f);
 		carve_ = carve_in_ = steer; // (no carve still to come out of when it stops)
 	} else {
 		kickturn_ = 0;
@@ -959,7 +971,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			pump_top_v_ = len(vel_);
 		}
 		float fall = std::sqrt(pump_top_v_ * pump_top_v_ + 2 * p[Gravity] * p[SlopeGravity] * std::max(0.0f, pump_top_y_ - pos_.y));
-		float vp = std::max(v, fall);
+		float vp = std::max(v, v + kPumpFallShare * (fall - v));
 		if (bend > kPumpBend && vel_.y < -0.2f && up_.y < kPumpSteep && v > 0.5f)
 			pump_store_ += kPumpGain * vp * vp * bend * kDt;
 		else if (vel_.y > 0.3f)
@@ -1269,6 +1281,7 @@ constexpr float kOllieLoadFull = 0.21f;
 void Rider::pop(const TrickDef &def, float share, bool off_rail)
 {
 	bool from_air = mode_ == SK8_MODE_AIR && !off_rail; // (a lip pop, just off a ramp)
+	V3 aim_in{}; // (a vert air: back in over the ramp, aimed to come down just inside the lip)
 	ramp_pop_ = false;
 	float charge = crouch_charge(crouch_);
 	float v = (p[PopLow] + (p[PopHigh] - p[PopLow]) * charge) * share;
@@ -1278,7 +1291,7 @@ void Rider::pop(const TrickDef &def, float share, bool off_rail)
 	vert_air_ = false;
 	push_cooldown_ = 0;
 	mode_ = SK8_MODE_AIR;
-	ollie_ = up_.y > 0.95f ? 1 : 0; // (off flat ground: the ollie's own rise and fall)
+	ollie_ = up_.y > kRampPopUp ? 1 : 0; // (off flat ground: the ollie's own rise and fall)
 	popped_air_ = true;
 	// (the ollie's rise-and-hang shape goes by how long the crouch was held: fitted against the port's
 	// arcs with a full load after kOllieLoadFull seconds)
@@ -1301,12 +1314,13 @@ void Rider::pop(const TrickDef &def, float share, bool off_rail)
 		if (wall_off_ && len(lip_in_) > 0.5f) {
 			V3 flat = flatten(vel_, kUp);
 			V3 along = flat - lip_in_ * dot(flat, lip_in_);
-			vel_ = V3{0, vel_.y, 0} + along * kLipAlongKeep + lip_in_ * kLipInSpeed;
+			vel_ = V3{0, vel_.y, 0} + along * kLipAlongKeep;
+			aim_in = lip_in_;
 			vert_air_ = true;
 			vert_in_ = lip_in_;
 			v *= kLipVertLift; // (less lift on top: the board mostly turns back in)
 		}
-	} else if (up_.y <= 0.95f) {
+	} else if (up_.y <= kRampPopUp) {
 		dir = unit(up_ * (1 - kRampPopLift) + kUp * kRampPopLift, up_);
 		// (low on a transition near an ollie's own pop; high up a steep face a small one)
 		// (and less the faster it's going up the ramp: carried up, there's less to push off)
@@ -1320,13 +1334,24 @@ void Rider::pop(const TrickDef &def, float share, bool off_rail)
 			in = unit(in, in);
 			float toward = dot(flatten(vel_, kUp), in);
 			if (toward < 0) // (only up the steep part: low on a transition it carries on up the ramp)
-				vel_ -= in * (toward * kRampPopInto * clampf((0.9f - up_.y) / 0.1f, 0, 1));
+				vel_ -= in * (toward * (kRampPopIntoLow + (kRampPopInto - kRampPopIntoLow) * clampf((0.9f - up_.y) / 0.2f, 0, 1)));
 			if (up_.y < kRampPopVert)
-				vert_air_ = true, vert_in_ = in;
+			{
+				vert_air_ = true, vert_in_ = in, aim_in = in;
+				// (and most of the way along the wall goes, as off the lip)
+				V3 flat = flatten(vel_, kUp);
+				V3 along = flat - in * dot(flat, in);
+				vel_ -= along * (1 - kLipAlongKeep);
+			}
 		}
 		ollie_kick_ = 0;
 	}
 	vel_ += dir * (v - ollie_kick_);
+	if (len(aim_in) > 0.5f) {
+		// the drift back in, set for the air it will have: down ~kVertIn inside where it went up (as the port's)
+		float t_air = 2 * std::max(vel_.y, 0.5f) / (p[Gravity] * 0.9f);
+		vel_ = vel_ - aim_in * dot(vel_, aim_in) + aim_in * clampf(kVertIn / t_air, 0.05f, 0.6f);
+	}
 	pos_ += up_ * 0.02f;
 	air_time_ = 0;
 	spin_total_ = 0;
@@ -1512,12 +1537,32 @@ float Rider::air_left() const
 	return left;
 }
 
+// Where the air comes down: its arc stepped on (gravity, as it falls) and cast against the world.
+bool Rider::predict_landing(World &w, V3 &normal, float &t) const
+{
+	V3 p0 = pos_ + up_ * 0.1f, v = vel_;
+	const float step = 2 * kDt;
+	for (int i = 0; i < kLandLookSteps; i++) {
+		V3 d = v * step;
+		Hit h;
+		if (len(d) > 1e-5f && w.cast(p0, d, h)) {
+			normal = h.normal;
+			t = (i + 0.5f) * step;
+			return true;
+		}
+		p0 = p0 + d;
+		v.y -= p[Gravity] * step;
+	}
+	return false;
+}
+
 void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 {
 	if (air_time_ <= 0) { // into the air: where from, for the air's height and length
 		launch_ = pos_;
 		launch_vel_ = vel_;
 		peak_ = pos_.y;
+		land_look_ = 0; // (look for where it lands straight away)
 		// (and where it was as the ollie began: which side of a rail it came from, before any pull)
 		launch_from_ = ground_trail_i_ >= kTrail ? ground_trail_[ground_trail_i_ % kTrail] : pos_;
 	}
@@ -1631,12 +1676,26 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	else
 		spin_total_ += a;
 
-	// level out gently unless this is a vert air
-	if (!vert_air_ && p[AirLevel] > 0) {
-		float tilt = angle_between(up_, kUp);
+	// Lining up for the landing (as the port's): the board turns in the air to the slope it's going to
+	// come down on - level for flat ground, the transition's angle dropping back into a ramp or onto a
+	// bank - in time to meet it; with nothing found ahead, level. (A vert air going up stays square to
+	// the wall until it starts back down.)
+	if (p[AirLevel] > 0 && !(vert_air_ && vel_.y > 0)) {
+		if (land_look_ <= 0) {
+			land_found_ = predict_landing(w, land_n_, land_t_);
+			land_look_ = kLandLookEvery;
+		} else {
+			land_look_ -= kDt;
+			land_t_ -= kDt;
+		}
+		V3 target = land_found_ && land_n_.y > 0.3f ? land_n_ : kUp;
+		float tilt = angle_between(up_, target);
 		if (tilt > 1e-3f) {
-			V3 axis = unit(cross(up_, kUp), V3{1, 0, 0});
-			float turn = std::min(tilt, p[AirLevel] * kDt);
+			V3 axis = unit(cross(up_, target), V3{1, 0, 0});
+			float rate = p[AirLevel];
+			if (land_found_)
+				rate = std::min(kLandAlignMax, std::max(rate, tilt / std::max(land_t_ - 0.05f, 0.08f)));
+			float turn = std::min(tilt, rate * kDt);
 			V3 h0 = flatten(fwd_, kUp);
 			up_ = unit(rotate(up_, axis, turn));
 			fwd_ = unit(flatten(rotate(fwd_, axis, turn), up_), fwd_);
@@ -1898,13 +1957,26 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	if (!foot_air_ && try_grind(w))
 		return;
 
+	// coming back down a vert air, the board is drawn in onto the wall it went up (as the port's: it
+	// lands on the transition, not down past it in front of it)
+	if (vert_air_ && vel_.y < -1.5f && len(vert_in_) > 0.5f) {
+		Hit wh;
+		V3 to_wall = vert_in_ * -1.0f;
+		if (w.cast(pos_, to_wall * kReentryReach, wh)) {
+			float d = len(flatten(wh.point - pos_, kUp));
+			float want = std::min(kReentrySpeed, d * 6) - dot(vel_, to_wall);
+			if (want > 0)
+				vel_ += to_wall * std::min(want, kReentryAccel * kDt);
+		}
+	}
+
 	V3 delta = vel_ * kDt;
 	float L = len(delta);
 	Hit h;
 	if (L > 1e-6f && w.cast(pos_ + up_ * 0.1f, delta + delta * (0.1f / L), h)) {
 		// popped off a ramp's face and still going up it: the board rides up along the wall in the
 		// air, clear of it, rather than coming down on it (as the port's ollie off a transition)
-		if (!foot_air_ && ramp_pop_ && vel_.y > 0.3f && h.normal.y < 0.97f && h.normal.y > 0.05f) {
+		if (!foot_air_ && (ramp_pop_ || popped_air_) && vel_.y > 0.3f && h.normal.y < 0.97f && h.normal.y > 0.05f) {
 			float into = dot(vel_, h.normal);
 			if (into < 0)
 				vel_ -= h.normal * into;
@@ -2117,6 +2189,8 @@ constexpr float kWallMax = 1.5f;      // longest ride, s
 bool Rider::try_wallride(const Hit &h)
 {
 	if (std::fabs(h.normal.y) > 0.4f)
+		return false;
+	if (vert_air_) // (coming back down into the ramp it went up: it lands on it, it doesn't ride the wall)
 		return false;
 	V3 n = unit(V3{h.normal.x, 0, h.normal.z}, V3{0, 0, 1});
 	if (dot(n, vel_) > 0)
@@ -2377,7 +2451,7 @@ bool Rider::try_grind(World &w)
 	}
 	// an air rolled up off a ramp's lip catches its coping only coming down right onto it (as the
 	// port: a little way past, onto the deck, it lands)
-	if (wall_off_ && !popped_air_ && !hand && len(flatten(s.point - pos_, kUp)) > kLipCatch)
+	if ((vert_air_ || (wall_off_ && !popped_air_)) && !hand && len(flatten(s.point - pos_, kUp)) > kLipCatch)
 		return false;
 	// still rising past the rail (an ollie up beside it, or just over it at the top): not yet - it
 	// lands on it coming down (as the port, recorded: caught as the board comes down onto it)

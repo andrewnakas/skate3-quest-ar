@@ -411,7 +411,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
         }
         2 => vec![
             pair("Left stick left/right", "choose a piece"),
-            pair("Right controller", "point; trigger drops the piece"),
+            pair("Right controller", "point; A (or trigger) drops the piece"),
             pair("Right stick", "turn / resize (or the piece pointed at)"),
             pair("Right grip on a piece", "pick it up"),
             pair("B on a piece", "delete it"),
@@ -420,7 +420,7 @@ fn howto_rows(page: usize, xr: bool) -> Vec<Row> {
             pair("Left stick click", "drop a starter park"),
             pair("Left stick up/down", "grow/shrink everything"),
             pair("Left grip + stick up/down", "grow/shrink only the park"),
-            pair("A", "show the detected planes"),
+            pair("Left grip + B", "show the detected planes"),
             pair("Y", "rescan the room"),
             pair("Hold X", "clear every piece"),
             pair("Hold left menu 1 s", "leave build mode"),

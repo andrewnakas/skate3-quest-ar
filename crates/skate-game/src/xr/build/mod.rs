@@ -11,16 +11,15 @@
 //! - left stick click: drop a starter park where the right controller points
 //! - left trigger: undo
 //! - right controller: point; a ghost of the piece shows where it would go
-//! - right trigger: drop it there
+//! - A (or the right trigger): drop it there
 //! - right stick left/right: turn it in 15° steps (it lines up with a table
 //!   edge when within 10°); up/down: resize it (its length or height).
 //!   Pointing at a placed piece, the stick turns and resizes that piece
 //! - right stick click on a placed piece: copy it (kind, size, scale, turn)
 //! - right grip on a placed piece: pick it up, release to put it down
 //! - B on a placed piece: delete it
-//! - A on a placed piece: make it invisible (it is still skated; build mode
-//!   shows it as a ghost) or visible again. A pointing at nothing shows the
-//!   detected planes
+//! - left grip held + A on a placed piece: make it invisible (it is still
+//!   skated; build mode shows it as a ghost) or visible again
 //! - Y: rescan the room (Quest Space Setup)
 //! - hold X: clear every piece
 //!
@@ -586,13 +585,14 @@ fn build_controls(
         }
         return;
     }
-    if pressed(now.b, previous.b) {
+    if pressed(now.b, previous.b) && touch.left_grip <= PRESS {
         if let Some(removed) = state.target.and_then(|id| placed.remove(id)) {
             info!("BUILD deleted {:?} (piece {})", removed.piece.kind, removed.id);
         }
         return;
     }
-    if pressed(now.a, previous.a) {
+    // (left grip held + A: invisible / visible again; A alone drops the piece, below)
+    if pressed(now.a, previous.a) && touch.left_grip > PRESS {
         if let Some(id) = state.target {
             placed.checkpoint();
             if let Some(item) = placed.get_mut(id) {
@@ -617,7 +617,7 @@ fn build_controls(
         }
         return;
     }
-    if pressed(now.trigger, previous.trigger) {
+    if pressed(now.trigger, previous.trigger) || pressed(now.a, previous.a) {
         if let Some((position, _)) = state.ghost {
             let piece = state.piece();
             let yaw = state.placed_yaw;

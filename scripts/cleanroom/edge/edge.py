@@ -5,7 +5,8 @@ import feel
 PACK = "/Volumes/FreeAgent GoFlex Drive/MacOffload/Documents/haloskate-ref/cleanpack/core.pack"
 S3 = os.path.expanduser("~/cleanroom/skatecore-cpp/build/s3trace")
 SK = os.path.expanduser("~/cleanroom/skatecore-cpp/build/sk8trace")
-D = os.path.dirname(os.path.abspath(__file__))
+import tempfile
+D = tempfile.mkdtemp(prefix="sk8edge")
 def _rows(cmd):
     r = subprocess.run(cmd, capture_output=True, text=True)
     return list(csv.DictReader(io.StringIO(r.stdout)))

@@ -121,6 +121,8 @@ pub(crate) struct Motion {
     pin: [f32; 2],
     /// 0..1 per leg: a foot held off the board in the air (one-foot ollies and grabs).
     foot_off: [f32; 2],
+    /// Where the feet have moved on the deck from the clip's spots (m: across, along), eased.
+    foot_shift: [Vec2; 2],
     ground: Ground,
     /// This stroke's foot has planted already (one plant per stroke).
     planted: bool,
@@ -202,6 +204,55 @@ struct Trace {
 const SPIKE_DEG: f32 = 14.0;
 
 /// Above this a one-frame turn is logged with the clips playing (SK8_JUMP_DEG, default 42).
+/// s the feet take to move to their spot on the deck for the stick / trick
+const FOOT_SHIFT_EASE: f32 = 0.06;
+/// m: how far the back foot moves onto the tail (front onto the nose) with the stick right out
+const FOOT_TO_END: f32 = 0.09;
+/// m: how far the other foot follows it toward the middle
+const FOOT_FOLLOW: f32 = 0.035;
+/// m: how far across the front foot moves with the stick to a side (the back one half that)
+const FOOT_ACROSS: f32 = 0.03;
+
+/// The feet's moves on the deck (front, back), as (across, along +nose) in the deck's frame.
+fn foot_shift_targets(s: &State, flick: [f32; 2], mirrored: bool) -> [Vec2; 2] {
+    let (fx, fy) = (flick[0], flick[1]);
+    let down = (-fy).max(0.0).min(1.0);
+    let up = fy.max(0.0).min(1.0);
+    // (the toe edge is across one way, or the other with the body mirrored)
+    let across = if mirrored { -fx } else { fx };
+    let free = matches!(s.mode, Mode::Ride | Mode::Air | Mode::Manual);
+    let (mut front, mut back) = (Vec2::ZERO, Vec2::ZERO);
+    match s.mode {
+        Mode::Manual if s.manual_dir > 0 => {
+            back.y -= FOOT_TO_END * 0.8;
+            front.y -= FOOT_FOLLOW;
+        }
+        Mode::Manual if s.manual_dir < 0 => {
+            front.y += FOOT_TO_END * 0.8;
+            back.y += FOOT_FOLLOW;
+        }
+        Mode::Grind => {
+            // on the back truck: 5-0, smith, feeble, tailslide, bluntslide, salad, willy, suski;
+            // on the front: nosegrind, crooked, overcrook, noseslide, noseblunt
+            match s.grind_kind {
+                4 | 8 | 9 | 11 | 14 | 18 | 19 | 20 => back.y -= FOOT_TO_END * 0.8,
+                5 | 6 | 7 | 10 | 13 => front.y += FOOT_TO_END * 0.8,
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    if free {
+        back.y -= FOOT_TO_END * down;
+        front.y -= FOOT_FOLLOW * down;
+        front.y += FOOT_TO_END * up;
+        back.y += FOOT_FOLLOW * up;
+        front.x += FOOT_ACROSS * across;
+        back.x += FOOT_ACROSS * 0.5 * across;
+    }
+    [front, back]
+}
+
 fn jump_deg() -> f32 {
     std::env::var("SK8_JUMP_DEG").ok().and_then(|v| v.parse().ok()).unwrap_or(3.0 * SPIKE_DEG)
 }
@@ -632,6 +683,16 @@ pub(crate) fn layer(
     let tilt = pin_tf.rotation * rider_rot.inverse();
     // the front leg (the left one, or the right when the body is mirrored)
     let front_leg = if mirrored { 1 } else { 0 };
+    // The feet move on the board with the right stick and the trick (as the port's rider): pulled
+    // down to load an ollie, the back foot slides onto the tail; pushed up for a nollie, the front
+    // foot onto the nose; the flick's side shifts them across; a manual or a grind on one truck puts
+    // the foot over that end.
+    let shift_want = foot_shift_targets(s, sim.input.flick, mirrored);
+    let ease = if dt > 0.0 { 1.0 - (-dt / FOOT_SHIFT_EASE).exp() } else { 0.0 };
+    for k in 0..2 {
+        let leg = if k == 0 { front_leg } else { 1 - front_leg };
+        motion.foot_shift[leg] += (shift_want[k] - motion.foot_shift[leg]) * ease;
+    }
     for (i, chain) in set.legs.iter().enumerate() {
         let Some(ankle) = ankles.get(i).copied() else { continue };
         let height = deck_inv.transform_point3(ankle).y - sole - skater::ANKLE;
@@ -683,6 +744,8 @@ pub(crate) fn layer(
         if w < 1e-3 {
             continue;
         }
+        local.x += motion.foot_shift[i].x;
+        local.z += motion.foot_shift[i].y;
         local.x = local.x.clamp(-PIN_HALF_WIDTH, PIN_HALF_WIDTH);
         local.z = local.z.clamp(-PIN_HALF_LEN, PIN_HALF_LEN);
         // on the deck's real surface: concave across, rising up the nose and tail

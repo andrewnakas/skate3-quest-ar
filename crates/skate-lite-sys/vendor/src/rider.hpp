@@ -55,6 +55,7 @@ private:
 	bool try_grind(World &w);
 	bool classify_grind(V3 tangent, V3 from);
 	float air_left() const;
+	bool predict_landing(World &w, V3 &normal, float &t) const;
 	void leave_grind(V3 velocity, bool popped, bool off_end = false);
 	void move_on_ground(World &w, V3 delta);
 	void follow_ground(World &w);
@@ -184,7 +185,10 @@ private:
 	unsigned ground_trail_i_ = 0;
 	bool grind_fs_ = false;
 	bool regrind_ = false;
-	bool ramp_pop_ = false;      // this air was popped off a ramp's face       // popped off a rail, not yet back on the ground       // a frontside grind: the right stick's sides swapped (as the port's)                 // in over the ramp, from the lip it last went up off // the board turned across onto the rail by the right stick in the air  // a slide's family: the board turned onto the rail the lip way
+	bool ramp_pop_ = false;
+	bool land_found_ = false;   // a landing found ahead, in the air
+	V3 land_n_{0, 1, 0};
+	float land_t_ = 0, land_look_ = 0;      // this air was popped off a ramp's face       // popped off a rail, not yet back on the ground       // a frontside grind: the right stick's sides swapped (as the port's)                 // in over the ramp, from the lip it last went up off // the board turned across onto the rail by the right stick in the air  // a slide's family: the board turned onto the rail the lip way
 	// scoring: where the air began and its top; lengths ridden on the current rail / manual (m);
 	// personal bests (line points, air seconds, rail and manual metres, tricks in a line)
 	V3 launch_, launch_vel_;
