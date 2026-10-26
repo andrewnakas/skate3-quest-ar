@@ -56,6 +56,7 @@ private:
 	bool classify_grind(V3 tangent, V3 from);
 	float air_left() const;
 	bool predict_landing(World &w, V3 &normal, float &t) const;
+	void reset_body_flip();
 	void leave_grind(V3 velocity, bool popped, bool off_end = false);
 	void move_on_ground(World &w, V3 delta);
 	void follow_ground(World &w);
@@ -187,6 +188,8 @@ private:
 	bool regrind_ = false;
 	bool ramp_pop_ = false;
 	float bump_cool_ = 0;
+	float bflip_ = 0, bflip_rate_ = 0, bflip_peak_ = 0, grab_began_ = -1; // a body flip: rad turned over
+	int bflip_dir_ = 0, bflip_turns_ = 0;
 	bool land_found_ = false;   // a landing found ahead, in the air
 	V3 land_n_{0, 1, 0};
 	float land_t_ = 0, land_look_ = 0;      // this air was popped off a ramp's face       // popped off a rail, not yet back on the ground       // a frontside grind: the right stick's sides swapped (as the port's)                 // in over the ramp, from the lip it last went up off // the board turned across onto the rail by the right stick in the air  // a slide's family: the board turned onto the rail the lip way

@@ -189,7 +189,7 @@ fn read(
     #[cfg(target_os = "android")]
     let touch = {
         use std::sync::Mutex;
-        static REST: Mutex<Option<([f32; 8], [bool; 8], u32)>> = Mutex::new(None);
+        static REST: Mutex<Option<([f32; 8], [bool; 8], u64)>> = Mutex::new(None);
         let pad = winit::platform::android::gamepad_state();
         if pad.events > 0 {
             let mut guard = REST.lock().unwrap();

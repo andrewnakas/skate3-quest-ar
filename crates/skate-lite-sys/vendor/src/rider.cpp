@@ -207,6 +207,15 @@ constexpr float kReentryAccel = 28.0f; // m/s^2
 constexpr float kLandLookEvery = 0.05f; // s between looks ahead for where it lands
 constexpr int kLandLookSteps = 60;      // two-step looks ahead (2 s)
 constexpr float kLandAlignMax = 7.0f;   // rad/s at most, lining up to land
+constexpr float kVertDropIn = 0.6f;  // m below where it went up a vert air comes back down (about)
+constexpr float kFlipWindow = 0.12f;  // s into a grab the left stick can still start a body flip
+constexpr float kFlipStick = 0.6f;    // the left stick this far forward / back
+constexpr float kFlipRate = 5.0f;     // rad/s turning over at most (as the port's, ~290 deg/s)
+constexpr float kFlipAccel = 30.0f;   // rad/s^2 coming up to it
+constexpr float kFlipSettle = 0.12f;  // s kept back at the end of the air to come out of it
+constexpr float kFlipPartMax = 2.3f;  // rad: too short an air for a whole one, over this far and back
+constexpr float kFlipLandTol = 0.6f;  // rad off upright a flip can still be landed
+constexpr unsigned kFlipPoints = 1500;
 constexpr float kVertPull = 0.8f;   // of gravity on a vert air
 constexpr float kVertIn = 0.31f; // m: a vert air comes back down this far inside the lip (as the port's)
 constexpr float kSettleFlip = 0.45f;
@@ -738,6 +747,8 @@ void Rider::step(World &w, const sk8_input &in)
 
 void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 {
+	if (bflip_dir_ != 0) // (back on something other than by a landing: a grind, a wall)
+		reset_body_flip();
 	ground_trail_[ground_trail_i_++ % kTrail] = pos_; // (where it rode, the last few steps)
 	if (takeoff_trick_ >= 0) {
 		if (f.revised >= 0) // the flick carried on round: read again as the whole of it (as the port)
@@ -1309,6 +1320,7 @@ constexpr float kOllieLoadFull = 0.21f;
 void Rider::pop(const TrickDef &def, float share, bool off_rail)
 {
 	bool from_air = mode_ == SK8_MODE_AIR && !off_rail; // (a lip pop, just off a ramp)
+	reset_body_flip();
 	V3 aim_in{}; // (a vert air: back in over the ramp, aimed to come down just inside the lip)
 	ramp_pop_ = false;
 	float charge = crouch_charge(crouch_);
@@ -1566,6 +1578,13 @@ float Rider::air_left() const
 }
 
 // Where the air comes down: its arc stepped on (gravity, as it falls) and cast against the world.
+void Rider::reset_body_flip()
+{
+	bflip_ = bflip_rate_ = bflip_peak_ = 0;
+	bflip_dir_ = bflip_turns_ = 0;
+	grab_began_ = -1;
+}
+
 bool Rider::predict_landing(World &w, V3 &normal, float &t) const
 {
 	V3 p0 = pos_ + up_ * 0.1f, v = vel_;
@@ -1704,6 +1723,22 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	else
 		spin_total_ += a;
 
+	if (bflip_dir_ != 0) {
+		// (looked at again as the landing shows: whole turns it can't finish in time come off)
+		if (bflip_turns_ > 0 && land_found_) {
+			float reach = std::fabs(bflip_) + kFlipRate * std::max(land_t_ - kFlipSettle, 0.0f);
+			int can_turns = int(std::floor(reach / (2 * kPi)));
+			if (can_turns < bflip_turns_)
+				bflip_turns_ = std::max(can_turns, int(std::lround(std::fabs(bflip_) / (2 * kPi))));
+		}
+		float want = bflip_turns_ > 0 ? float(bflip_dir_ * bflip_turns_) * 2 * kPi
+			: (land_found_ && land_t_ < std::fabs(bflip_peak_) / kFlipRate + kFlipSettle ? 0.0f : bflip_peak_);
+		float d = want - bflip_;
+		bflip_rate_ = approach(bflip_rate_, clampf(d * 8, -kFlipRate, kFlipRate), kFlipAccel * kDt);
+		bflip_ += bflip_rate_ * kDt;
+		if (std::fabs(want - bflip_) < 0.01f)
+			bflip_ = want;
+	}
 	// Lining up for the landing (as the port's): the board turns in the air to the slope it's going to
 	// come down on - level for flat ground, the transition's angle dropping back into a ramp or onto a
 	// bank - in time to meet it; with nothing found ahead, level. (A vert air going up stays square to
@@ -1859,6 +1894,27 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 			grab_style_ = t;
 			grab_tweakable_ = false;
 		}
+	}
+	// a body flip (as the port: grab with the left stick held forward / back - a frontflip /
+	// backflip; with a spin too, a flip 540 and the like): as many whole turns as the air leaves
+	// time for, or, too short for one, a part way over and back
+	if (hands && !grab_)
+		grab_began_ = air_time_;
+	if (hands && bflip_dir_ == 0 && air_time_ - grab_began_ <= kFlipWindow && std::fabs(steer_pad_[1]) > kFlipStick) {
+		bflip_dir_ = steer_pad_[1] > 0 ? 1 : -1;
+		V3 ln;
+		float t = 0;
+		// (going up beside a wall the look ahead meets the wall itself: then by the air's own arc)
+		if (!predict_landing(w, ln, t) || ln.y < 0.5f) {
+			t = air_left();
+			if (vert_air_ && vel_.y > 0) { // (up a vert air: up floating a little, back down past the lip into the ramp)
+				float g = p[Gravity], up_t = vel_.y / (g * kVertPull), h = vel_.y * vel_.y / (2 * g * kVertPull);
+				t = up_t + std::sqrt(2 * (h + kVertDropIn) / g);
+			}
+		}
+		float can = kFlipRate * std::max(t - kFlipSettle - kFlipRate / (2 * kFlipAccel), 0.0f);
+		bflip_turns_ = int(std::floor(can / (2 * kPi)));
+		bflip_peak_ = float(bflip_dir_) * std::min(can * 0.45f, kFlipPartMax);
 	}
 	grab_ = hands;
 
@@ -2060,11 +2116,23 @@ void Rider::land(const Hit &h)
 		bad = "Sideways";
 	else if (into > p[ImpactBail])
 		bad = "Too hard";
+	// a body flip has to come round the whole way (or back) to be landed
+	const float flip_off = bflip_ - std::round(bflip_ / (2 * kPi)) * 2 * kPi;
+	if (!bad && bflip_dir_ != 0 && std::fabs(flip_off) > kFlipLandTol)
+		bad = "Over-rotated";
+	const int flips_done = int(std::lround(std::fabs(bflip_) / (2 * kPi)));
+	const int flip_dir = bflip_dir_;
+	reset_body_flip();
 	pos_ = h.point;
 	surface_ = h.surface;
 	if (bad && !never_bail()) {
 		bail(bad);
 		return;
+	}
+	if (flips_done > 0) {
+		std::string fn = flips_done == 2 ? "Double " : flips_done >= 3 ? "Triple " : "";
+		fn += flip_dir > 0 ? "Frontflip" : "Backflip";
+		pending_.push_back({staged(fn.c_str()), unsigned(kFlipPoints * flips_done)});
 	}
 	// landed with the board caught upside down: the skater steps off and runs it out (as the port)
 	if (dark_) {
@@ -2638,6 +2706,8 @@ void Rider::leave_grind(V3 velocity, bool popped, bool off_end)
 
 void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 {
+	if (bflip_dir_ != 0)
+		reset_body_flip();
 	if (rail_ < 0 || size_t(rail_) >= w.rails.size()) {
 		leave_grind(vel_, false);
 		return;
@@ -2882,6 +2952,8 @@ void Rider::grind(World &w, const sk8_input &in, const Flick::Result &f)
 
 void Rider::bail(const char *reason)
 {
+	reset_body_flip();
+	reset_body_flip();
 	if (mode_ == SK8_MODE_BAIL)
 		return;
 	if (mode_ == SK8_MODE_GRIND)
@@ -2987,6 +3059,8 @@ void Rider::state(sk8_state &s) const
 	V3 right = unit(cross(up, fwd_), V3{1, 0, 0});
 	V3 fwd = unit(cross(right, up), fwd_);
 	Q stance = from_basis(right, up, fwd);
+	if (bflip_ != 0)
+		stance = stance * Q::axis_angle({1, 0, 0}, bflip_);
 	Q board = stance;
 	if (mode_ == SK8_MODE_WALLRIDE || since_wall_ < 0.14f) {
 		// the board flat on the wall; the rider leans out from it only part way
