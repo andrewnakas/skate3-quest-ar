@@ -6,10 +6,9 @@
 //!   up and held: manual / nose manual (how far balances it)
 //! - A: push (hold to keep pushing), X: mongo push, B: brake, Y: get off / on the board (walk)
 //! - left stick click held while flicking: old school (no comply, boneless, no comply 180)
-//! - right grip (pad: RB) held while steering: powerslide; held into a landing: revert
-//! - X held while steering: powerslide
+//! - left stick pushed back to a diagonal: powerslide
 //! - triggers in the air: grab (left / right hand)
-//! - right grip: manual, left grip: nose manual
+//! - grips: nothing on the board (as the port: the Rust rewrite's pad layout, Touch = Xbox pad)
 //! - left menu: tap for the menu, hold for build mode (see `xr::build`)
 //!
 //! Desktop (`--clean` without a headset): A/D steer, W/S balance, Space push,
@@ -49,12 +48,8 @@ pub(crate) fn from_touch(touch: &crate::xr::touch::TouchState) -> Input {
     if touch.right_trigger > PRESSED {
         b |= buttons::GRAB_RIGHT;
     }
-    if touch.right_grip > PRESSED {
-        b |= buttons::SLIDE;
-    }
-    if touch.left_grip > PRESSED {
-        b |= buttons::NOSE_MANUAL;
-    }
+    // (the grips do nothing on the board, as in the port: held while holding the controllers they
+    // would otherwise catch flips dark and pin the board in a manual)
     Input {
         steer: touch.left_stick,
         flick: touch.right_stick,

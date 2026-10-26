@@ -186,6 +186,7 @@ private:
 	bool grind_fs_ = false;
 	bool regrind_ = false;
 	bool ramp_pop_ = false;
+	float bump_cool_ = 0;
 	bool land_found_ = false;   // a landing found ahead, in the air
 	V3 land_n_{0, 1, 0};
 	float land_t_ = 0, land_look_ = 0;      // this air was popped off a ramp's face       // popped off a rail, not yet back on the ground       // a frontside grind: the right stick's sides swapped (as the port's)                 // in over the ramp, from the lip it last went up off // the board turned across onto the rail by the right stick in the air  // a slide's family: the board turned onto the rail the lip way

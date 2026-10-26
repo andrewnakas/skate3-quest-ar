@@ -184,10 +184,33 @@ fn read(
         menu: button(&actions.menu),
     };
     // A game pad (Quest: a Bluetooth Xbox controller) drives everything the Touch controllers do.
+    // (Only axes that have moved off where they rested when the pad first spoke count: a device
+    // that reports a stick or trigger parked away from zero can't hold the Touch sticks over.)
     #[cfg(target_os = "android")]
     let touch = {
+        use std::sync::Mutex;
+        static REST: Mutex<Option<([f32; 8], [bool; 8], u32)>> = Mutex::new(None);
         let pad = winit::platform::android::gamepad_state();
-        if pad.events > 0 { super::touch::pad_into_touch(touch, pad.axes, pad.buttons) } else { touch }
+        if pad.events > 0 {
+            let mut guard = REST.lock().unwrap();
+            let (rest, moved, logged) = guard.get_or_insert((pad.axes, [false; 8], 0));
+            let mut axes = pad.axes;
+            for i in 0..8 {
+                if (pad.axes[i] - rest[i]).abs() > 0.25 {
+                    moved[i] = true;
+                }
+                if !moved[i] {
+                    axes[i] = 0.0;
+                }
+            }
+            if pad.events / 200 != *logged {
+                *logged = pad.events / 200;
+                info!("PAD events {} axes {:?} rest {:?} moved {:?} buttons {:#x}", pad.events, pad.axes, rest, moved, pad.buttons);
+            }
+            super::touch::pad_into_touch(touch, axes, pad.buttons)
+        } else {
+            touch
+        }
     };
     latest.0 = touch;
     let mut state = mapper.map(&touch, time.delta_secs());

@@ -5,16 +5,17 @@
 //!
 //! - left stick left/right: choose a piece (the wrist palette above the left
 //!   controller shows them; the chosen one is raised)
-//! - left stick up/down: scale the piece pointed at (or the next one to drop)
-//!   as a whole; nothing else changes size (the skater's size and the whole
-//!   park's are in the menu: Build a park)
+//! - left stick up/down: stretch the piece pointed at (or the next one to
+//!   drop) along its length / height
 //! - left stick click: drop a starter park where the right controller points
 //! - left trigger: undo
 //! - right controller: point; a ghost of the piece shows where it would go
 //! - A (or the right trigger): drop it there
 //! - right stick left/right: turn it in 15° steps (it lines up with a table
-//!   edge when within 10°); up/down: resize it (its length or height).
-//!   Pointing at a placed piece, the stick turns and resizes that piece
+//!   edge when within 10°); up/down: scale it as a whole (everything about it
+//!   bigger or smaller; the skater's size and the whole park's are in the
+//!   menu: Build a park). Pointing at a placed piece, the stick turns and
+//!   scales that piece
 //! - right stick click on a placed piece: copy it (kind, size, scale, turn)
 //! - right grip on a placed piece: pick it up, release to put it down
 //! - B on a placed piece: delete it
@@ -472,12 +473,15 @@ fn build_controls(
     });
     state.ghost = valid.map(|h| (to_tracking.transform_point3(h.point), h.point));
 
-    // Right stick: turn and resize (length / height) the piece pointed at, or else the ghost; left
-    // stick up/down: scale that one piece as a whole.
-    let [scale_x, scale_y] = touch.left_stick;
-    let scaling = scale_y.abs() > STICK_DEADZONE && scale_y.abs() > scale_x.abs();
-    let resize = if scaling { scale_y } else { touch.right_stick[1] };
-    let resizing = scaling || (resize.abs() > STICK_DEADZONE && resize.abs() > touch.right_stick[0].abs());
+    // Right stick: turn (left/right) and scale the piece pointed at, or else the ghost, as a whole
+    // (up/down: everything about it bigger or smaller together); left stick up/down: stretch just
+    // its length / height.
+    let [rx, ry] = touch.right_stick;
+    let [lx, ly] = touch.left_stick;
+    let scaling = ry.abs() > STICK_DEADZONE && ry.abs() > rx.abs();
+    let stretching = !scaling && ly.abs() > STICK_DEADZONE && ly.abs() > lx.abs();
+    let resize = if scaling { ry } else { ly };
+    let resizing = scaling || stretching;
     let turn = (now.right_flick != 0 && now.right_flick != previous.right_flick)
         .then(|| -ROTATE_STEP * now.right_flick as f32);
     let factor = (resize * RESIZE_RATE * time.delta_secs()).exp();

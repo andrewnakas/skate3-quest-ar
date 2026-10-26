@@ -217,6 +217,10 @@ constexpr float kFakieTurnPush = 0.6f; // m/s rolling fakie under this, a push g
 constexpr float kBoardslideDrag = 0.61f; // m/s^2 more a boardslide loses along the rail
 constexpr float kSideBias = 0.075f; // m
 constexpr int kTrail = 16; // steps of ground kept (where an ollie began)
+constexpr float kBumpLow = 0.15f, kBumpHigh = 1.3f; // m over the board: a rail the body runs into
+constexpr float kBumpReach = 0.14f; // m to the side of its line
+constexpr float kBumpKeep = 0.28f;  // of the speed kept, bumped
+constexpr float kBumpCool = 1.0f;   // s before it can bump again
 constexpr float kPushTap = 1.045f;   // m/s a tapped push gives (held, up to a full one)
 constexpr float kPushFull = 9.0f;
 constexpr float kPushRepeat = 0.61f; // a held-on stroke's share   // steps more the button's held for a full one
@@ -1189,6 +1193,30 @@ void Rider::move_on_ground(World &w, V3 delta)
 	float L = len(delta);
 	if (L < 1e-6f)
 		return;
+	// A rail at body height across the way (or its end straight ahead): the rider runs into it - the
+	// speed knocked off, not ridden through (as the port's: "bumped", rolling on slowly after)
+	if (bump_cool_ > 0)
+		bump_cool_ -= kDt;
+	if (bump_cool_ <= 0 && up_.y > 0.9f && !w.rails.empty() &&
+		(mode_ == SK8_MODE_RIDE || mode_ == SK8_MODE_MANUAL || mode_ == SK8_MODE_SLIDE)) {
+		V3 next = pos_ + delta;
+		RailSpot s = w.nearest_rail(next + kUp * 0.7f, 0.8f);
+		if (s.rail >= 0) {
+			float h = s.point.y - next.y;
+			V3 off = flatten(s.point - next, kUp);
+			V3 going = flatten(vel_, kUp);
+			if (h > kBumpLow && h < kBumpHigh && len(off) < kBumpReach && len(going) > 0.5f &&
+				dot(going, flatten(s.point - pos_, kUp)) >= 0) {
+				vel_ = vel_ * kBumpKeep;
+				bump_cool_ = kBumpCool;
+				emit(SK8_EV_LAND, "bumped", 0, 0, surface_);
+				delta = delta * kBumpKeep;
+				L = len(delta);
+				if (L < 1e-6f)
+					return;
+			}
+		}
+	}
 	V3 dir = delta * (1.0f / L);
 	Hit h;
 	if (w.cast(pos_ + up_ * kBoardHeight, dir * (L + kRadius), h)) {
