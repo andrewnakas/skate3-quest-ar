@@ -39,6 +39,9 @@ The APK carries no game data; the clean tier needs none.
 
 ## Imported disc (optional)
 
+Player guide: [docs/IMPORT-SKATE3.md](../../docs/IMPORT-SKATE3.md) (`MAKE-QUEST-ZIP.bat` makes
+`Skate3-Quest.zip` by itself; `make-bundle.ps1 -NoZip` leaves a `quest-data/` folder for the script below).
+
 The app starts in the clean-room tier, which needs no game data. To play the
 full retail tier (the faithful port: retail controls, animations and skaters)
 convert your own Skate 3 disc with the desktop engine and make the transfer
@@ -86,17 +89,19 @@ under the `skate3` tag.
 
 | Touch | Action |
 |---|---|
-| Left stick | Steer; in the air, spin; in a manual, balance (up/down) |
-| Right stick | Hold down to crouch, flick to pop and flip (How to play lists every trick) |
-| A (hold) | Push |
+| Left stick | Steer (hard over when slow: kickturn); in the air, spin; pushed back to a diagonal: powerslide |
+| Right stick | Hold down to crouch, flick to pop and flip (How to play lists every trick); part way down / up and held: manual / nose manual |
+| A / X (hold) | Push / mongo push (a tap is a light push, held a full one) |
 | B | Brake |
-| X + steer | Powerslide |
-| Right grip / left grip | Manual / nose manual |
-| Triggers, in the air | Grab (left / right hand) |
+| Y | Step off / back on the board |
+| Triggers, in the air | Grab (left / right hand); grab with the left stick forward / back: front flip / back flip (with a spin: flip 360, 540) |
+| Right stick on a rail | Up / down: nosegrind / 5-0; right out to a side and held: rotates into crooked, willy, boardslide or salad, feeble, smith, overcrook, lipslide |
+| Left stick on a rail | Lean the grind over a step |
+| Grips | Nothing on the board (as the Rust rewrite's pad layout) |
 | Left grip + left trigger | Aim; let go to put the skater there |
 | Left menu (tap) | The menu (below) |
 | Left menu held + both grips | SK8 menu (advanced tuning) |
-| Left menu held 1 s (alone) | Build mode (see below) |
+| Left menu held 1 s (alone) | Build mode: A places, B deletes, right stick turns / scales the piece, left stick stretches it |
 
 Tricks (hold the right stick down first): through the centre to up = ollie,
 up-left = kickflip, up-right = heelflip; sweep along the rim to the left and

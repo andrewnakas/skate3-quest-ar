@@ -12,6 +12,13 @@ CACHE="${2:-}"
 PKG=com.andrewnakas.skate3ar
 DEST=/sdcard/Android/data/$PKG/files
 adb shell mkdir -p "$DEST/assets" "$DEST/Skate3RustEngine/audio-pcm-cache"
+# (Android won't let adb push create folders inside another app's files: make them first)
+(cd "$ASSETS" && find . -type d | sed 's|^\./||;s|^\.$||') | while IFS= read -r d; do
+  [ -n "$d" ] && printf 'mkdir -p "%s/assets/%s"\n' "$DEST" "$d"
+done > /tmp/sk8-mkdirs.sh
+adb push /tmp/sk8-mkdirs.sh /data/local/tmp/sk8-mkdirs.sh >/dev/null
+adb shell sh /data/local/tmp/sk8-mkdirs.sh
+adb shell rm /data/local/tmp/sk8-mkdirs.sh
 adb push --sync "$ASSETS/." "$DEST/assets/"
 if [ -n "$CACHE" ]; then
   adb push --sync "$CACHE/." "$DEST/Skate3RustEngine/audio-pcm-cache/"

@@ -4,24 +4,46 @@
 
 # Skate 3 AR for Meta Quest 3 (alpha)
 
-The Skate 3 Rust engine running in passthrough AR on Quest 3: a skater in your
-real room, riding your floor, tables and furniture, plus ramps, rails and
-stairs you place with the Touch controllers. Grow or shrink the skater and
-the park to any size. Clean (CC0) skate sounds.
+A skater in your real room in passthrough AR on Quest 3: ride your floor, tables and furniture,
+and build a park of ramps, rails, ledges, quarter pipes and stairs with the Touch controllers.
+Ollies and flip tricks, grinds and slides, manuals, grabs, body flips, spins and big airs.
 
-**[Download the APK](https://github.com/andrewnakas/skate3-quest-ar/releases)** and
-install it with `adb install -r`. It needs game data converted from **your own Skate 3 disc**;
-no EA assets are included (setup in [scripts/quest/README.md](scripts/quest/README.md), along
-with the controls). Sounds are spatial: they come from the skater, wherever it is in your room.
+**[Download the latest APK](https://github.com/andrewnakas/skate3-quest-ar/releases/latest)**
+and install it with `adb install -r skate3ar.apk` (or SideQuest). Open **Skate 3 AR** from the
+headset's Library > Unknown Sources.
 
-A version that needs no game files at all is in the works for 0.03: a fully clean-room skater
-whose model, animations, physics tuning and colliders are all original, with nothing taken
-from the retail game.
+**It plays straight away with no game files.** The default skater is our own clean-room
+engine: original physics, model, animations and CC0 sounds, with nothing taken from EA.
+
+**Own Skate 3 for Xbox 360? Import it for the full retail tier** (retail skater, animations,
+controls and sounds), converted from your own disc. Four steps, one Windows PC:
+
+1. Run the [Skate 3 Rust Engine](https://github.com/SK8-ENGINE/skate-3-rust-engine/releases/tag/experimental)
+   once on your ISO and skate for a minute.
+2. Put `MAKE-QUEST-ZIP.bat` + `make-bundle.ps1` (from the release) next to `skate3rust.exe`
+   and double-click the `.bat`: it writes `Skate3-Quest.zip`.
+3. Copy the zip to the Quest's `Download/Skate3` folder.
+4. In the app: menu > Skate 3 data > Import, then reopen the app.
+
+Step-by-step with pictures of where everything is: **[docs/IMPORT-SKATE3.md](docs/IMPORT-SKATE3.md)**.
+No EA assets are in this repo or the APK.
+
+### Controls
+
+| Touch | |
+|---|---|
+| Right stick | Hold down to crouch, flick up to ollie; flick directions for flip tricks |
+| Left stick | Steer; in the air, spin; pushed back to a diagonal: powerslide |
+| A / X | Push / mongo push (tap a light push, hold a full one) |
+| B / Y | Brake / step off the board |
+| Triggers (air) | Grab; **grab + left stick forward/back: front flip / back flip** (add a spin for flip 360s, 540s) |
+| Right stick on a rail | Up/down: nosegrind / 5-0; right out to a side and held: turns into crooked, salad, feeble, smith, boardslide, lipslide |
+| Left menu (tap / hold 1 s) | Menu / build mode (A places, B deletes, right stick turns and scales the piece) |
+
+More in [scripts/quest/README.md](scripts/quest/README.md) and the in-app How to play page.
 
 **Handing off to Snap Spectacles?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): how this
 maps onto the C++ port [skatecore-cpp](https://github.com/andrewnakas/skatecore-cpp).
-
-This is an early alpha built on the Skate 3 Rust Engine below.
 
 # Skate 3 Rust Engine
 

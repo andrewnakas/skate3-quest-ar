@@ -503,10 +503,10 @@ fn data_widgets(world: &World) -> Vec<Widget> {
     }
     w.extend([
         Widget::info(""),
-        Widget::info("The headset can't read a disc. On a PC, run the Skate 3 setup"),
-        Widget::info("on your own ISO, then scripts/quest/make-bundle.ps1. Copy the"),
-        Widget::info("quest-data folder (or a zip of it) to Download/Skate3 on the"),
-        Widget::info("headset, or push it with scripts/quest/push-assets.sh."),
+        Widget::info("How (on a Windows PC, once): run skate3rust.exe on your own"),
+        Widget::info("Skate 3 ISO, skate a minute, then double-click MAKE-QUEST-ZIP.bat."),
+        Widget::info("Copy Skate3-Quest.zip to Download/Skate3 on this headset and"),
+        Widget::info("press Import above. Guide: docs/IMPORT-SKATE3.md on GitHub."),
     ]);
     w.dedup();
     w
