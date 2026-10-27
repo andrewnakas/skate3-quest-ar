@@ -16,9 +16,10 @@ use bevy::audio::{DefaultSpatialScale, SpatialListener, SpatialScale};
 use bevy::prelude::*;
 use bevy_mod_xr::camera::XrCamera;
 
-/// Real distance from the head inside which the skater is at full volume, m.
+/// Real distance from the head inside which the skater is at full volume, m (a skater across the
+/// room still heard well).
 /// Twice as far is a quarter of the level.
-const REFERENCE_M: f32 = 1.0;
+const REFERENCE_M: f32 = 3.0;
 /// Real distance between the ears, m.
 const EAR_GAP_M: f32 = 0.18;
 

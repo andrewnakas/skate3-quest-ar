@@ -55,9 +55,9 @@ const WAVS: &[(&str, &[u8])] = clean_wavs!(
 
 /// Overall level; the CC0 files are normalised per category (hits peak near -4 dBFS, loops sit
 /// around -24 dBFS RMS).
-const MASTER: f32 = 0.9;
+const MASTER: f32 = 1.5;
 /// Loops are mastered quiet so they sit under the hits; this restores them.
-const LOOP_GAIN: f32 = 1.6;
+const LOOP_GAIN: f32 = 2.6;
 /// Volume fade time constant, seconds.
 const FADE_S: f32 = 0.06;
 /// Below this board speed the wheels are silent, m/s.
