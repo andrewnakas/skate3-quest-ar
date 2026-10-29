@@ -47,7 +47,10 @@ mesh="$OUT/kenney_mesh.txt"
 
 # 3. both windows, side by side
 open -na "Google Chrome" --args --new-window "http://127.0.0.1:$PORT/?base=/pack/&map=KenneyPark"
-SK8_MESH="$mesh" SK8_SPAWN="13.5,0.1,-1.5,-1.511" "$GAME" --clean &
+# (a dev build links bevy and the Rust std dynamically: point the loader at them)
+sysroot="$("$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc" --print sysroot 2>/dev/null || rustc --print sysroot)"
+libs="$sysroot/lib/rustlib/aarch64-apple-darwin/lib:$(dirname "$GAME")/deps:$(dirname "$GAME")"
+DYLD_LIBRARY_PATH="$libs" SK8_MESH="$mesh" SK8_SPAWN="13.5,0.1,-1.5,-1.511" "$GAME" --clean &
 game=$!
 sleep 6
 osascript <<'EOF' || true

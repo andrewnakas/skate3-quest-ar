@@ -154,23 +154,34 @@ pub(crate) fn desktop_world(
             let up = (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero().y.abs();
             grid.add(*t, if up > 0.98 { SURFACE_GROUND } else { SURFACE_WOOD });
         }
-        let positions: Vec<[f32; 3]> = tris.iter().flat_map(|t| t.map(|p| p.to_array())).collect();
-        let mut mesh = Mesh::new(
-            bevy::mesh::PrimitiveTopology::TriangleList,
-            bevy::asset::RenderAssetUsages::default(),
-        )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        mesh.compute_flat_normals();
-        commands.spawn((
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(0.93, 0.62, 0.5), // coral, as the park pieces
-                double_sided: true,
-                cull_mode: None,
-                ..default()
-            })),
-            Transform::default(),
-        ));
+        // (the ground grey, as the original's; ramps, boxes and rails coral)
+        let low_flat = |t: &[Vec3; 3]| {
+            (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero().y.abs() > 0.98 && t.iter().all(|p| p.y < 0.15)
+        };
+        for (ground, color) in [(true, Color::srgb(0.4, 0.41, 0.44)), (false, Color::srgb(0.93, 0.62, 0.5))] {
+            let positions: Vec<[f32; 3]> =
+                tris.iter().filter(|t| low_flat(t) == ground).flat_map(|t| t.map(|p| p.to_array())).collect();
+            if positions.is_empty() {
+                continue;
+            }
+            let mut mesh = Mesh::new(
+                bevy::mesh::PrimitiveTopology::TriangleList,
+                bevy::asset::RenderAssetUsages::default(),
+            )
+            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+            mesh.compute_flat_normals();
+            commands.spawn((
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    double_sided: true,
+                    cull_mode: None,
+                    ..default()
+                })),
+                // (the ground a hair up, clear of the big floor plane under it)
+                Transform::from_xyz(0.0, if ground { 0.002 } else { 0.0 }, 0.0),
+            ));
+        }
         sim.set_collision(grid, &mesh_rails);
         // `SK8_SPAWN=x,y,z,facing` (radians): where to start (the original's spawn, for the same line)
         let spawn: Vec<f32> = std::env::var("SK8_SPAWN")
