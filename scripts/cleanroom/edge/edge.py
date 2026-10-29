@@ -10,7 +10,7 @@ D = tempfile.mkdtemp(prefix="sk8edge")
 def _rows(cmd):
     r = subprocess.run(cmd, capture_output=True, text=True)
     return list(csv.DictReader(io.StringIO(r.stdout)))
-def pair(action, ticks, setup=None, sk_action=None, params=(), facing_at=0):
+def pair(action, ticks, setup=None, sk_action=None, params=(), facing_at=0, extra=()):
     """Run action (ticks relative to the start) in both. Returns (port rows from t0, sk8 rows)."""
     setup = setup or {}
     prefix, t0 = setup.get("prefix", feel.PREFIX), setup.get("t0", feel.T0)
@@ -26,6 +26,7 @@ def pair(action, ticks, setup=None, sk_action=None, params=(), facing_at=0):
     q = os.path.join(D, f"q{os.getpid()}.txt"); open(q, "w").write(feel.shift(a, 1) if a.strip() else "\n")
     cmd = [SK, q, str(ticks + 1), "--speed", f"{speed:.4f}", *place]
     for kv in params: cmd += ["--param", kv]
+    cmd += list(extra)
     return rows[t0:], _rows(cmd)[1:]
 def hs(r): return math.hypot(float(r["deck_vx"]), float(r["deck_vz"]))
 def yawp(r):
