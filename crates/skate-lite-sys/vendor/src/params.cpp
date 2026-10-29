@@ -28,7 +28,7 @@ const sk8_param kTable[ParamCount] = {
 	{"slope_gravity", "Share of gravity rolling on a slope", kSpeed, 0.1f, 1.5f, 0.78f, 0.01f},
 	{"push_kick", "Push strength, share of the way to top speed", kSpeed, 0.0f, 1.0f, 0.64f, 0.01f},
 	{"push_period", "Time between pushes, s", kSpeed, 0.15f, 2.0f, 0.98f, 0.01f},
-	{"push_top", "Top pushing speed, m/s", kSpeed, 1.0f, 30.0f, 10.75f, 0.05f},
+	{"push_top", "Top pushing speed, m/s", kSpeed, 1.0f, 30.0f, 9.83f, 0.05f},
 	{"push_cap", "Most one stroke gives, m/s", kSpeed, 0.5f, 10.0f, 3.6f, 0.05f},
 	{"push_lead", "Step off before the first push, s", kSpeed, 0.0f, 1.0f, 0.4f, 0.01f},
 	{"push_mongo", "Mongo push (0 off, 1 on)", kSpeed, 0.0f, 1.0f, 0.0f, 1.0f},

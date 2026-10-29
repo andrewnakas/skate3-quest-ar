@@ -22,6 +22,8 @@ use skate_lite_sys::{Input, buttons};
 
 #[cfg(feature = "xr")]
 const PRESSED: f32 = 0.5;
+#[cfg(feature = "xr")]
+const GRIP_PRESSED: f32 = 0.5; // (as the retail tier's grip-as-bumper threshold)
 
 #[cfg(feature = "xr")]
 pub(crate) fn from_touch(touch: &crate::xr::touch::TouchState) -> Input {
@@ -39,8 +41,10 @@ pub(crate) fn from_touch(touch: &crate::xr::touch::TouchState) -> Input {
     if touch.y {
         b |= buttons::OFF_BOARD;
     }
-    if touch.left_stick_click {
-        b |= buttons::FOOT_OFF;
+    // the right grip is the port's RB (as the retail tier maps it): a flip caught dark, a handplant
+    // with X; the left grip (LB) and the stick clicks do nothing on the board, as in the port
+    if touch.right_grip >= GRIP_PRESSED {
+        b |= buttons::SLIDE;
     }
     if touch.left_trigger > PRESSED {
         b |= buttons::GRAB_LEFT;
@@ -48,8 +52,6 @@ pub(crate) fn from_touch(touch: &crate::xr::touch::TouchState) -> Input {
     if touch.right_trigger > PRESSED {
         b |= buttons::GRAB_RIGHT;
     }
-    // (the grips do nothing on the board, as in the port: held while holding the controllers they
-    // would otherwise catch flips dark and pin the board in a manual)
     Input {
         steer: touch.left_stick,
         flick: touch.right_stick,
@@ -785,7 +787,6 @@ pub(crate) fn read_desktop(
     for (k, bit) in [
         (KeyCode::Space, buttons::PUSH),
         (KeyCode::AltLeft, buttons::PUSH_MONGO),
-        (KeyCode::KeyF, buttons::FOOT_OFF),
         (KeyCode::ShiftLeft, buttons::BRAKE),
         (KeyCode::KeyG, buttons::OFF_BOARD),
         (KeyCode::KeyQ, buttons::GRAB_LEFT),
@@ -813,13 +814,12 @@ pub(crate) fn read_desktop(
             input.flick = r.to_array();
         }
         for (b, bit) in [
-            // the port's layout: A push, X mongo push, B brake, Y off the board; manuals are on the
-            // right stick part-way (as in the port), so RB is the powerslide (and the revert)
+            // the port's layout: A push, X mongo push, B brake, Y off the board, RB a dark catch /
+            // a handplant with X; manuals are on the right stick part-way (as in the port)
             (GamepadButton::South, buttons::PUSH),
             (GamepadButton::West, buttons::PUSH_MONGO),
             (GamepadButton::East, buttons::BRAKE),
             (GamepadButton::North, buttons::OFF_BOARD),
-            (GamepadButton::LeftThumb, buttons::FOOT_OFF),
             (GamepadButton::RightTrigger, buttons::SLIDE),
             (GamepadButton::LeftTrigger2, buttons::GRAB_LEFT),
             (GamepadButton::RightTrigger2, buttons::GRAB_RIGHT),

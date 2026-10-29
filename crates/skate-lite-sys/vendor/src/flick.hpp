@@ -79,6 +79,13 @@ public:
 	const std::vector<unsigned char> &tokens() const { return tokens_; }
 	// After a fire the stick must come back to the centre before a new gesture starts.
 	bool spent() const { return spent_; }
+	// forget the flick under way; nothing more until the stick goes back to the centre
+	void cancel()
+	{
+		reset();
+		spent_ = true;
+		part_steps_ = part_centre_ = 0;
+	}
 
 private:
 	void push(unsigned char t);
@@ -106,6 +113,7 @@ private:
 	// sweep rather than a flip's flick)
 	float prev_deg_ = NAN;
 	bool kick_sweep_ = false, heel_sweep_ = false;
+	int part_steps_ = 0, part_centre_ = 0; // steps the stick has been held part-way out
 	// a finished gesture that's also the start of a longer one: fired when the stick goes on
 	// somewhere else (or back to the centre) rather than straight away
 	int pending_ = -1;

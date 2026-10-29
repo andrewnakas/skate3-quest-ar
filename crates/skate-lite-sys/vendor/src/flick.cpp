@@ -212,6 +212,9 @@ constexpr float kUpHeelEdge = -18.5f, kUpKickEdge = 38.5f; // degrees from up
 // sweep; reaching the right's zone short of its diagonal, it waits a step to see which)
 constexpr float kKickZone = 84.5f, kHeelZone = -95.5f, kZoneMove = 3.0f, kKickCone = 48.5f;
 
+constexpr int kPartForget = 10; // steps at the centre after it before it's forgotten
+constexpr int kPartHold = 12; // steps part-way out that make it a held manual, not a flick
+
 constexpr int kRevise = 6;
 constexpr int kCrouchHeld = 1; // steps on one rim sector before a sweep: that's the crouch // steps after a trick the stick's carrying on can still change it
 
@@ -326,7 +329,11 @@ Flick::Result Flick::feed(float x, float y)
 				raw_.push_back({(unsigned char)s, 1});
 				push((unsigned char)s);
 				Result again = swept_shove();
-				if (again.trick >= 0 && again.trick != revise_trick_) {
+				// (a kick / heelflip already flicked out to its diagonal stays one, carried on round
+				// or not: as the port)
+				const char *was = revise_trick_ >= 0 ? kTricks[size_t(revise_trick_)].name : "";
+				bool flipped = std::strncmp(was, "Kickflip", 8) == 0 || std::strncmp(was, "Heelflip", 8) == 0;
+				if (again.trick >= 0 && again.trick != revise_trick_ && !flipped) {
 					out.revised = revise_trick_ = again.trick;
 				}
 			}
@@ -343,6 +350,22 @@ Flick::Result Flick::feed(float x, float y)
 			spent_ = false;
 		return out;
 	}
+	// the stick held part-way a while (a manual's depth): let go, it stays the flick's lead-in but the
+	// centre between doesn't count (as the port: out of a manual straight down again is just the crouch,
+	// out of a nose manual down is a nollie)
+	if (r >= kLeadIn && r < kRimIn)
+		part_steps_++;
+	else if (r >= kRimIn)
+		part_steps_ = 0;
+	// (for a moment: let go longer than a flick's expiry, it's forgotten)
+	if (r < kCentreIn && part_steps_ > kPartHold) {
+		if (++part_centre_ > kPartForget) {
+			part_steps_ = part_centre_ = 0;
+			reset();
+		}
+		return out;
+	}
+	part_centre_ = 0;
 	if (r >= (tokens_.empty() ? kLeadIn : kRimIn)) {
 		int s = sector_of(x, y);
 		float deg = std::atan2(x, y) * 180 / kPi;
