@@ -79,6 +79,7 @@ const struct
 	{{TDown, TLeft, TRight}, "Heelflip"},
 	{{TDown, TDownLeft, TUpLeft}, "Heelflip"},
 	{{TDown, TDownLeft, TLeft}, "Frontside Shove-it"},
+	{{TDown, TLeft, TCentre}, "Frontside Shove-it"}, // (flicked straight across to the left and let go: the port's too)
 	{{TDown, TDownLeft, TLeft, TUp}, "Frontside Shove-it"},
 	{{TDown, TDownRight, TRight, TUpRight}, "Pop Shove-it"},
 	{{TDown, TDownRight, TUp}, "Varial Kickflip"},
@@ -205,8 +206,14 @@ int find_trick(const char *name)
 // heelflip. The other sectors stay 45 degrees, centred on their directions.
 constexpr float kUpHeelEdge = -18.5f, kUpKickEdge = 38.5f; // degrees from up
 
+// Swept from the crouch (down) round a side and on along the rim above it, the port reads a
+// shove-it; a flick from the side out to the up diagonal that stops there is the flip (measured:
+// past ~85.5 degrees right or ~94 left of up, the stick moving on at least ~3 degrees a step is a
+// sweep; reaching the right's zone short of its diagonal, it waits a step to see which)
+constexpr float kKickZone = 84.5f, kHeelZone = -95.5f, kZoneMove = 3.0f, kKickCone = 48.5f;
+
 constexpr int kRevise = 6;
-constexpr int kCrouchHeld = 12; // steps on one rim sector before a sweep: that's the crouch // steps after a trick the stick's carrying on can still change it
+constexpr int kCrouchHeld = 1; // steps on one rim sector before a sweep: that's the crouch // steps after a trick the stick's carrying on can still change it
 
 int sector_of(float x, float y)
 {
@@ -224,6 +231,7 @@ int sector_of(float x, float y)
 
 void Flick::reset()
 {
+	kick_sweep_ = heel_sweep_ = false;
 	tokens_.clear();
 	raw_.clear();
 	pending_ = -1;
@@ -337,6 +345,18 @@ Flick::Result Flick::feed(float x, float y)
 	}
 	if (r >= (tokens_.empty() ? kLeadIn : kRimIn)) {
 		int s = sector_of(x, y);
+		float deg = std::atan2(x, y) * 180 / kPi;
+		bool off_crouch = !arc_.empty() && arc_.size() == 1; // (the first move off the crouch: a flick, not a sweep)
+		bool wait = false;
+		if (!std::isnan(prev_deg_) && !off_crouch) {
+			if (prev_deg_ > 0 && prev_deg_ < kKickZone && deg <= prev_deg_ - kZoneMove)
+				kick_sweep_ = true;
+			if (prev_deg_ < 0 && prev_deg_ > kHeelZone && deg >= prev_deg_ + kZoneMove)
+				heel_sweep_ = true;
+		}
+		if (!std::isnan(prev_deg_) && prev_deg_ >= kKickZone && deg > kKickCone && deg < kKickZone)
+			wait = true;
+		prev_deg_ = deg;
 		if (last_sector_ >= 0 && s != last_sector_ && !tokens_.empty() && tokens_.back() == last_sector_ &&
 			tokens_.size() >= 2 && rim_steps_ + 1 < kSweepDwell &&
 			(ring_distance(s, last_sector_) <= 2 || tokens_.size() >= 3)) {
@@ -365,8 +385,17 @@ Flick::Result Flick::feed(float x, float y)
 		out = crouch_arc();
 		if (out.trick < 0)
 			out = swept_shove();
-		if (out.trick < 0)
+		if (out.trick < 0 && !wait)
 			out = resolve(false);
+		// (from the crouch down: swept on above the side it went round, the flip is that side's shove-it)
+		if (out.trick >= 0 && !arc_.empty() && arc_[0].first == TDown) {
+			const char *n = kTricks[size_t(out.trick)].name;
+			bool ollie = std::strcmp(n, "Ollie") == 0;
+			if (kick_sweep_ && (ollie || std::strncmp(n, "Kickflip", 8) == 0))
+				out.trick = find_trick("Pop Shove-it");
+			else if (heel_sweep_ && (ollie || std::strncmp(n, "Heelflip", 8) == 0))
+				out.trick = find_trick("Frontside Shove-it");
+		}
 		// A shove-it's sweep held at its sideways end (instead of let go to the centre): it pops
 		// as the shove-it, and kept there it turns on (held: 360, 540)
 		if (out.trick < 0 && rim_steps_ >= 9) {
@@ -381,6 +410,7 @@ Flick::Result Flick::feed(float x, float y)
 		}
 	} else if (r < kCentreIn) {
 		on_rim_ = false;
+		prev_deg_ = NAN;
 		young_ = false;
 		if (++arc_centre_ >= 3) // let go (not just crossing the middle in a sweep)
 			arc_.clear();
@@ -465,7 +495,7 @@ Flick::Result Flick::crouch_arc()
 		// shove-it (back down from left instead, it's on its way to a tre)
 		bool swept = raw.size() >= 4 && raw[1].first == TDownLeft && raw[1].second <= 3 && raw[2].first == TLeft &&
 			(raw[3].first == TUpLeft || raw[3].first == TUp);
-		if (swept)
+		if (swept && heel_sweep_)
 			name = "Frontside Shove-it";
 	}
 	if (name)

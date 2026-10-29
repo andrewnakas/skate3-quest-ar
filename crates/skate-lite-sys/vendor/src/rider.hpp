@@ -109,7 +109,7 @@ private:
 	bool popped_air_ = false;
 	// where the board was and which way was up last step (the pump: how the surface curves)
 	V3 pump_pos_{0, 0, 0}, pump_up_{0, 1, 0};
-	float pump_store_ = 0, pump_top_y_ = 0, pump_top_v_ = 0; // speed the pump has yet to give, m/s
+	float pump_store_ = 0, pump_top_y_ = 0, pump_top_v_ = 0, pump_curve_ = 0, pump_least_ = 0, pump_press_ = 0; // speed the pump has yet to give, m/s
 	float crouch_look_ = 0; // the crouch as it looks (see step)
 	bool grab_held_through_flip_ = false;
 
@@ -207,6 +207,7 @@ private:
 	bool flip_landable() const { return flip_ < 0 || flip_turns_ - flip_angle_ <= (1 - p[FlipLenience]) * flip_base_turns_ + 1e-4f; }
 	float spin_speed_ = 0, spin_total_ = 0;
 	float air_time_ = 0;
+	bool held_flip_ = false; // the flick held on at its end through a flip
 	float catch_body_ = 0, catch_board_ = 0; // drawn: rad the body / board still to turn to a board-adjusted catch
 	int ollie_ = 0;     // an ollie off flat ground: 1 rising, 2 pulled up short, 3 hanging, 4 pushed down
 	float hang_ = 0, ollie_kick_ = 0, ollie_load_ = 1, ollie_hang_ = 0.25f;
@@ -231,7 +232,8 @@ private:
 	bool vert_air_ = false; // off the top of a steep wall: comes back down into it
 	int settle_trick_ = -1; // a flip landed short: the board finishing its turn
 	float settle_e_ = 1, settle_mult_ = 1;
-	float brake_held_ = 0, brake_up_ = 0, push_gain_ = 0, skid_ = 0, skid_time_ = 0, land_settle_ = 0.8f;
+	float brake_held_ = 0, brake_up_ = 0, push_gain_ = 0, skid_ = 0, skid_time_ = 0, swing_ = 0, swing0_ = 0, swing_loss_ = 0, swing_knock_loss_ = 0, land_settle_ = 0.8f;
+	int swing_knock_ = 0;
 	bool grind_tip_ = false;
 	bool grind_slide_ = false, grind_backwards_ = false;
 	float grind_transfer_ = 0; // a 50-50 near the rail's end, the front truck past it: tipped onto the tail

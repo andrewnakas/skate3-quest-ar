@@ -5,6 +5,7 @@
 // pass through the centre. A trick is an exact token string; the recogniser fires the
 // moment the string read so far equals a trick's.
 #pragma once
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -100,6 +101,11 @@ private:
 	int rim_steps_ = 0; // steps the stick has stayed in one rim sector
 	bool young_ = false; // the newest rim sector is only just reached (may be a sweep passing through)
 	int last_sector_ = -1;
+	// the stick's angle at the last rim sample (degrees from up, clockwise; NAN off the rim), and
+	// whether it has since swept on along the rim inside the zone above either side (a shove-it's
+	// sweep rather than a flip's flick)
+	float prev_deg_ = NAN;
+	bool kick_sweep_ = false, heel_sweep_ = false;
 	// a finished gesture that's also the start of a longer one: fired when the stick goes on
 	// somewhere else (or back to the centre) rather than straight away
 	int pending_ = -1;

@@ -197,6 +197,20 @@ namespace {
 
 constexpr float kPushBite = 0.12f; // s: how long a stroke's foot takes to give its speed
 constexpr float kSkidTime = 0.3f;
+constexpr float kLandCarveWait = 0.2f; // s after landing before the stick carves
+constexpr float kVertKnock = 0.72f; // of the speed kept, a vert air coming back down onto its wall
+// landed off the line (measured on the port): the gap closes at kSwingRate + kSwingEase * gap,
+// the board taking kSwingBoard of it; a knock as it comes down takes kSwingKnock of the gap and
+// kSwingKnockLoss of the speed it'll lose over the first ticks
+constexpr float kSwingRate = 0.576f;  // rad/s
+constexpr float kSwingEase = 5.55f;   // 1/s
+constexpr float kSwingBoard = 0.45f;
+constexpr float kSwingKnock = 0.08f;
+constexpr float kSwingKnockLoss = 0.5f;
+constexpr int kSwingKnockTicks = 2;
+// and the speed that costs: none up to kSkidFree off the line, then evenly more the further across
+constexpr float kSkidFree = 10 * 3.14159265f / 180;
+constexpr float kSkidMost = 0.8f;
 constexpr float kVertLipUp = 0.1f; // the wall's up below this at the lip: a vert air (a 68 deg quarter pipe carries over onto its deck, as the port)
 constexpr float kLipCatch = 0.16f; // m: an air off a lip comes down this close to its coping to grind it
 constexpr float kLipAlongKeep = 0.33f; // of the way along the coping kept, popped off the lip
@@ -238,7 +252,7 @@ constexpr float kPlantWind = 0.605f;
 constexpr float kFootOffHold = 0.1f;
 constexpr double kLineMultiplier = 1.5; // a line's points banked at this (the port's never went higher)
 constexpr float kFingerFlipSpeed = 2.3f;
-constexpr float kSpinUp = 0.07f;      // s into the air before the stick spins it (not off the pop)
+constexpr float kSpinUp = 0.115f;      // s into the air before the stick spins it (not off the pop)
 constexpr float kSpinKick = 3.3f;     // rad/s it's quickly up to; then it gathers speed
 constexpr float kSpinKickEase = 64.0f; // 1/s: how quickly it's up to that
 constexpr float kSpinAccel = 37.0f;   // rad/s^2 on from there to the full rate
@@ -259,10 +273,14 @@ constexpr float kOllieHangTap = 0.16f;  // s longer, a quick flick's
 constexpr float kRailHang = 0.1f;       // s it hangs, popped off a rail
 constexpr float kOllieHangPull = 0.45f; // times gravity, hanging
 constexpr float kOllieDrop = 3.0f;      // times gravity, pushed back down
+constexpr float kHeldFloat = 7.5f;     // m/s^2: a held flip's air off flat, after the pop
 constexpr float kOllieDropTo = 4.2f;    // m/s down, then falling as any air
 constexpr float kPlantDropIn = 6.2f; // m/s down the wall dropping back in off a handplant (the port's fall from ~1.5 m over the coping)
 constexpr float kWallUp = 0.97f;    // the surface's up below this: a ramp's face
+constexpr float kWallrideFace = 0.08f; // the up of a surface steeper than this is a wall (not a ramp)
 constexpr float kWallYaw = 1.335f;   // rad/s the board turns after the way it's going across one
+constexpr float kWallStall = 0.3f; // m/s: slower than this the board stops coming round after its path
+constexpr float kWallYawPerV = 0.8f; // rad/s per m/s
 constexpr float kWallScrub = 6.0f;  // m/s^2 the wheels take off sideways scrubbing across one
 constexpr float kWallDrag = 0.3f;   // of a powerslide's drag, scrubbing across one
 constexpr float kSlideAngle = 1.2f;  // rad (~69 deg) off the rail: a slide, not a grind
@@ -484,12 +502,17 @@ static const float kSteerCurve[][2] = {
 	{0.429f, 0.1097f}, {0.5f, 0.1886f}, {0.571f, 0.2999f}, {0.643f, 0.4194f}, {0.714f, 0.5549f},
 	{0.786f, 0.6056f}, {0.857f, 0.6848f}, {0.929f, 0.7997f}, {1.0f, 0.8650f}};
 
-// How hard an air spin goes for the (pad-read) left stick, measured on the port as how far it
-// spins through an ollie with the stick held at each deflection (less the turn after landing):
-// a little part-way, about half a turn from two thirds out, and the full turn only right out.
+// How hard an air spin goes for the (pad-read) left stick, measured on the port as its spin rate at
+// the height of an ollie with the stick held at each deflection: coming on almost evenly with the
+// stick from a quarter of the way out.
 static const float kSpinCurve[][2] = {
-	{0.0f, 0.0f}, {0.214f, 0.056f}, {0.357f, 0.127f}, {0.5f, 0.399f}, {0.643f, 0.5376f}, {0.786f, 0.597f},
-	{0.929f, 0.602f}, {1.0f, 0.999f}};
+	{0.0f, 0.0f}, {0.214f, 0.105f}, {0.286f, 0.205f}, {0.357f, 0.27f}, {0.429f, 0.345f}, {0.5f, 0.425f},
+	{0.571f, 0.548f}, {0.643f, 0.652f}, {0.714f, 0.724f}, {0.786f, 0.789f}, {0.857f, 0.862f},
+	{0.929f, 0.926f}, {1.0f, 1.0f}};
+// and held on, the spin is fastest a moment into the air, then winds down a little as it goes on
+constexpr float kSpinPeakAt = 0.29f; // s into the air
+constexpr float kSpinFade = 0.53f;   // of the rate per s after that
+constexpr float kSpinFadeMin = 0.58f;
 
 // ---------------------------------------------------------------- board tilt
 
@@ -526,6 +549,7 @@ constexpr float kRampPopFast = 8.5f; // m/s: going this fast up a ramp, only the
 constexpr float kRampPopUp = 0.985f;  // the surface's up under this: popping off a ramp, not the flat
 constexpr float kRampPopInto = 0.9f;
 constexpr float kRampPopIntoLow = 0.6f; // low on a transition: less of it turns up  // of the way on into the wall taken off by a ramp pop
+constexpr float kRampCarry = 5.6f, kRampCarrySpan = 1.0f; // m/s
 constexpr float kRampPopVert = 0.7f;  // a ramp this steep popped off: a vert air
 constexpr float kRampGlideGap = 0.04f; // m clear of the wall, riding up it in the air      // a ramp-face pop's size, of an ollie's
 constexpr float kLipPop = 0.28f;        // a lip pop's (straight up), of an ollie's
@@ -537,6 +561,8 @@ constexpr float kPumpSteep = 0.995f; // (not on the flat)
 constexpr float kPumpGain = 0.62f;  // speed stored per unit of the curve's press (v^2 * bend)
 constexpr float kPumpFallShare = 0.6f; // of the way from its speed to the drop's it pumps by
 constexpr float kPumpRate = 8.0f;   // m/s^2 it comes out at
+constexpr float kPumpLeast = 8.0f;  // m/s^2 stored at the least coming down a curve
+constexpr float kPumpCurveHold = 0.12f; // s
 
 
 // ---------------------------------------------------------------- powerslide
@@ -916,7 +942,10 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 
 	// carve: the turn comes on over a moment (two easing stages: a gentle start, like the port)
 	float ease = 1 - std::exp(-kDt / std::max(p[CarveEase], 0.001f));
-	carve_in_ += (on_curve(kSteerCurve, steer) - carve_in_) * ease;
+	// (just down from an air the stick doesn't carve yet: as the port, measured - held through a
+	// spin's landing, the board comes in line first and the carve starts ~0.2 s on)
+	float carve_steer = since_land_ < kLandCarveWait ? 0.0f : steer;
+	carve_in_ += (on_curve(kSteerCurve, carve_steer) - carve_in_) * ease;
 	carve_ += (carve_in_ - carve_) * ease;
 	// (and less the slower it rolls: as the port, measured held at each speed - ~0.7 at 4.6 m/s, ~0.95 at 8.8)
 	float rate = p[Carve] * carve_ * clampf(speed / 2.5f, 0.35f, 1.0f) * clampf(0.7f + kCarveBySpeed * (speed - 4.6f), 0.55f, 1.0f);
@@ -987,10 +1016,22 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		}
 		float fall = std::sqrt(pump_top_v_ * pump_top_v_ + 2 * p[Gravity] * p[SlopeGravity] * std::max(0.0f, pump_top_y_ - pos_.y));
 		float vp = std::max(v, v + kPumpFallShare * (fall - v));
-		if (bend > kPumpBend && vel_.y < -0.2f && up_.y < kPumpSteep && v > 0.5f)
-			pump_store_ += kPumpGain * vp * vp * bend * kDt;
-		else if (vel_.y > 0.3f)
-			pump_store_ = 0; // (climbing again: nothing carried up the next wall)
+		// (a ramp's curve is cut in flat faces: it's on the curve a moment after crossing an edge)
+		pump_curve_ = bend > kPumpBend ? kPumpCurveHold : std::max(0.0f, pump_curve_ - kDt);
+		bool down_curve = pump_curve_ > 0 && vel_.y < -0.2f && up_.y < kPumpSteep && v > 0.5f;
+		if (down_curve) {
+			float by_press = kPumpGain * vp * vp * bend * kDt;
+			pump_store_ += by_press;
+			pump_press_ += by_press;
+			// slow, it still pumps: as the port, about as much from a low drop (the least it gets
+			// over the way down, not on top)
+			pump_least_ += kPumpLeast * kDt;
+			if (pump_least_ > pump_press_) {
+				pump_store_ += pump_least_ - pump_press_;
+				pump_press_ = pump_least_;
+			}
+		} else if (vel_.y > 0.3f)
+			pump_store_ = pump_least_ = pump_press_ = 0; // (climbing again: nothing carried up the next wall)
 		float give = std::min(pump_store_, kPumpRate * kDt);
 		if (give > 0 && v > 0.5f) {
 			vel_ += unit(going, travel) * give;
@@ -1151,18 +1192,49 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	bool on_wall = up_.y < kWallUp && mode_ == SK8_MODE_RIDE && !reverting && slide_off_ <= 0 && kickturn_ <= 0;
 	if (on_wall) {
 		V3 going = flatten(vel_, up_), travel = fakie_ ? -fwd_ : fwd_;
-		if (len(going) > 0.2f) {
+		// (not near a stall at the top, as the port: it holds the board there and, ridden up
+		// nearly straight, rolls back down fakie instead of coming round)
+		if (len(going) > kWallStall) {
 			float off = std::atan2(dot(cross(travel, going), up_), dot(travel, unit(going, travel)) * len(going));
 			if (std::fabs(off) < kPi / 2) {
-				float turn = std::copysign(std::min(std::fabs(off), kWallYaw * kDt), off);
+				// (as quick as it's going: the slower, the slower it comes round)
+				float yaw_rate = std::min(kWallYaw, kWallYawPerV * len(going));
+				float turn = std::copysign(std::min(std::fabs(off), yaw_rate * kDt), off);
 				fwd_ = unit(flatten(rotate(fwd_, up_, turn), up_), fwd_);
 			}
 		}
 	}
+	// landed off the line: board and motion come together (see land())
+	bool swinging = swing_ != 0 && mode_ == SK8_MODE_RIDE && !reverting;
+	if (swing_ != 0 && !swinging)
+		swing_ = swing_loss_ = 0;
+	if (swinging) {
+		float off = std::fabs(swing_), sign = swing_ > 0 ? 1.0f : -1.0f;
+		float step = (kSwingRate + kSwingEase * off) * kDt;
+		float lose = 0;
+		if (swing_knock_ > 0) { // the knock as it comes down
+			step += kSwingKnock * swing0_ / kSwingKnockTicks;
+			lose = std::min(swing_knock_loss_, swing_loss_);
+			swing_knock_--;
+		}
+		step = std::min(step, off);
+		// (the rest of it evenly over the time the gap takes to close)
+		float left = std::log((kSwingRate + kSwingEase * off) / kSwingRate) / kSwingEase;
+		lose += (swing_loss_ - lose) * std::min(1.0f, kDt / std::max(left, kDt));
+		fwd_ = unit(flatten(rotate(fwd_, up_, sign * step * kSwingBoard), up_), fwd_);
+		vel_ = rotate(vel_, up_, -sign * step * (1 - kSwingBoard));
+		float sp = len(vel_);
+		if (sp > 1e-4f)
+			vel_ = vel_ * (std::max(0.0f, sp - lose) / sp);
+		swing_loss_ = std::max(0.0f, swing_loss_ - lose);
+		swing_ -= sign * step;
+		if (std::fabs(swing_) < 1e-4f)
+			swing_ = swing_loss_ = 0;
+	}
 	// wheels resist sideways motion
 	V3 side = unit(cross(up_, fwd_), V3{1, 0, 0});
 	float lateral = dot(vel_, side);
-	float grip = mode_ == SK8_MODE_SLIDE || slide_off_ > 0
+	float grip = mode_ == SK8_MODE_SLIDE || slide_off_ > 0 || swinging
 		? 0.0f // (sliding, the board's way is the slide's own, above)
 		: 1 - std::exp(-p[Grip] * kDt * (reverting ? 0.08f : 1.0f));
 	float take = lateral * grip;
@@ -1364,7 +1436,10 @@ void Rider::pop(const TrickDef &def, float share, bool off_rail)
 		dir = unit(up_ * (1 - kRampPopLift) + kUp * kRampPopLift, up_);
 		// (low on a transition near an ollie's own pop; high up a steep face a small one)
 		// (and less the faster it's going up the ramp: carried up, there's less to push off)
-		v *= kRampPop + (kRampPopLow - kRampPop) * clampf((up_.y - 0.45f) / 0.5f, 0, 1) *
+		// (fast up it, as the port, measured: the board rides on up the face the way it was going
+		// and the pop adds little - fading in from kRampCarry to kRampCarry + kRampCarrySpan m/s)
+		float carry = clampf((len(vel_) - kRampCarry) / kRampCarrySpan, 0, 1);
+		v *= kRampPop * (1 - carry) + (kRampPopLow - kRampPop) * clampf((up_.y - 0.45f) / 0.5f, 0, 1) *
 			clampf((kRampPopFast - len(vel_)) / 3.0f, 0, 1);
 		ramp_pop_ = true;
 		// the motion on into the wall turns up along it: it goes up beside the wall and comes back
@@ -1374,7 +1449,7 @@ void Rider::pop(const TrickDef &def, float share, bool off_rail)
 			in = unit(in, in);
 			float toward = dot(flatten(vel_, kUp), in);
 			if (toward < 0) // (only up the steep part: low on a transition it carries on up the ramp)
-				vel_ -= in * (toward * (kRampPopIntoLow + (kRampPopInto - kRampPopIntoLow) * clampf((0.9f - up_.y) / 0.2f, 0, 1)));
+				vel_ -= in * (toward * (1 - carry) * (kRampPopIntoLow + (kRampPopInto - kRampPopIntoLow) * clampf((0.9f - up_.y) / 0.2f, 0, 1)));
 			if (up_.y < kRampPopVert)
 			{
 				vert_air_ = true, vert_in_ = in, aim_in = in;
@@ -1570,7 +1645,10 @@ float Rider::air_left() const
 	float hang = hang_, t = air_time_, vy = vel_.y + ollie_kick_, y = pos_.y, g = p[Gravity], left = 0;
 	while (left < 4 && (vy > 0 || y > pop_y_)) {
 		t += kDt;
-		vy -= g * ollie_pull(ollie, hang, t, vy, ollie_load_, ollie_hang_) * kDt;
+		float pull = ollie_pull(ollie, hang, t, vy, ollie_load_, ollie_hang_);
+		if (held_flip_ && ollie >= 3)
+			pull = kHeldFloat / std::max(g, 1.0f);
+		vy -= g * pull * kDt;
 		y += vy * kDt;
 		left += kDt;
 	}
@@ -1654,6 +1732,10 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		ollie_kick_ -= add;
 	}
 	pull = ollie_pull(ollie_, hang_, air_time_, vel_.y, ollie_load_, ollie_hang_);
+	// a flip held at the flick's end floats (as the port, measured: off flat, the climb stops
+	// short and it comes down on an even, lighter pull - time for the turns it's going for)
+	if (held_flip_ && ollie_ >= 3)
+		pull = kHeldFloat / std::max(p[Gravity], 1.0f);
 	if (vert_air_ && vel_.y > 0)
 		pull *= kVertPull; // (a vert air floats a little on the way up: as the port's)
 	vel_ += V3{0, -p[Gravity] * pull, 0} * kDt;
@@ -1686,11 +1768,14 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	// (quickly to about a third of the full rate, then gathering speed; held through the pop, it
 	// waits until the board's up)
 	bool up_yet = varial || air_time_ > kSpinUp;
-	float target = over && up_yet ? -stick * p[SpinRate] : 0.0f;
+	float fade = varial ? 1.0f : std::max(kSpinFadeMin, 1 - kSpinFade * std::max(0.0f, air_time_ - kSpinPeakAt));
+	float target = over && up_yet ? -stick * p[SpinRate] * fade : 0.0f;
 	bool speeding = std::fabs(target) > std::fabs(spin_speed_) || target * spin_speed_ < 0;
 	float ease = 1 - std::exp(-kDt * std::max(p[SpinEase], 0.1f));
 	if (varial) // (a body varial: at once)
 		spin_speed_ += (target - spin_speed_) * ease;
+	else if (!speeding && over && target * spin_speed_ > 0) // held on, winding down with the air
+		spin_speed_ = approach(spin_speed_, target, kSpinAccel * kDt);
 	else if (!speeding) // let go: it carries on round, slowing
 		spin_speed_ += (target - spin_speed_) * (1 - std::exp(-kDt / kSpinCoast));
 	else if (target * spin_speed_ < 0 || std::fabs(spin_speed_) < kSpinKick) {
@@ -1868,6 +1953,8 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 		float r = std::sqrt(last_flick_[0] * last_flick_[0] + last_flick_[1] * last_flick_[1]);
 		bool held = r >= kHeldIn &&
 			(last_flick_[0] * flip_dir_[0] + last_flick_[1] * flip_dir_[1]) / r > 0.87f;
+		// (once held, it floats on down even let go: as the port)
+		held_flip_ = held_flip_ || (held && under_a0_ < 0);
 		if (held && flip_extra_ < 3 && flip_turns_ - flip_angle_ < 0.5f && under_a0_ < 0)
 			extend_flip();
 	}
@@ -2110,8 +2197,8 @@ void Rider::land(const Hit &h)
 		bad = "Body varial off the board";
 	if (!flip_done)
 		bad = "Under-flipped";
-	else if (tilt > p[LandMax] * kDeg)
-		bad = "Bad angle";
+	else if (tilt > p[LandMax] * kDeg && !(n.y < kWallUp && n.y > kWallrideFace && into < p[ImpactBail]))
+		bad = "Bad angle"; // (a ramp's face takes the board as it comes, as the port)
 	else if (side > p[SideMax] * kDeg)
 		bad = "Sideways";
 	else if (into > p[ImpactBail])
@@ -2163,12 +2250,28 @@ void Rider::land(const Hit &h)
 	V3 travel = fakie ? -fwd_ : fwd_;
 	// back down into the transition out of a vert air: the speed carries on along the wall (it
 	// comes down nearly along it), none lost into it
+	// (as the port, measured on its quarter pipe: a knock as it meets the wall, about a quarter of
+	// the speed gone)
 	if (vert_air_ && len(vflat) > 0.1f)
-		vflat = unit(vflat, travel) * len(vel_);
+		vflat = unit(vflat, travel) * len(vel_) * kVertKnock;
 	vert_air_ = false;
-	// landing off the line of travel skids: the further round, the more speed it scrubs off
-	float keep = std::max(0.0f, 1 - std::pow(side / (p[LandSkid] * kDeg), 1.6f));
-	vel_ = travel * len(vflat);
+	// Landing off the line of travel (as the port, measured on spins landed short or long): the
+	// wheels don't snap to the way it's going. The board turns part way back and the motion bends
+	// the rest of the way round to it over a moment, scrubbing speed as it goes - the more across
+	// it came down, the more (a square 180 keeps it all).
+	swing_ = 0;
+	if (len(vflat) > 0.5f && side > 0.5f * kDeg) {
+		V3 path = unit(vflat, travel);
+		swing_ = std::atan2(dot(cross(travel, path), n), dot(travel, path));
+		swing0_ = std::fabs(swing_);
+		float lost = clampf((side - kSkidFree) / std::max(p[LandSkid] * kDeg - kSkidFree, 0.01f), 0.0f, kSkidMost);
+		swing_loss_ = len(vflat) * lost;
+		swing_knock_ = kSwingKnockTicks;
+		swing_knock_loss_ = swing_loss_ * kSwingKnockLoss / kSwingKnockTicks;
+		vel_ = vflat;
+	} else {
+		vel_ = travel * len(vflat);
+	}
 	bool clean = tilt < p[LandClean] * kDeg && side < 20 * kDeg;
 
 	if (vhalves > 0) {
@@ -2179,12 +2282,7 @@ void Rider::land(const Hit &h)
 	}
 	varial_ = 0;
 	int halves = int(std::lround(std::fabs(spin_total_) / kPi));
-	// landing out of a body spin costs speed (each half turn more); the speed lost skids off over
-	// kSkidTime, not all at once
-	if (halves > 0)
-		keep *= std::max(0.5f, 1.0f - 0.15f * float(halves));
-	skid_time_ = kSkidTime;
-	skid_ = len(vel_) * (1 - keep) / kSkidTime;
+	skid_time_ = 0;
 	if (halves > 0) {
 		// named as the port does: on the trick done in the air ("Kickflip 180", "Stiffy 360"), or with
 		// nothing else done, by the way it spun (the left stick left: backside, right: frontside)
@@ -2228,6 +2326,7 @@ void Rider::land(const Hit &h)
 	settle_e_ = flip_ >= 0 ? flip_frac() : 1;
 	settle_mult_ = flip_mult_;
 	flip_ = -1;
+	held_flip_ = false;
 	spin_total_ = spin_speed_ = 0;
 	air_time_ = 0;
 	grab_ = 0;
@@ -2284,7 +2383,8 @@ constexpr float kWallMax = 1.5f;      // longest ride, s
 
 bool Rider::try_wallride(const Hit &h)
 {
-	if (std::fabs(h.normal.y) > 0.4f)
+	// (only a wall: a ramp's face, however steep, is landed on, as the port - it has no wallrides)
+	if (std::fabs(h.normal.y) > kWallrideFace)
 		return false;
 	if (vert_air_) // (coming back down into the ramp it went up: it lands on it, it doesn't ride the wall)
 		return false;
@@ -2581,7 +2681,8 @@ bool Rider::try_grind(World &w)
 		V3 tt = s.tangent;
 		float aa = angle_between(unit(flatten(fwd_, kUp), fwd_), unit(flatten(tt, kUp), tt));
 		aa = std::min(aa, kPi - aa);
-		dark = aa > 55 * kDeg;
+		// (caught dark with RB, it lands upside down on it whichever way it comes: as the port)
+		dark = aa > 55 * kDeg || dark_;
 	}
 	if (!dark && flip_ >= 0 && !flip_landable() && !never_bail()) {
 		bail("Under-flipped");
@@ -2642,8 +2743,12 @@ bool Rider::try_grind(World &w)
 	bool backwards = classify_grind(s.tangent, mode_before == SK8_MODE_AIR ? launch_ : pre_pos);
 	spin_speed_ = 0; // (the board stops turning as it lands on the rail, as the port's)
 	bool slide = grind_slide_;
-	if (dark)
+	if (dark) {
 		grind_kind_ = SK8_GRIND_DARKSLIDE;
+		// (upside down the board's sides swap: the port names the same approach's darkslide the other side)
+		grind_fs_ = !grind_fs_;
+		grind_side_ = grind_fs_ ? "Frontside " : "Backside ";
+	}
 	if (plant) {
 		grind_kind_ = hand || (last_buttons_ & (SK8_GRAB_LEFT | SK8_GRAB_RIGHT)) ? SK8_GRIND_HANDPLANT : SK8_GRIND_FOOTPLANT;
 		plant_hold_ = hand ? SK8_SLIDE : SK8_FOOT_OFF;
