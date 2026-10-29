@@ -74,6 +74,32 @@ fn piece_mesh(geometry: &PieceGeometry) -> Mesh {
     mesh
 }
 
+/// A park dump: "t ax ay az bx by bz cx cy cz" triangles and "r n x y z ..." grind lines.
+fn load_mesh(file: &str) -> Option<(Vec<[Vec3; 3]>, Vec<Vec<Vec3>>)> {
+    let text = std::fs::read_to_string(file).map_err(|e| warn!("SK8_MESH {file}: {e}")).ok()?;
+    let (mut tris, mut rails) = (Vec::new(), Vec::new());
+    for line in text.lines() {
+        let mut it = line.split_whitespace();
+        let kind = it.next();
+        let v: Vec<f32> = it.filter_map(|x| x.parse().ok()).collect();
+        match kind {
+            Some("t") if v.len() >= 9 => tris.push([
+                Vec3::new(v[0], v[1], v[2]),
+                Vec3::new(v[3], v[4], v[5]),
+                Vec3::new(v[6], v[7], v[8]),
+            ]),
+            Some("r") if !v.is_empty() => {
+                let n = v[0] as usize;
+                if v.len() >= 1 + 3 * n {
+                    rails.push((0..n).map(|i| Vec3::new(v[1 + 3 * i], v[2 + 3 * i], v[3 + 3 * i])).collect());
+                }
+            }
+            _ => {}
+        }
+    }
+    (!tris.is_empty()).then_some((tris, rails))
+}
+
 pub(crate) fn desktop_world(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -120,6 +146,46 @@ pub(crate) fn desktop_world(
         })),
         Transform::default(),
     ));
+    // `SK8_MESH=<file>` (desktop only): ride a park dumped from your own copy of the game (the
+    // skatecore `mapdump` tool's text, "t" triangles and "r" grind lines) instead of the test park,
+    // to compare side by side with the original on the same ramps. Nothing of it is bundled.
+    if let Some((tris, mesh_rails)) = std::env::var("SK8_MESH").ok().and_then(|f| load_mesh(&f)) {
+        for t in &tris {
+            let up = (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero().y.abs();
+            grid.add(*t, if up > 0.98 { SURFACE_GROUND } else { SURFACE_WOOD });
+        }
+        let positions: Vec<[f32; 3]> = tris.iter().flat_map(|t| t.map(|p| p.to_array())).collect();
+        let mut mesh = Mesh::new(
+            bevy::mesh::PrimitiveTopology::TriangleList,
+            bevy::asset::RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.compute_flat_normals();
+        commands.spawn((
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb(0.93, 0.62, 0.5), // coral, as the park pieces
+                double_sided: true,
+                cull_mode: None,
+                ..default()
+            })),
+            Transform::default(),
+        ));
+        sim.set_collision(grid, &mesh_rails);
+        // `SK8_SPAWN=x,y,z,facing` (radians): where to start (the original's spawn, for the same line)
+        let spawn: Vec<f32> = std::env::var("SK8_SPAWN")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|v| v.trim().parse().ok())
+            .collect();
+        if spawn.len() == 4 {
+            sim.place(Vec3::new(spawn[0], spawn[1], spawn[2]), spawn[3]);
+        } else {
+            sim.place(Vec3::ZERO, 0.0);
+        }
+        info!("SK8 desktop park from SK8_MESH: {} triangles, {} rails", sim.collision_triangles, mesh_rails.len());
+        return;
+    }
     let mut rails = Vec::new();
     for (kind, size, at, turn) in PARK {
         let piece = Piece { kind, size };
