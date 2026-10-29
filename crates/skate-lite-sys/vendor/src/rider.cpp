@@ -277,7 +277,7 @@ constexpr float kOllieRiseFull = 0.35f, kOllieRiseTap = 0.78f; // the climb's pu
 constexpr float kOllieBrake = 3.4f;     // times gravity, pulled up short
 constexpr float kOllieHangVy = 0.4f;    // m/s up when it's hanging
 constexpr float kOllieHang = 0.25f;     // s it hangs at the top
-constexpr float kOllieHangTap = 0.135f;  // s longer, a quick flick's
+constexpr float kOllieHangTap = 0.1355f;  // s longer, a quick flick's
 constexpr float kRailHang = 0.1f;       // s it hangs, popped off a rail
 constexpr float kOllieHangPull = 0.45f; // times gravity, hanging
 constexpr float kOllieDrop = 3.0f;      // times gravity, pushed back down
