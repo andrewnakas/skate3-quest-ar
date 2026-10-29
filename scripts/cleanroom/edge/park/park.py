@@ -19,18 +19,19 @@ def shift(script, by):
 def port(script, ticks):
     p = os.path.join(D, "kp.txt"); open(p, "w").write(script)
     return list(csv.DictReader(io.StringIO(subprocess.run([S3, PACK, MAP, p, str(ticks)], capture_output=True, text=True).stdout)))
-def sk8_from(prow, script, ticks, params=()):
+def sk8_from(prow, script, ticks, params=(), extra=()):
     vx, vz = (float(prow[k]) for k in ("deck_vx", "deck_vz"))
     p = os.path.join(D, "kps.txt"); open(p, "w").write(shift(script, 1) or "\n")
     cmd = [SK, p, str(ticks + 1), "--mesh", MESH, "--speed", f"{math.hypot(vx, vz):.4f}",
            "--pos", f"{float(prow['deck_px']):.4f},{float(prow['deck_py']):.4f},{float(prow['deck_pz']):.4f}",
            "--facing", f"{math.atan2(vx, vz):.5f}"]
     for kv in params: cmd += ["--param", kv]
+    cmd += list(extra)
     return list(csv.DictReader(io.StringIO(subprocess.run(cmd, capture_output=True, text=True).stdout)))[1:]
-def run(extra="", ticks=150, params=(), pre=""):
+def run(extra="", ticks=150, params=(), pre="", sk_extra=()):
     """The port down the line (plus `pre`, absolute ticks) and `extra` from T0; sk8 from the port's T0 state."""
     pr = port(LINE + pre + (shift(extra, T0) if extra.strip() else ""), T0 + ticks)
-    return pr[T0:], sk8_from(pr[T0], extra, ticks, params)
+    return pr[T0:], sk8_from(pr[T0], extra, ticks, params, sk_extra)
 def sp(r): return math.hypot(float(r["deck_vx"]), float(r["deck_vz"]))
 # the second line: up the same quarter pipe at an angle, slower (T2)
 LINE2 = "30 41 0 0 0 0 0x1000\n70 81 0 0 0 0 0x1000\n90 170 -1 0 0 0 0\n180 191 0 0 0 0 0x1000\n215 226 0 0 0 0 0x1000\n"
