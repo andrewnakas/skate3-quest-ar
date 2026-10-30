@@ -41,6 +41,8 @@ def gen(rng, ticks=150):
 SYN = [("360flip", "treflip"), ("fspopshuvit", "fsshoveit"), ("popshuvit", "shoveit"), ("frontside", "fs"),
        ("backside", "bs"), ("shuvit", "shoveit"), ("pop", "")]
 def canon(n):
+    n = re.sub(r"\s+(180|360|540|720)$", "", n)
+    n = re.sub(r"^(Fakie|Switch|Nollie)\s+(?=\S)", lambda m: "" if m.group(1) != "Nollie" else "Nollie ", n)
     w = sorted(x for x in re.split(r"[^a-z0-9]+", n.lower()) if x)
     s = "".join(w)
     for a, b in SYN: s = s.replace(a, b)
