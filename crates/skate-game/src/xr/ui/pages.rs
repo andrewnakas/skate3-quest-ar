@@ -9,6 +9,7 @@ use crate::xr::ar_settings::{ArMode, ArSettings};
 use crate::xr::build::{BuildMode, MAX_PARK_SCALE, MAX_PIECE_SCALE, MAX_SCALE, MIN_PARK_SCALE, MIN_PIECE_SCALE, MIN_SCALE, PlacedPieces};
 use crate::xr::link::{ArWorld, SkaterLink, TeleportSkater};
 use crate::xr::planes::{RoomMesh, SceneCapture, SceneShapes};
+use crate::xr::scan::ParkScan;
 use crate::xr::rig::Rig;
 use crate::xr::spawn::ray_triangle;
 use bevy::prelude::*;
@@ -245,13 +246,27 @@ fn ar_widgets(world: &World) -> Vec<Widget> {
         let busy = world.resource::<SceneCapture>().busy();
         w.push(Widget::button("scan", if busy { "Room scan running..." } else { "Set up a room scan (Space Setup)" }));
     }
+    let scan = world.resource::<ParkScan>();
+    w.push(Widget::toggle(
+        "scan_capture",
+        "Scan the park (walk all of it, looking at the ground and ramps)",
+        s.scan_capture,
+    ));
+    if scan.depth_frames > 0 {
+        w.push(Widget::info(format!(
+            "Park scan: {:.0} m2 of ground from {} depth frames",
+            scan.depth_area_m2(),
+            scan.depth_frames
+        )));
+        w.push(Widget::button("scan_clear", "Forget the park scan"));
+    }
     w.extend([
         Widget::toggle("floor_collide", "Floor: skate on it", s.floor.collide),
         Widget::toggle("floor_show", "Floor: show it", s.floor.show),
         Widget::toggle("planes_collide", "Walls, tables, furniture: skate on them", s.planes.collide),
         Widget::toggle("planes_show", "Walls, tables, furniture: show them", s.planes.show),
-        Widget::toggle("mesh_collide", "3D room mesh: skate on it", s.mesh.collide),
-        Widget::toggle("mesh_show", "3D room mesh: show it", s.mesh.show),
+        Widget::toggle("mesh_collide", "3D scan (park scan, room mesh): skate on it", s.mesh.collide),
+        Widget::toggle("mesh_show", "3D scan: show it", s.mesh.show),
         Widget::button("show_all", "Show everything"),
         Widget::button("hide_all", "Hide everything (still skated)"),
     ]);
@@ -274,6 +289,10 @@ fn ar_act(widget: &str, world: &mut World) -> Outcome {
             world.resource_mut::<SceneCapture>().requested = true;
             return Outcome::Say("Starting Space Setup".into());
         }
+        "scan_clear" => {
+            world.resource_mut::<ParkScan>().clear_depth();
+            return Outcome::Say("Park scan cleared".into());
+        }
         "intro" => {
             edit(world, |s| s.onboarding_done = false);
             world.resource_mut::<XrUi>().request = Some(INTRO);
@@ -292,6 +311,7 @@ fn ar_act(widget: &str, world: &mut World) -> Outcome {
         "show_all" => s.set_all_shown(true),
         "hide_all" => s.set_all_shown(false),
         "hud" => s.hud = !s.hud,
+        "scan_capture" => s.scan_capture = !s.scan_capture,
         _ => {}
     });
     Outcome::Stay
@@ -561,6 +581,13 @@ pub(crate) fn put_skater_ahead(world: &mut World) {
         .all_triangles()
         .filter(|[a, b, c]| (*b - *a).cross(*c - *a).normalize_or_zero().y.abs() > 0.6)
         .filter_map(|[a, b, c]| ray_triangle(from, Vec3::NEG_Y, a, b, c))
+        .chain(
+            world
+                .resource::<ArWorld>()
+                .cast_terrain(from, Vec3::NEG_Y * root.scale.y * 4.0)
+                .filter(|(_, n)| n.y.abs() > 0.6)
+                .map(|(f, _)| f * root.scale.y * 4.0),
+        )
         .min_by(f32::total_cmp)
         .map(|t| from - Vec3::Y * t);
     let floor_y = world.resource::<ArSettings>().floor_offset;

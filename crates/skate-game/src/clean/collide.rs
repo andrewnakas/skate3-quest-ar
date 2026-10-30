@@ -1,8 +1,12 @@
 //! Triangle collision for the clean-room engine: a uniform grid over the
-//! ground plane, answering the engine's segment casts.
+//! ground plane, answering the engine's segment casts. Scanned terrain
+//! (`sk8_terrain`) rides alongside in its own fine collider, answering with
+//! smooth normals so the board follows a scanned transition's curve instead
+//! of its facets.
 use bevy::math::Vec3;
 use bevy::platform::collections::HashMap;
 use skate_lite_sys::{Collision, Hit};
+use std::sync::Arc;
 
 /// Grid cell edge, game metres.
 const CELL: f32 = 2.0;
@@ -25,6 +29,7 @@ struct Tri {
 pub(crate) struct Grid {
     tris: Vec<Tri>,
     cells: HashMap<(i32, i32), Vec<u32>>,
+    terrain: Option<Arc<sk8_terrain::Collider>>,
 }
 
 fn cell(v: f32) -> i32 {
@@ -60,8 +65,13 @@ impl Grid {
         self.add([a, c, d], surface);
     }
 
+    /// Scanned terrain (ground surface), ridden with smooth normals.
+    pub(crate) fn set_terrain(&mut self, terrain: Option<Arc<sk8_terrain::Collider>>) {
+        self.terrain = terrain.filter(|t| !t.is_empty());
+    }
+
     pub(crate) fn len(&self) -> usize {
-        self.tris.len()
+        self.tris.len() + self.terrain.as_ref().map_or(0, |t| t.len())
     }
 
     /// Nearest hit on the segment `origin .. origin + delta`; the normal faces the origin.
@@ -80,6 +90,11 @@ impl Grid {
                         best = Some((f, n, t.surface));
                     }
                 }
+            }
+        }
+        if let Some((f, n)) = self.terrain.as_ref().and_then(|t| t.cast(origin, delta)) {
+            if best.is_none_or(|(b, _, _)| f < b) {
+                best = Some((f, n, SURFACE_GROUND));
             }
         }
         best

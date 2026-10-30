@@ -161,6 +161,12 @@ fn raycast(world: &ArWorld, origin: Vec3, direction: Vec3) -> Option<Vec3> {
             }
             ray_triangle(origin, direction, a, b, c)
         })
+        .chain(
+            world
+                .cast_terrain(origin, direction * MAX_RANGE)
+                .filter(|(_, n)| n.y.abs() >= MIN_UP)
+                .map(|(f, _)| f * MAX_RANGE),
+        )
         .filter(|&t| t <= MAX_RANGE)
         .min_by(f32::total_cmp)
         .map(|t| origin + direction * t)

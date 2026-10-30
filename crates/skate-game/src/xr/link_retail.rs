@@ -34,7 +34,13 @@ fn apply_world(
     }
     *applied = Some(world.revision);
     let quads = world.room_quads.iter().map(|q| q.map(v)).collect();
-    let triangles = world.room_triangles.iter().map(|t| t.map(v)).collect();
+    let triangles = world
+        .room_triangles
+        .iter()
+        .copied()
+        .chain(world.terrain.iter().flat_map(|t| t.collider.triangles()))
+        .map(|t| t.map(v))
+        .collect();
     let edges = world.room_edges.iter().map(|&(a, b)| (v(a), v(b))).collect();
     let pieces = world
         .pieces

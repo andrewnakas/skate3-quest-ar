@@ -57,6 +57,7 @@ half = { version = "=2.7.1", optional = true }
 serde_json.workspace = true
 serde.workspace = true
 skate-mods = { path = "../skate-mods", optional = true }
+sk8-terrain = { path = "../sk8-terrain" }
 skate-lite-sys = { path = "../skate-lite-sys" }
 
 skate-vehicles = { path = "../skate-vehicles", optional = true }
@@ -72,6 +73,11 @@ image = { version = "=0.25.10", optional = true, default-features = false, featu
 # Game pads on Quest come through the (vendored, patched) winit Android backend: xr::actions.
 [target.'cfg(target_os = "android")'.dependencies]
 winit = { version = "0.30.13", default-features = false }
+# The park scan reads the headset's depth images back on the GPU queue wgpu already owns
+# (xr::depth).
+ash = "=0.38.0"
+wgpu = { version = "=27.0.1", default-features = false }
+wgpu-hal = { version = "=27.0.4", features = ["vulkan"] }
 
 [dev-dependencies]
 naga = { version = "=27.0.3", features = ["wgsl-in"] }

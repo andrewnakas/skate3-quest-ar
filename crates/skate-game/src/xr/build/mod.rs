@@ -711,6 +711,7 @@ fn drop_after_park_scale(
     let top = world
         .all_triangles()
         .filter_map(|[a, b, c]| ray_triangle(from, Vec3::NEG_Y, a, b, c))
+        .chain(world.cast_terrain(from, Vec3::NEG_Y * DROP_SEARCH * 2.0).map(|(f, _)| f * DROP_SEARCH * 2.0))
         .min_by(f32::total_cmp)
         .map_or(point, |t| from - Vec3::Y * t);
     teleport.write(TeleportSkater {
@@ -747,6 +748,9 @@ fn cast(
     };
     for [a, b, c] in world.room() {
         consider(ray_triangle(origin, direction, a, b, c), (b - a).cross(c - a), None);
+    }
+    if let Some((f, n)) = world.cast_terrain(origin, direction * MAX_RANGE) {
+        consider(Some(f * MAX_RANGE), n, None);
     }
     for item in placed.items.iter().filter(|p| Some(p.id) != placed.dragging) {
         let at = item.world_transform(root, placed.park_scale);

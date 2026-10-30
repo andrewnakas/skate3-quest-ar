@@ -20,7 +20,9 @@ use crate::skate_audio::clean::SurfaceHints;
 use super::link::{ArWorld, PieceSurfaces, SkaterLink};
 use super::ar_settings::ArSettings;
 use super::rig::Rig;
+use super::scan::{ParkScan, FLOOR_UNDER_TERRAIN_M};
 use bevy::prelude::*;
+use std::sync::Arc;
 
 const MIN_HALF_M: f32 = 0.01;
 const UPWARD_MIN_COS: f32 = 0.9;
@@ -50,9 +52,10 @@ fn rebuild_collision(
     mesh_planes: Res<MeshPlanes>,
     link: Res<SkaterLink>,
     settings: Res<ArSettings>,
+    scan: Res<ParkScan>,
     mut world: ResMut<ArWorld>,
     hints: Option<ResMut<SurfaceHints>>,
-    mut built: Local<Option<((Vec3, f32), u64, u64, u64)>>,
+    mut built: Local<Option<((Vec3, f32), u64, u64, u64, usize)>>,
 ) {
     let (Some(anchor), Some(root)) = (rig.anchor, rig.root_transform()) else {
         return;
@@ -61,7 +64,11 @@ fn rebuild_collision(
     // anchor, a different set of entities or an edited layout is worth a
     // rebuild. A piece being dragged rebuilds when it is dropped, and grind
     // state refers to the current rails, so a grind finishes first.
-    let key = (anchor, revision.0, placed.revision, settings.revision);
+    // The smoothed scan, once built for this anchor and these settings, replaces the raw room
+    // mesh.
+    let terrain = scan.terrain_for(anchor, revision.0, settings.revision).filter(|_| settings.mesh.collide);
+    let terrain_id = terrain.as_ref().map_or(0, |t| Arc::as_ptr(t) as usize);
+    let key = (anchor, revision.0, placed.revision, settings.revision, terrain_id);
     if shapes.0.is_empty() || *built == Some(key) || placed.busy() || link.grinding {
         return;
     }
@@ -70,12 +77,24 @@ fn rebuild_collision(
     // Flat surfaces found in the room mesh ride like Scene planes, with
     // grindable edges, and replace the lumpy triangles under them.
     let all_shapes: Vec<Shape> = shapes.0.iter().copied().chain(mesh_planes.solid_shapes()).collect();
-    let ridden: Vec<Shape> = all_shapes.iter().copied().filter(|s| layer_on(s, &settings)).collect();
+    let ridden: Vec<Shape> = all_shapes
+        .iter()
+        .copied()
+        .filter(|s| layer_on(s, &settings))
+        .map(|s| match s {
+            Shape::Plane { pose, half, floor: true } if terrain.is_some() => Shape::Plane {
+                pose: pose.with_translation(pose.translation - Vec3::Y * FLOOR_UNDER_TERRAIN_M),
+                half,
+                floor: true,
+            },
+            s => s,
+        })
+        .collect();
     let (quads, real_edges) = real_geometry(&ridden);
     let triangles = room
         .0
         .as_ref()
-        .filter(|_| settings.mesh.collide)
+        .filter(|_| settings.mesh.collide && terrain.is_none())
         .map(|mesh| mesh_triangles(mesh, &all_shapes))
         .unwrap_or_default();
     let to_world = |p: Vec3| root.transform_point(p);
@@ -85,6 +104,8 @@ fn rebuild_collision(
     let room_edges: Vec<(Vec3, Vec3)> = real_edges.iter().map(|&(a, b)| (to_world(a), to_world(b))).collect();
     // Table and furniture tops are grindable ledges.
     let mut rails: Vec<Vec<Vec3>> = room_edges.iter().map(|&(a, b)| vec![a, b]).collect();
+    // Ledge tops and copings found in the scan.
+    rails.extend(terrain.iter().flat_map(|t| t.rails.iter().cloned()));
     let mut pieces = Vec::with_capacity(placed.items.len());
     let mut sound = SurfaceHints::default();
     for item in &placed.items {
@@ -128,12 +149,14 @@ fn rebuild_collision(
         room_edges,
         pieces,
         rails,
+        terrain: terrain.clone(),
     };
     if let Some(mut hints) = hints {
         *hints = sound;
     }
     info!(
-        "AR collision: {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} of {} shapes ({} mesh planes), {piece_count} placed pieces, {rail_count} grind rails, layers floor={} planes={} mesh={} ({:.1} ms)",
+        "AR collision: {} scanned-terrain triangles, {quad_count} Scene faces + {triangle_count} room-mesh triangles from {} of {} shapes ({} mesh planes), {piece_count} placed pieces, {rail_count} grind rails, layers floor={} planes={} mesh={} ({:.1} ms)",
+        terrain.as_ref().map_or(0, |t| t.collider.len()),
         ridden.len(),
         shapes.0.len(),
         all_shapes.len() - shapes.0.len(),

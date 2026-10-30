@@ -4837,6 +4837,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sk8-terrain"
+version = "0.1.0"
+dependencies = [
+ "glam 0.30.10",
+ "skate-lite-sys",
+]
+
+[[package]]
 name = "skate-audio-core"
 version = "0.1.0"
 dependencies = [
@@ -4868,6 +4876,7 @@ dependencies = [
 name = "skate-game"
 version = "0.1.0"
 dependencies = [
+ "ash",
  "bevy",
  "bevy_mod_openxr",
  "bevy_mod_xr",
@@ -4879,6 +4888,7 @@ dependencies = [
  "openxr",
  "serde",
  "serde_json",
+ "sk8-terrain",
  "skate-audio-core",
  "skate-audio-formats",
  "skate-core",
@@ -4889,6 +4899,7 @@ dependencies = [
  "skate-vehicles",
  "tracing-log",
  "wgpu",
+ "wgpu-hal",
  "winit",
  "zip",
 ]

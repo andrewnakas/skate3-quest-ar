@@ -16,6 +16,8 @@
 //! (floors, planes, 3D mesh) is drawn when its "show" is on. Build mode also
 //! draws the floor and plane layers being skated. A pointing at nothing in
 //! build mode shows or hides every layer. Drawing never changes collision.
+use super::scan::ParkScan;
+use std::sync::Arc;
 use super::actions::LatestTouch;
 use super::ar_settings::ArSettings;
 use super::build::{BuildMode, PlacedPieces};
@@ -65,12 +67,13 @@ struct OverlayRoot;
 #[derive(Component)]
 struct RoomMeshView;
 
-/// Which overlay layers are drawn now: (floors, planes, 3D mesh).
+/// Which overlay layers are drawn now: (floors, planes, 3D mesh). The scan is drawn while the
+/// park is being scanned, so the player sees what is covered.
 fn drawn(settings: &ArSettings, building: bool) -> (bool, bool, bool) {
     (
         settings.floor.show || (building && settings.floor.collide),
         settings.planes.show || (building && settings.planes.collide),
-        settings.mesh.show,
+        settings.mesh.show || settings.scan_capture,
     )
 }
 
@@ -324,23 +327,69 @@ fn rebuild_overlay(
 
 /// The scanned room mesh, one flat-tinted triangle per face (blue for floor,
 /// grey for walls, orange for everything else), in tracking space.
+/// The 3D layer: the smoothed scan once there is one (what is actually ridden), else Space
+/// Setup's raw room mesh.
+#[allow(clippy::too_many_arguments)]
 fn rebuild_mesh_view(
     room: Res<RoomMesh>,
+    scan: Res<ParkScan>,
     settings: Res<ArSettings>,
     mode: Res<BuildMode>,
     mut overlay: ResMut<PlaneOverlay>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut view: Query<&mut Mesh3d, With<RoomMeshView>>,
+    time: Res<Time<Real>>,
+    mut last: Local<f32>,
 ) {
     let (_, _, show) = drawn(&settings, mode.active);
-    let Some(mesh) = room.0.as_ref().filter(|_| show) else { return };
-    let key = mesh.vertices.as_ptr() as usize;
+    if !show {
+        return;
+    }
+    // A growing scan is a big mesh to upload: redraw it every few seconds, not every rebuild.
+    let now = time.elapsed_secs();
+    if overlay.mesh_built.is_some() && now - *last < 4.0 {
+        return;
+    }
+    let terrain = scan.built.as_ref().map(|(_, t)| t);
+    let key = match (terrain, room.0.as_ref()) {
+        (Some(t), _) => Arc::as_ptr(t) as usize,
+        (None, Some(mesh)) => mesh.vertices.as_ptr() as usize,
+        (None, None) => return,
+    };
     if overlay.mesh_built == Some(key) {
         return;
     }
     let Ok(mut handle) = view.single_mut() else { return };
     overlay.mesh_built = Some(key);
-    handle.0 = meshes.add(room_mesh_view(mesh));
+    *last = now;
+    handle.0 = meshes.add(match (terrain, room.0.as_ref()) {
+        (Some(t), _) => terrain_view(&t.tracking),
+        (None, Some(mesh)) => room_mesh_view(mesh),
+        (None, None) => unreachable!(),
+    });
+}
+
+/// The smoothed scan, coloured by slope: flat ground blue, ramps and transitions orange, walls
+/// grey.
+fn terrain_view(mesh: &sk8_terrain::TerrainMesh) -> Mesh {
+    let mut positions = Vec::with_capacity(mesh.triangles.len() * 3);
+    let mut colors = Vec::with_capacity(mesh.triangles.len() * 3);
+    for (t, n) in mesh.triangles.iter().zip(&mesh.normals) {
+        for (p, n) in t.iter().zip(n) {
+            let color = if n.y > 0.97 {
+                [0.25, 0.6, 1.0, 0.16]
+            } else if n.y > 0.35 {
+                [1.0, 0.6, 0.2, 0.3]
+            } else {
+                [0.8, 0.82, 0.88, 0.14]
+            };
+            positions.push(p.to_array());
+            colors.push(color);
+        }
+    }
+    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
 }
 
 pub(crate) fn room_mesh_view(mesh: &super::planes::LocatedMesh) -> Mesh {
@@ -374,6 +423,7 @@ fn place_overlay(
     settings: Res<ArSettings>,
     overlay: Res<PlaneOverlay>,
     room: Res<RoomMesh>,
+    scan: Res<ParkScan>,
     mut root: Query<(&mut Transform, &mut Visibility), (With<OverlayRoot>, Without<RoomMeshView>)>,
     mut view: Query<(&mut Transform, &mut Visibility), (With<RoomMeshView>, Without<OverlayRoot>)>,
 ) {
@@ -397,6 +447,7 @@ fn place_overlay(
         place(&mut transform, &mut visibility, overlay.built.is_some() && (floors || planes));
     }
     if let Ok((mut transform, mut visibility)) = view.single_mut() {
-        place(&mut transform, &mut visibility, mesh && room.0.is_some() && overlay.mesh_built.is_some());
+        let any = room.0.is_some() || scan.built.is_some();
+        place(&mut transform, &mut visibility, mesh && any && overlay.mesh_built.is_some());
     }
 }

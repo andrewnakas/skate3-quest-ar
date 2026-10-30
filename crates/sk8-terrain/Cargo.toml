@@ -1,0 +1,13 @@
+[package]
+name = "sk8-terrain"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-only"
+description = "Scanned skatepark terrain: fuses depth samples into a 2.5D heightfield, smooths it so transitions ride clean, and meshes it with smooth normals"
+
+[dependencies]
+glam = "=0.30.10"
+
+[dev-dependencies]
+skate-lite-sys = { path = "../skate-lite-sys" }

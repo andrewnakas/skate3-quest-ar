@@ -174,6 +174,7 @@ pub(crate) fn apply_ar_world(
     for t in world.room() {
         grid.add(t, SURFACE_GROUND);
     }
+    grid.set_terrain(world.terrain.as_ref().map(|t| t.collider.clone()));
     for p in &world.pieces {
         for &q in &p.quads {
             grid.add_quad(q, SURFACE_WOOD);

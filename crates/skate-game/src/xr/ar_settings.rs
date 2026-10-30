@@ -61,6 +61,10 @@ pub(crate) struct ArSettings {
     /// Free-roam floor height above STAGE y = 0, real metres.
     #[serde(default)]
     pub floor_offset: f32,
+    /// Fusing the headset's depth into the park scan while the player walks (not saved: a
+    /// fresh start never scans by itself).
+    #[serde(skip)]
+    pub scan_capture: bool,
     /// The trick / points readout in the corner while skating.
     #[serde(default = "yes")]
     pub hud: bool,
@@ -78,6 +82,7 @@ impl Default for ArSettings {
             planes: Layer::default(),
             mesh: Layer::default(),
             floor_offset: 0.0,
+            scan_capture: false,
             hud: true,
             revision: 0,
         }

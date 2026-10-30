@@ -21,6 +21,10 @@ pub(crate) mod panel;
 mod plane_view;
 pub(crate) mod planes;
 mod real_world;
+pub(crate) mod scan;
+#[cfg(target_os = "android")]
+mod depth;
+mod depth_project;
 pub(crate) mod rig;
 mod spatial_audio;
 pub(crate) mod spawn;
@@ -58,6 +62,8 @@ pub(crate) fn plugins(base: PluginGroupBuilder) -> PluginGroupBuilder {
     raw.fb_scene = true;
     // The room's triangle mesh, for objects Scene has no plane or box for.
     raw.meta_spatial_entity_mesh = true;
+    // The headset's depth, fused into the park scan while walking a skatepark (`depth`).
+    raw.meta_environment_depth = true;
     // In-app "rescan the room" (runs Space Setup).
     raw.fb_scene_capture = true;
     // Probe only: Oculus 206 didn't offer it. bevy_mod_openxr drops any
@@ -122,6 +128,7 @@ impl Plugin for XrPlugin {
                 planes::PlanesPlugin,
                 rig::RigPlugin(self.options),
                 real_world::RealWorldPlugin,
+                scan::ScanPlugin,
                 spawn::SpawnPlugin,
                 build::BuildPlugin,
                 plane_view::PlaneViewPlugin,

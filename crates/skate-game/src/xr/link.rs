@@ -7,7 +7,9 @@
 //! an adapter that applies the world, honours teleports and fills the link;
 //! the faithful port's is [`RetailLinkPlugin`] here, the clean one lives in
 //! `crate::clean::sim`.
+use super::scan::TerrainWorld;
 use bevy::prelude::*;
+use std::sync::Arc;
 
 #[cfg(feature = "retail")]
 #[path = "link_retail.rs"]
@@ -34,12 +36,19 @@ pub(crate) struct ArWorld {
     /// Grindable furniture edges.
     pub room_edges: Vec<(Vec3, Vec3)>,
     pub pieces: Vec<PieceSurfaces>,
-    /// Every grind rail: furniture edges and the pieces' rails and copings.
+    /// Every grind rail: furniture edges, scanned ledges and copings, and the pieces' rails.
     pub rails: Vec<Vec<Vec3>>,
+    /// The scanned ground, smoothed (`scan`): ridden in place of the raw room mesh.
+    pub terrain: Option<Arc<TerrainWorld>>,
 }
 
 impl ArWorld {
-    /// The real room as triangles (no pieces).
+    /// The nearest scanned-terrain hit on `origin .. origin + delta`: (fraction, normal).
+    pub(crate) fn cast_terrain(&self, origin: Vec3, delta: Vec3) -> Option<(f32, Vec3)> {
+        self.terrain.as_ref()?.collider.cast_far(origin, delta)
+    }
+
+    /// The real room as triangles (no pieces, no scanned terrain: see [`Self::cast_terrain`]).
     pub(crate) fn room(&self) -> impl Iterator<Item = [Vec3; 3]> + '_ {
         self.room_quads
             .iter()
