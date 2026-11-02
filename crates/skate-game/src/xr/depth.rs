@@ -41,7 +41,16 @@ const LOOKING_DOWN: f32 = -0.15;
 const RETRY_S: f32 = 3.0;
 
 pub(super) fn build(app: &mut App) {
-    app.add_systems(Last, capture.run_if(openxr_session_running));
+    let shared = Depth::default();
+    app.insert_resource(shared.clone()).add_systems(Last, capture.run_if(openxr_session_running));
+    // The image itself can only be asked for between the frame's xrBeginFrame and xrEndFrame
+    // (else ERROR_CALL_ORDER_INVALID), which happen in the render world.
+    app.sub_app_mut(bevy::render::RenderApp).insert_resource(shared).add_systems(
+        bevy::render::Render,
+        acquire
+            .after(bevy_mod_xr::session::XrRenderSystems::PreRender)
+            .before(bevy_mod_xr::session::XrRenderSystems::PostRender),
+    );
 }
 
 struct Gpu {
@@ -72,7 +81,10 @@ struct DepthState {
     /// Not before this time: the provider failed to come up, try again then.
     retry_at: f32,
     in_flight: Option<InFlight>,
-    last: f32,
+    /// When the render world last asked for an image, and what the runtime said if it failed.
+    last: Option<std::time::Instant>,
+    acquire_err: Option<sys::Result>,
+    acquire_fn: Option<sys::pfn::AcquireEnvironmentDepthImageMETA>,
     /// Floor hits with the rows top-down and bottom-up, until one wins.
     votes: [u32; 2],
     frames_voted: u32,
@@ -84,8 +96,8 @@ struct DepthState {
 unsafe impl Send for DepthState {}
 unsafe impl Sync for DepthState {}
 
-#[derive(Resource, Default)]
-struct Depth(DepthState);
+#[derive(Resource, Default, Clone)]
+struct Depth(std::sync::Arc<std::sync::Mutex<DepthState>>);
 
 fn set_state(world: &mut World, state: impl Into<String>) {
     let state = state.into();
@@ -107,8 +119,10 @@ fn capture(world: &mut World) {
     };
     let enabled = world.get_resource::<OxrEnabledExtensions>().is_some_and(|e| e.meta_environment_depth);
     let now = world.resource::<Time<Real>>().elapsed_secs();
-    world.resource_scope(|world, mut depth: Mut<Depth>| {
-        let st = &mut depth.0;
+    let shared = world.resource::<Depth>().0.clone();
+    (move |world: &mut World| {
+        let Ok(mut guard) = shared.lock() else { return };
+        let st = &mut *guard;
         if !enabled {
             set_state(world, "not available (this headset's runtime has no depth API)");
             return;
@@ -234,42 +248,59 @@ fn capture(world: &mut World) {
             unsafe { gpu.device.reset_fences(&[gpu.fence]).ok() };
             st.in_flight = None;
         }
-        if now - st.last < PERIOD_S {
-            return;
-        }
-        let Some(frame) = world.get_resource::<OxrFrameState>() else { return };
-        let space = sys::Space::from_raw(world.resource::<XrPrimaryReferenceSpace>().as_raw());
-        let info = sys::EnvironmentDepthImageAcquireInfoMETA {
-            ty: sys::EnvironmentDepthImageAcquireInfoMETA::TYPE,
-            next: ptr::null(),
-            space,
-            display_time: frame.predicted_display_time,
-        };
-        let mut image = sys::EnvironmentDepthImageMETA {
-            ty: sys::EnvironmentDepthImageMETA::TYPE,
-            next: ptr::null(),
-            swapchain_index: 0,
-            near_z: 0.0,
-            far_z: 0.0,
-            views: [view_out(), view_out()],
-        };
-        let r = unsafe { (fp.acquire_environment_depth_image)(provider.provider, &info, &mut image) };
-        if r != sys::Result::SUCCESS {
+        st.acquire_fn = Some(fp.acquire_environment_depth_image);
+        if let Some(r) = st.acquire_err.take() {
             // Not ready yet (it takes a moment after starting), or lost tracking.
             if world.resource::<ScanStatus>().frames == 0 {
                 set_state(world, format!("waiting for the first depth image ({r:?})"));
             }
-            return;
         }
-        st.last = now;
-        let Some(&src) = provider.images.get(image.swapchain_index as usize) else { return };
-        if let Err(e) = unsafe { copy(gpu, src, provider.size) } {
-            warn!("DEPTH copy failed: {e:?}");
-            st.failed = true;
-            return;
-        }
-        st.in_flight = Some(InFlight { near: image.near_z, far: image.far_z, view: image.views[0] });
-    });
+    })(world);
+}
+
+/// Render world, inside the frame: a few times a second, ask for the latest depth image and copy
+/// it to the host buffer (exclusive: nothing else submits to the queue meanwhile).
+fn acquire(world: &mut World) {
+    let Some(shared) = world.get_resource::<Depth>().map(|d| d.0.clone()) else { return };
+    let Ok(mut guard) = shared.lock() else { return };
+    let st = &mut *guard;
+    let (Some(provider), Some(gpu), Some(acquire_fn)) = (st.provider.as_ref(), st.gpu.as_ref(), st.acquire_fn) else { return };
+    if !provider.running || st.failed || st.in_flight.is_some() {
+        return;
+    }
+    if st.last.is_some_and(|t| t.elapsed().as_secs_f32() < PERIOD_S) {
+        return;
+    }
+    let (Some(frame), Some(space)) = (world.get_resource::<OxrFrameState>(), world.get_resource::<XrPrimaryReferenceSpace>()) else {
+        return;
+    };
+    let info = sys::EnvironmentDepthImageAcquireInfoMETA {
+        ty: sys::EnvironmentDepthImageAcquireInfoMETA::TYPE,
+        next: ptr::null(),
+        space: sys::Space::from_raw(space.as_raw()),
+        display_time: frame.predicted_display_time,
+    };
+    let mut image = sys::EnvironmentDepthImageMETA {
+        ty: sys::EnvironmentDepthImageMETA::TYPE,
+        next: ptr::null(),
+        swapchain_index: 0,
+        near_z: 0.0,
+        far_z: 0.0,
+        views: [view_out(), view_out()],
+    };
+    st.last = Some(std::time::Instant::now());
+    let r = unsafe { acquire_fn(provider.provider, &info, &mut image) };
+    if r != sys::Result::SUCCESS {
+        st.acquire_err = Some(r);
+        return;
+    }
+    let Some(&src) = provider.images.get(image.swapchain_index as usize) else { return };
+    if let Err(e) = unsafe { copy(gpu, src, provider.size) } {
+        warn!("DEPTH copy failed: {e:?}");
+        st.failed = true;
+        return;
+    }
+    st.in_flight = Some(InFlight { near: image.near_z, far: image.far_z, view: image.views[0] });
 }
 
 fn view_out() -> sys::EnvironmentDepthImageViewMETA {

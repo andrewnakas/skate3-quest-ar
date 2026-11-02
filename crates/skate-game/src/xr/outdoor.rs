@@ -16,7 +16,7 @@ use bevy_mod_xr::spaces::XrPrimaryReferenceSpace;
 use openxr::sys;
 
 /// `XR_META_boundary_visibility`.
-pub(crate) const BOUNDARY_VISIBILITY_EXT: &[u8] = b"XR_META_boundary_visibility";
+pub(crate) const BOUNDARY_VISIBILITY_EXT: &[u8] = b"XR_META_boundary_visibility\0"; // (nul-terminated, as the runtime reports names)
 /// `XrBoundaryVisibilityMETA`: 1 not suppressed, 2 suppressed.
 const BOUNDARY_NOT_SUPPRESSED: i32 = 1;
 const BOUNDARY_SUPPRESSED: i32 = 2;

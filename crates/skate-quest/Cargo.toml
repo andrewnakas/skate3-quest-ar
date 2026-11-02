@@ -75,6 +75,9 @@ required = false
 name = "com.oculus.permission.HAND_TRACKING"
 
 [[package.metadata.android.uses_permission]]
+name = "com.oculus.permission.BOUNDARY_VISIBILITY"
+
+[[package.metadata.android.uses_permission]]
 name = "com.oculus.permission.USE_SCENE"
 
 # The in-app Skate 3 import reads the player's bundle from Download/Skate3

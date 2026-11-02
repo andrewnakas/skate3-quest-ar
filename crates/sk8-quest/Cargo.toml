@@ -70,6 +70,9 @@ required = false
 name = "com.oculus.permission.HAND_TRACKING"
 
 [[package.metadata.android.uses_permission]]
+name = "com.oculus.permission.BOUNDARY_VISIBILITY"
+
+[[package.metadata.android.uses_permission]]
 name = "com.oculus.permission.USE_SCENE"
 
 [[package.metadata.android.uses_permission]]
