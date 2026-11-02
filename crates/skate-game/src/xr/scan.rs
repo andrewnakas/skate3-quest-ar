@@ -40,6 +40,27 @@ pub(crate) struct TerrainWorld {
 /// What a built terrain was built from: rig anchor, scan revision, Scene revision, settings.
 pub(crate) type BuildKey = ((Vec3, f32), u64, u64, u64);
 
+/// What the depth capture is doing, for the AR settings page (and the log).
+#[derive(Resource, Default)]
+pub(crate) struct ScanStatus {
+    /// Short state: "off", "starting", "running", or why not.
+    pub state: String,
+    /// Depth frames taken / unprojected points kept from them, this session.
+    pub frames: u64,
+    pub points: u64,
+    /// Points thrown out by the range / height filters (a wrong floor or row order shows here).
+    pub rejected: u64,
+}
+
+impl ScanStatus {
+    pub(crate) fn line(&self) -> String {
+        if self.state.is_empty() {
+            return "Depth: not started (needs the headset's depth sensor)".into();
+        }
+        format!("Depth: {} - {} frames, {} points kept, {} thrown out", self.state, self.frames, self.points, self.rejected)
+    }
+}
+
 #[derive(Resource)]
 pub(crate) struct ParkScan {
     /// The walked depth scan.
@@ -99,6 +120,7 @@ pub(crate) struct ScanPlugin;
 impl Plugin for ScanPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ParkScan>()
+            .init_resource::<ScanStatus>()
             .add_systems(Update, (grid_room_mesh, rebuild_terrain).chain());
         #[cfg(target_os = "android")]
         super::depth::build(app);

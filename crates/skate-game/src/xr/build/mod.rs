@@ -378,6 +378,7 @@ fn build_controls(
     mut state: ResMut<BuildState>,
     mut placed: ResMut<PlacedPieces>,
     mut capture: ResMut<SceneCapture>,
+    mut settings: ResMut<crate::xr::ar_settings::ArSettings>,
 ) {
     if !mode.active {
         state.ray = None;
@@ -424,8 +425,15 @@ fn build_controls(
         info!("BUILD selected {:?}", PieceKind::ALL[state.selected]);
     }
     if pressed(now.y, previous.y) {
-        capture.requested = true;
-        info!("BUILD rescan requested");
+        // (outdoors: the park scan on / off; in a room: Space Setup)
+        if settings.free_roam() {
+            settings.scan_capture = !settings.scan_capture;
+            settings.revision += 1;
+            info!("BUILD park scan {}", if settings.scan_capture { "on" } else { "off" });
+        } else {
+            capture.requested = true;
+            info!("BUILD rescan requested");
+        }
     }
     if pressed(now.undo, previous.undo) {
         if placed.undo() {

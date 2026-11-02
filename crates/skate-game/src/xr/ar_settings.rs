@@ -13,11 +13,12 @@ const FILE: &str = "ar-settings.json";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum ArMode {
-    /// The Space Setup room: floor, walls, furniture and the room mesh.
-    #[default]
+    /// Indoors, in a Space Setup room: floor, walls, furniture and the room mesh.
     Room,
-    /// Outside or anywhere unscanned: no room scan, just an endless floor
-    /// under the skater (plus placed pieces).
+    /// Outdoors (a skatepark): no room, no boundary, no Space Setup. The headset's depth is
+    /// fused into the park scan while walking round (on by default), over an endless floor,
+    /// plus placed pieces. (Saved as "FreeRoam".)
+    #[default]
     FreeRoam,
 }
 
@@ -61,8 +62,8 @@ pub(crate) struct ArSettings {
     /// Free-roam floor height above STAGE y = 0, real metres.
     #[serde(default)]
     pub floor_offset: f32,
-    /// Fusing the headset's depth into the park scan while the player walks (not saved: a
-    /// fresh start never scans by itself).
+    /// Fusing the headset's depth into the park scan while the player walks (not saved: it
+    /// starts on in outdoor park mode, off in a room).
     #[serde(skip)]
     pub scan_capture: bool,
     /// The trick / points readout in the corner while skating.
@@ -77,12 +78,12 @@ impl Default for ArSettings {
         Self {
             version: 1,
             onboarding_done: false,
-            mode: ArMode::Room,
+            mode: ArMode::FreeRoam,
             floor: Layer::default(),
             planes: Layer::default(),
             mesh: Layer::default(),
             floor_offset: 0.0,
-            scan_capture: false,
+            scan_capture: true,
             hud: true,
             revision: 0,
         }
@@ -90,6 +91,7 @@ impl Default for ArSettings {
 }
 
 impl ArSettings {
+    /// Outdoor park mode (no room, no boundary): see [`ArMode::FreeRoam`].
     pub(crate) fn free_roam(&self) -> bool {
         self.mode == ArMode::FreeRoam
     }
@@ -121,7 +123,8 @@ fn load(files: Res<XrFiles>, mut settings: ResMut<ArSettings>) {
     let Ok(bytes) = std::fs::read(&path) else { return };
     match serde_json::from_slice::<ArSettings>(&bytes) {
         Ok(loaded) => {
-            *settings = ArSettings { revision: 1, ..loaded };
+            let scan_capture = loaded.mode == ArMode::FreeRoam;
+            *settings = ArSettings { revision: 1, scan_capture, ..loaded };
             info!("AR settings: loaded {} ({:?})", path.display(), settings.mode);
         }
         Err(e) => warn!("AR settings: ignoring {}: {e}", path.display()),

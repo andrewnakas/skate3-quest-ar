@@ -56,6 +56,12 @@ version = 1
 name = "com.oculus.feature.PASSTHROUGH"
 required = true
 
+# Outdoor park mode: runs with no Guardian boundary set up (the boundary is hidden while passthrough
+# shows the real park; see skate-game xr/outdoor.rs)
+[[package.metadata.android.uses_feature]]
+name = "com.oculus.feature.BOUNDARYLESS_APP"
+required = true
+
 [[package.metadata.android.uses_feature]]
 name = "oculus.software.handtracking"
 required = false

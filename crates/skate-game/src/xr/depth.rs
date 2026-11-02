@@ -13,7 +13,7 @@
 //! down wins.
 use super::ar_settings::ArSettings;
 use super::depth_project::{pose_position, pose_rotation, unproject, InFlight};
-use super::scan::{ParkScan, MAX_PARK_HEIGHT_M};
+use super::scan::{ParkScan, ScanStatus, MAX_PARK_HEIGHT_M};
 use ash::vk;
 use ash::vk::Handle as _;
 use bevy::prelude::*;
@@ -32,8 +32,13 @@ use std::ptr;
 const PERIOD_S: f32 = 0.2;
 /// Points this close to the head (round it, along the ground) are the player's own body.
 const BODY_RADIUS_M: f32 = 0.45;
-/// Frames used to decide which way up the rows go.
-const ORIENTATION_FRAMES: u32 = 12;
+/// Frames (looking down at the ground) used to decide which way up the rows go.
+const ORIENTATION_FRAMES: u32 = 6;
+/// Looking down at least this much (the view's forward y) counts for that.
+const LOOKING_DOWN: f32 = -0.15;
+/// Seconds before trying again after the provider couldn't be made or started (the Scene
+/// permission may still be on its way).
+const RETRY_S: f32 = 3.0;
 
 pub(super) fn build(app: &mut App) {
     app.add_systems(Last, capture.run_if(openxr_session_running));
@@ -64,6 +69,8 @@ struct DepthState {
     provider: Option<Provider>,
     gpu: Option<Gpu>,
     failed: bool,
+    /// Not before this time: the provider failed to come up, try again then.
+    retry_at: f32,
     in_flight: Option<InFlight>,
     last: f32,
     /// Floor hits with the rows top-down and bottom-up, until one wins.
@@ -80,6 +87,15 @@ unsafe impl Sync for DepthState {}
 #[derive(Resource, Default)]
 struct Depth(DepthState);
 
+fn set_state(world: &mut World, state: impl Into<String>) {
+    let state = state.into();
+    let mut status = world.resource_mut::<ScanStatus>();
+    if status.state != state {
+        info!("DEPTH state: {state}");
+        status.state = state;
+    }
+}
+
 fn capture(world: &mut World) {
     if !world.contains_resource::<Depth>() {
         world.init_resource::<Depth>();
@@ -93,7 +109,11 @@ fn capture(world: &mut World) {
     let now = world.resource::<Time<Real>>().elapsed_secs();
     world.resource_scope(|world, mut depth: Mut<Depth>| {
         let st = &mut depth.0;
-        if st.failed || !enabled {
+        if !enabled {
+            set_state(world, "not available (this headset's runtime has no depth API)");
+            return;
+        }
+        if st.failed {
             return;
         }
         let instance = world.resource::<OxrInstance>().clone();
@@ -105,14 +125,19 @@ fn capture(world: &mut World) {
                 p.running = false;
                 info!("DEPTH provider stopped");
             }
+            set_state(world, "off (turn on Scan the park)");
+            return;
+        }
+        if now < st.retry_at {
             return;
         }
         if st.provider.is_none() {
             match create_provider(fp, session.as_raw()) {
                 Ok(p) => st.provider = Some(p),
                 Err(e) => {
-                    warn!("DEPTH no depth provider ({e}): the park scan can't capture");
-                    st.failed = true;
+                    warn!("DEPTH no depth provider ({e}): trying again");
+                    st.retry_at = now + RETRY_S;
+                    set_state(world, format!("can't start ({e}); allow Spatial data in the app's permissions"));
                     return;
                 }
             }
@@ -124,6 +149,7 @@ fn capture(world: &mut World) {
                 Err(e) => {
                     warn!("DEPTH no readback ({e}): the park scan can't capture");
                     st.failed = true;
+                    set_state(world, format!("failed ({e})"));
                     return;
                 }
             }
@@ -132,8 +158,9 @@ fn capture(world: &mut World) {
         if !provider.running {
             let r = unsafe { (fp.start_environment_depth_provider)(provider.provider) };
             if r.into_raw() < 0 {
-                warn!("DEPTH start failed: {r:?}");
-                st.failed = true;
+                warn!("DEPTH start failed: {r:?}: trying again");
+                st.retry_at = now + RETRY_S;
+                set_state(world, format!("can't start ({r:?}); trying again"));
                 return;
             }
             provider.running = true;
@@ -152,6 +179,7 @@ fn capture(world: &mut World) {
             let vote = st.flip.is_none();
             let mut scan = world.resource_mut::<ParkScan>();
             let mut rays = 0u64;
+            let mut rejected = 0u64;
             for flip in [false, true] {
                 if st.flip.is_some_and(|f| f != flip) {
                     continue;
@@ -159,7 +187,7 @@ fn capture(world: &mut World) {
                 let points = unproject(pixels, (w, h), job, flip);
                 if vote {
                     // Looking down at the ground, the right way up puts the near points on it.
-                    let down = (pose_rotation(job.view.pose) * Vec3::NEG_Z).y < -0.3;
+                    let down = (pose_rotation(job.view.pose) * Vec3::NEG_Z).y < LOOKING_DOWN;
                     if down {
                         st.votes[flip as usize] += points.iter().filter(|p| (p.y - floor_y).abs() < 0.12).count() as u32;
                     }
@@ -168,6 +196,7 @@ fn capture(world: &mut World) {
                 for p in points {
                     let ground = Vec2::new(p.x - eye.x, p.z - eye.z).length();
                     if ground < BODY_RADIUS_M || p.y > floor_y + MAX_PARK_HEIGHT_M || p.y < floor_y - 2.0 {
+                        rejected += 1;
                         continue;
                     }
                     let range = p.distance(eye);
@@ -176,17 +205,31 @@ fn capture(world: &mut World) {
                     rays += 1;
                 }
             }
+            drop(scan);
+            let voting = vote;
             if vote {
-                let down = (pose_rotation(job.view.pose) * Vec3::NEG_Z).y < -0.3;
+                let down = (pose_rotation(job.view.pose) * Vec3::NEG_Z).y < LOOKING_DOWN;
                 st.frames_voted += down as u32;
                 if st.frames_voted >= ORIENTATION_FRAMES {
                     st.flip = Some(st.votes[1] > st.votes[0]);
                     info!("DEPTH rows {} (floor votes {:?})", if st.votes[1] > st.votes[0] { "bottom-up" } else { "top-down" }, st.votes);
                 }
             } else if rays > 0 {
+                let mut scan = world.resource_mut::<ParkScan>();
                 scan.depth_frames += 1;
                 scan.depth_rays += rays;
                 scan.revision += 1;
+            }
+            {
+                let mut status = world.resource_mut::<ScanStatus>();
+                status.frames += 1;
+                status.points += rays;
+                status.rejected += rejected;
+            }
+            if voting && st.flip.is_none() {
+                set_state(world, "starting: look down at the ground for a moment");
+            } else {
+                set_state(world, if rays > 0 { "scanning" } else { "scanning (nothing in range: look at the ground within 4 m)" });
             }
             unsafe { gpu.device.reset_fences(&[gpu.fence]).ok() };
             st.in_flight = None;
@@ -213,6 +256,9 @@ fn capture(world: &mut World) {
         let r = unsafe { (fp.acquire_environment_depth_image)(provider.provider, &info, &mut image) };
         if r != sys::Result::SUCCESS {
             // Not ready yet (it takes a moment after starting), or lost tracking.
+            if world.resource::<ScanStatus>().frames == 0 {
+                set_state(world, format!("waiting for the first depth image ({r:?})"));
+            }
             return;
         }
         st.last = now;

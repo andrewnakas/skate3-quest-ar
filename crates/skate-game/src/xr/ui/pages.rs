@@ -9,7 +9,7 @@ use crate::xr::ar_settings::{ArMode, ArSettings};
 use crate::xr::build::{BuildMode, MAX_PARK_SCALE, MAX_PIECE_SCALE, MAX_SCALE, MIN_PARK_SCALE, MIN_PIECE_SCALE, MIN_SCALE, PlacedPieces};
 use crate::xr::link::{ArWorld, SkaterLink, TeleportSkater};
 use crate::xr::planes::{RoomMesh, SceneCapture, SceneShapes};
-use crate::xr::scan::ParkScan;
+use crate::xr::scan::{ParkScan, ScanStatus};
 use crate::xr::rig::Rig;
 use crate::xr::spawn::ray_triangle;
 use bevy::prelude::*;
@@ -67,8 +67,8 @@ impl UiProvider for Shared {
             INTRO => UiPage::new(
                 "Welcome to SK8 AR",
                 vec![
-                    Widget::info("Skate a little skater around your real room: floors, tables,"),
-                    Widget::info("couches, and ramps and rails you build yourself."),
+                    Widget::info("Skate a little skater around a real skatepark (or your room):"),
+                    Widget::info("its ramps and ledges, and ramps and rails you build yourself."),
                     Widget::info(tier_line(retail)),
                     Widget::info(""),
                     Widget::info("Point with the right controller and pull the trigger,"),
@@ -82,19 +82,21 @@ impl UiProvider for Shared {
             INTRO_MODE => UiPage::new(
                 "Where are you skating?",
                 vec![
-                    Widget::button("room", "In this room (use my room scan)"),
-                    Widget::button("room_scan", "In this room: scan it now"),
-                    Widget::button("free", "Outside / free roam (no scan, an endless floor)"),
+                    Widget::button("free", "Outdoors at a skatepark (no room, no boundary)"),
+                    Widget::button("room", "Indoors in this room (use my room scan)"),
+                    Widget::button("room_scan", "Indoors: scan this room now"),
                     Widget::info(""),
-                    Widget::info("A room scan lets the skater ride your floor, walls, tables"),
-                    Widget::info("and furniture. Free roam is one flat floor at your feet."),
+                    Widget::info("Outdoors the headset scans the park as you walk round it:"),
+                    Widget::info("look at the ground, ramps and ledges and they become rideable."),
+                    Widget::info("Indoors uses your Space Setup room: floor, walls, furniture."),
                     Widget::info("Change it any time in AR settings."),
                 ],
             ),
             INTRO_FLOOR => {
                 let mut w = Vec::new();
                 if settings.free_roam() {
-                    w.push(Widget::info("Free roam: one flat floor at your feet, as far as you go."));
+                    w.push(Widget::info("Outdoor park: walk round looking at the ground and ramps;"));
+                    w.push(Widget::info("what the headset sees becomes rideable (AR settings shows how much)."));
                     w.extend(floor_widgets(settings));
                 } else {
                     w.push(Widget::info("The skater rides your floor, tables and furniture."));
@@ -148,7 +150,10 @@ impl UiProvider for Shared {
             }
             (INTRO_MODE, "room" | "room_scan" | "free") => {
                 let mode = if widget == "free" { ArMode::FreeRoam } else { ArMode::Room };
-                edit(world, |s| s.mode = mode);
+                edit(world, |s| {
+                    s.mode = mode;
+                    s.scan_capture = mode == ArMode::FreeRoam;
+                });
                 if widget == "room_scan" {
                     world.resource_mut::<SceneCapture>().requested = true;
                 }
@@ -203,7 +208,7 @@ fn tier_line(retail: bool) -> &'static str {
 fn mode_line(settings: &ArSettings) -> &'static str {
     match settings.mode {
         ArMode::Room => "AR: your room scan.",
-        ArMode::FreeRoam => "AR: free roam (one endless floor).",
+        ArMode::FreeRoam => "AR: outdoor park (scanned as you walk, no room needed).",
     }
 }
 
@@ -238,7 +243,7 @@ fn ar_widgets(world: &World) -> Vec<Widget> {
     let s = world.resource::<ArSettings>();
     let mut w = vec![
         Widget::info(mode_line(s)),
-        Widget::toggle("free_roam", "Free roam (outside: no room scan, endless floor)", s.free_roam()),
+        Widget::toggle("free_roam", "Outdoor park (no room, no boundary; scans as you walk)", s.free_roam()),
     ];
     if s.free_roam() {
         w.extend(floor_widgets(s));
@@ -252,6 +257,8 @@ fn ar_widgets(world: &World) -> Vec<Widget> {
         "Scan the park (walk all of it, looking at the ground and ramps)",
         s.scan_capture,
     ));
+    // (what the depth sensor is doing, so a scan that isn't growing says why)
+    w.push(Widget::info(world.resource::<ScanStatus>().line()));
     if scan.depth_frames > 0 {
         w.push(Widget::info(format!(
             "Park scan: {:.0} m2 of ground from {} depth frames",
@@ -301,7 +308,10 @@ fn ar_act(widget: &str, world: &mut World) -> Outcome {
         _ => {}
     }
     edit(world, |s| match widget {
-        "free_roam" => s.mode = if s.free_roam() { ArMode::Room } else { ArMode::FreeRoam },
+        "free_roam" => {
+            s.mode = if s.free_roam() { ArMode::Room } else { ArMode::FreeRoam };
+            s.scan_capture = s.free_roam(); // (outdoors it scans; in a room the Space Setup scan is used)
+        }
         "floor_collide" => s.floor.collide = !s.floor.collide,
         "floor_show" => s.floor.show = !s.floor.show,
         "planes_collide" => s.planes.collide = !s.planes.collide,
@@ -470,7 +480,7 @@ const BUILD_HELP: [(&str, &str); 15] = [
     ("Right stick click", "copy the piece pointed at"),
     ("Left trigger", "undo"),
     ("Left stick click", "drop a starter park"),
-    ("Y", "rescan the room"),
+    ("Y", "outdoors: park scan on / off; indoors: rescan the room"),
     ("Hold X", "clear every piece"),
 ];
 

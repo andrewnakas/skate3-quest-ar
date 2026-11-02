@@ -17,6 +17,7 @@ pub(crate) mod ar_settings;
 pub(crate) mod build;
 pub(crate) mod link;
 mod mesh_planes;
+mod outdoor;
 pub(crate) mod panel;
 mod plane_view;
 pub(crate) mod planes;
@@ -66,6 +67,10 @@ pub(crate) fn plugins(base: PluginGroupBuilder) -> PluginGroupBuilder {
     raw.meta_environment_depth = true;
     // In-app "rescan the room" (runs Space Setup).
     raw.fb_scene_capture = true;
+    // Outdoor park mode: a floor-level space with no room or boundary, and the boundary hidden
+    // (`outdoor`).
+    raw.ext_local_floor = true;
+    raw.other.push(outdoor::BOUNDARY_VISIBILITY_EXT.to_vec());
     // Probe only: Oculus 206 didn't offer it. bevy_mod_openxr drops any
     // extension the runtime lacks; `log_scene_extensions` reports the result.
     raw.ext_plane_detection = true;
@@ -129,6 +134,7 @@ impl Plugin for XrPlugin {
                 rig::RigPlugin(self.options),
                 real_world::RealWorldPlugin,
                 scan::ScanPlugin,
+                outdoor::OutdoorPlugin,
                 spawn::SpawnPlugin,
                 build::BuildPlugin,
                 plane_view::PlaneViewPlugin,
