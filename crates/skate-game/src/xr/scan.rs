@@ -94,10 +94,12 @@ impl Default for ParkScan {
 }
 
 impl ParkScan {
-    /// The latest built terrain, if it was built for this rig anchor, Scene and settings (the
-    /// walked scan may have grown since: that rebuild follows).
-    pub(crate) fn terrain_for(&self, anchor: (Vec3, f32), scene: u64, settings: u64) -> Option<Arc<TerrainWorld>> {
-        self.built.as_ref().filter(|(k, _)| (k.0, k.2, k.3) == (anchor, scene, settings)).map(|(_, t)| t.clone())
+    /// The latest built terrain, if it was built for this rig anchor. It stays ridden until the
+    /// next build replaces it: a newer scan, Scene or settings only rebuild it (the old one was
+    /// dropped at once before, and outdoors the floor following the skater changes the Scene every
+    /// few metres, so the skater spent much of the time on the flat floor with no terrain).
+    pub(crate) fn terrain_for(&self, anchor: (Vec3, f32), _scene: u64, _settings: u64) -> Option<Arc<TerrainWorld>> {
+        self.built.as_ref().filter(|(k, _)| k.0 == anchor).map(|(_, t)| t.clone())
     }
 
     /// Forget the walked scan (the room mesh stays).
@@ -112,6 +114,33 @@ impl ParkScan {
     pub(crate) fn depth_area_m2(&self) -> f32 {
         let cell = self.depth.config.cell;
         self.depth.heightmap(BuildConfig::default().min_weight).filled() as f32 * cell * cell
+    }
+}
+
+/// The latest built scan, written to the app's files directory.
+const SCAN_DUMP: &str = "park-scan.txt";
+
+fn write_dump(path: &std::path::Path, mesh: &sk8_terrain::TerrainMesh, rails: &[Vec<Vec3>]) {
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(mesh.triangles.len() * 90);
+    for t in &mesh.triangles {
+        let _ = writeln!(
+            out,
+            "t {:.4} {:.4} {:.4} {:.4} {:.4} {:.4} {:.4} {:.4} {:.4}",
+            t[0].x, t[0].y, t[0].z, t[1].x, t[1].y, t[1].z, t[2].x, t[2].y, t[2].z
+        );
+    }
+    for r in rails {
+        let _ = write!(out, "r {}", r.len());
+        for p in r {
+            let _ = write!(out, " {:.4} {:.4} {:.4}", p.x, p.y, p.z);
+        }
+        out.push('\n');
+    }
+    // (written beside and renamed over: a pull never sees half a file)
+    let tmp = path.with_extension("tmp");
+    if std::fs::write(&tmp, out).is_ok() {
+        let _ = std::fs::rename(&tmp, path);
     }
 }
 
@@ -171,6 +200,7 @@ fn rebuild_terrain(
     revision: Res<super::planes::SceneRevision>,
     settings: Res<ArSettings>,
     time: Res<Time<Real>>,
+    files: Option<Res<super::XrFiles>>,
 ) {
     if let Some((key, task)) = scan.job.as_mut() {
         let key = *key;
@@ -181,7 +211,10 @@ fn rebuild_terrain(
         return;
     }
     let (Some(anchor), Some(root)) = (rig.anchor, rig.root_transform()) else { return };
-    let key: BuildKey = (anchor, scan.revision, revision.0, settings.revision);
+    // (outdoors the Scene only changes as the endless floor follows the skater, which the terrain
+    // doesn't depend on: leave it out so that doesn't force a rebuild every few metres)
+    let scene = if settings.free_roam() { 0 } else { revision.0 };
+    let key: BuildKey = (anchor, scan.revision, scene, settings.revision);
     if scan.built.as_ref().is_some_and(|(k, _)| *k == key) {
         return;
     }
@@ -208,6 +241,10 @@ fn rebuild_terrain(
         .copied()
         .filter(|s| layer_on(s, &settings) && !matches!(s, Shape::Plane { floor: true, .. }))
         .collect();
+    // (each built scan is also written out, real metres in tracking space, in the skatecore
+    // mapdump text format, so it can be pulled off the headset and ridden on the desktop:
+    // `SK8_MESH=park-scan.txt skate3rust --clean`)
+    let dump = files.map(|f| f.0.join(SCAN_DUMP));
     let task = AsyncComputeTaskPool::get().spawn(async move {
         let started = std::time::Instant::now();
         let raw = match room {
@@ -227,6 +264,9 @@ fn rebuild_terrain(
         let rails: Vec<Vec<Vec3>> =
             terrain.rails.iter().map(|r| r.iter().map(|&p| root.transform_point(p)).collect()).collect();
         let collider = Arc::new(Collider::new(&world_mesh));
+        if let Some(path) = dump {
+            write_dump(&path, &terrain.mesh, &terrain.rails);
+        }
         info!(
             "SCAN terrain: {} cells, {} triangles, {} edge rails ({:.0} ms)",
             terrain.surface.map.filled(),
