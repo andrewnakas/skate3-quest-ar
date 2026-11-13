@@ -44,6 +44,7 @@ private:
 	void pop(const TrickDef &def, float share, bool off_rail = false);
 	void flick_dir(float out[2]) const;
 	bool opposite_flick(const float dir[2]) const;
+	bool under_stick() const;
 	void start_underflip();
 	std::string grind_full_name() const;
 	void best(float &record, float value, const char *what, float scale);
@@ -79,6 +80,8 @@ private:
 	bool switch_ = false;
 	float fakie_time_ = 0, switching_ = -1, switch_len_ = 1;
 	bool push_queued_ = false;
+	bool push_switched_ = false;
+	int fakie_push_ticks_ = 0; // ticks the push has been held rolling fakie (a tap does nothing) // this stroke follows a shuffle round out of fakie (no step-off)
 	std::string stance_pre_; // "Fakie " / "Switch " in front of a pop's tricks
 	void start_switch(float duration);
 	std::string staged(const char *name) const { return stance_pre_ + name; }
@@ -134,6 +137,7 @@ private:
 	V3 wall_n_;
 	float wall_time_ = 0, since_wall_ = 9; // off a slide: the board turns back to the line of travel in the air
 	int grab_ = 0, grab_style_ = 0;
+	float grab_pose_ = 0; // s of the grab's pose left (the air floats coming down in it)
 	float grab_time_ = 0;
 	bool grab_scored_ = false;
 	bool grab_tweakable_ = false; // started with the stick centred: the stick can still tweak it
@@ -157,6 +161,19 @@ private:
 	// opposite way flicked during it
 	float under_a0_ = -1, flip_speed_ = 1, takeoff_dir_[2] = {0, 0};
 	bool under_wanted_ = false;
+	float crouch_last_ = 0;
+	float since_nose_manual_ = 9, nose_manual_len_ = 0; // s since riding a nose manual     // the crouch just let out of, s
+	bool flick_centre_ = false; // the last flick went through the centre (only that kickflip rolls under)
+	bool flip_late_ = false;
+	int shove_up_ = 0;        // since the flick: 1 the stick's been up straight on from it, 2 up again after the centre
+	bool flick_let_go_ = false;
+	float shove_up_at_ = 0;
+	bool shove_down_ = false;
+	bool stick_was_centre_ = false;
+	int up_run_ = 0; // steps the right stick has been straight up // the right stick was in the centre last step  // ... and then pulled down in time (a frontside shove-it rolls under)    // since_flick_ when the stick got up // the stick's been back to the centre since the last flick // this flip was flicked in the air (no underflip: only measured off the pop)
+	float since_flick_ = 9;        // s since the last flick came out
+	bool held_since_flick_ = false; // the stick has stayed on that flick's way since (a held flip)
+	float hold_dir_[2] = {0, 0};
 	// a foot off in the air (sk8_plant_pose foot bits): asked for, how long, shown, scored this air
 	int air_feet_ = 0, air_feet_want_ = 0;
 	float air_feet_time_ = 0;
@@ -207,10 +224,12 @@ private:
 	bool flip_landable() const { return flip_ < 0 || flip_turns_ - flip_angle_ <= (1 - p[FlipLenience]) * flip_base_turns_ + 1e-4f; }
 	float spin_speed_ = 0, spin_total_ = 0;
 	float air_time_ = 0;
+	bool popped_nollie_ = false; // the last pop was a nollie's (its air takes a flick later)
 	bool held_flip_ = false;
 	float runout_ = 0;
 	int air_crouch_ = 0; // steps the crouch has been held in this air
 	bool was_air_ = false;
+	bool shove_under_ = false; // a frontside shove-it already rolled under
 	float takeoff_extra_ = 0; // s more than the pop wait before this takeoff leaves // s left running out a dark landing // the flick held on at its end through a flip
 	float catch_body_ = 0, catch_board_ = 0; // drawn: rad the body / board still to turn to a board-adjusted catch
 	int ollie_ = 0;     // an ollie off flat ground: 1 rising, 2 pulled up short, 3 hanging, 4 pushed down

@@ -198,8 +198,14 @@ namespace {
 constexpr float kPushBite = 0.12f; // s: how long a stroke's foot takes to give its speed
 constexpr float kSkidTime = 0.3f;
 constexpr float kCarveAtMid = 0.8f, kCarveTopShare = 0.95f; // carve share at 4.9 m/s, and at most
+// kickflip / frontside shove-it underflips: s after the flick (see under_stick, the shove's in step)
+constexpr float kUnderDown = 0.19f, kUnderBack = 0.16f, kUnderCrouch = 0.174f;
+constexpr float kNoseLong = 0.38f, kNoseLongPop = 0.9f; // a nose manual held longer: its nollie pops lower
+constexpr float kNoseNollieNow = 0.2f; // s after a nose manual a nollie still pops at once
 constexpr float kNoComplyWindow = 0.52f, kNoComplyPlant = 0.12f; // s into a push's first stroke a flicked ollie is a no comply
 constexpr float kLateFlickAfter = 0.15f; // s into the air before a flick flips it late
+constexpr float kLateFlickNollie = 0.066f; // off a nollie, later still (as the port, measured)
+constexpr float kLateFlipSpeed = 0.84f; // a late flip turns slower than one off the pop
 constexpr int kAirCrouchVoid = 9; // steps of a crouch held in the air before landing that void it
 constexpr float kPushCarve = 0.77f; // of the carve while a push stroke is on
 constexpr float kRunoutKeep = 0.72f, kRunoutDecel = 6.0f, kRunoutTime = 1.5f; // a dark landing run out
@@ -244,6 +250,7 @@ constexpr float kSettleFlip = 0.45f;
 constexpr float kTipTime = 0.166f;  // s the right stick holds up or down before it's over onto that truck
 constexpr float kTurnFirst = 0.282f; // s held right out to a side before the board first turns round
 constexpr float kTurnStep = 0.134f;  // s each step round after that
+constexpr int kFakiePushTicks = 5; // a push held this many ticks rolling fakie shuffles round (shorter: nothing)
 constexpr float kFakieTurnPush = 0.6f; // m/s rolling fakie under this, a push goes the board's way
 constexpr float kBoardslideDrag = 0.61f; // m/s^2 more a boardslide loses along the rail
 constexpr float kSideBias = 0.075f; // m
@@ -281,6 +288,10 @@ constexpr float kOllieHangTap = 0.1355f;  // s longer, a quick flick's
 constexpr float kRailHang = 0.1f;       // s it hangs, popped off a rail
 constexpr float kOllieHangPull = 0.45f; // times gravity, hanging
 constexpr float kOllieDrop = 3.0f;      // times gravity, pushed back down
+// a grab's pose (the hand to the board and back) lasts at least kGrabPoseMin from its start and
+// kGrabOut past the let-go; coming down in it, the air floats (as the port, measured: it lands up to
+// ~6 ticks later than the same ollie ungrabbed)
+constexpr float kGrabPoseMin = 0.5f, kGrabOut = 0.33f, kGrabFloat = 8.6f;
 constexpr float kHeldFloat = 7.5f;     // m/s^2: a held flip's air off flat, after the pop
 constexpr float kOllieDropTo = 4.2f;    // m/s down, then falling as any air
 constexpr float kPlantDropIn = 6.2f; // m/s down the wall dropping back in off a handplant (the port's fall from ~1.5 m over the coping)
@@ -310,7 +321,7 @@ constexpr float kAdjustYaw = 1.1f, kAdjustPitch = 0.38f; // rad: a board adjust 
 constexpr float kCatchEase = 0.12f;  // s: drawn, the body and board ease round to a board-adjusted catch
 constexpr float kAdjustCatch = 1.57f; // rad: how far a full sideways adjust turns the board for a rail
 constexpr float kUnderTurn = 0.34f;   // turns an underflip goes its first way before it turns back
-constexpr float kUnderWindow = 0.11f; // s into a flip the opposite flick still turns it into an underflip   // s: a boneless's wind-up, push pressed to the pop
+   // s: a boneless's wind-up, push pressed to the pop
 constexpr float kPlantVariant = 0.15f; // s a handplant variant's buttons / stick hold before it changes
 constexpr float kGrindTransfer = 0.1525f; // s the right stick holds a new way before the grind changes
 constexpr float kGrindSettle = 0.1525f;  // s into a grind before the stick can change it
@@ -638,6 +649,54 @@ void Rider::step(World &w, const sk8_input &in)
 	Flick::Result f;
 	if (mode_ != SK8_MODE_BAIL)
 		f = flick_.feed(in.flick[0], in.flick[1]);
+	if (switch_) { // (switch names each flick's twin: see mirror_trick)
+		f.trick = mirror_trick(f.trick);
+		f.revised = mirror_trick(f.revised);
+	}
+	{ // how long since a flick came out, and has the stick stayed on its way since (a held flip)
+		float x = in.flick[0], y = in.flick[1], r = std::sqrt(x * x + y * y);
+		bool up = r > 0.8f && y > 0.9f; // (straight up: not the up diagonals on the way)
+		// (a flick in the air while the board's already turning starts nothing: it doesn't count)
+		if (f.trick >= 0 && !(mode_ == SK8_MODE_AIR && flip_ >= 0)) {
+			held_since_flick_ = r > 0.3f;
+			if (r > 0.3f)
+				hold_dir_[0] = x / r, hold_dir_[1] = y / r;
+			since_flick_ = 0;
+			// (and only out of a full crouch: the port's needs ~11 ticks down first, measured)
+			flick_centre_ = f.through_centre && (crouch_time_ > 0 ? crouch_time_ : crouch_last_) > kUnderCrouch;
+			crouch_last_ = 0;
+			// (up straight on round the rim: the end of the sweep; up out of the centre: up again)
+			shove_up_ = up ? (stick_was_centre_ ? 2 : 1) : 0;
+			shove_up_at_ = 0;
+			flick_let_go_ = r < 0.3f;
+			shove_down_ = false;
+		} else {
+			since_flick_ += kDt;
+			if (r < 0.3f)
+				flick_let_go_ = true;
+			else if (up && (shove_up_ == 0 || stick_was_centre_)) {
+				if (shove_up_ == 0)
+					shove_up_at_ = since_flick_;
+				shove_up_ = stick_was_centre_ || flick_let_go_ ? 2 : 1;
+			}
+			if (held_since_flick_ && !(r >= kHeldIn && (x * hold_dir_[0] + y * hold_dir_[1]) / r > 0.87f))
+				held_since_flick_ = false;
+		}
+		// a frontside shove-it rolls under with the stick up then pulled down (as the port, measured: via
+		// the centre, the up at the end of its sweep then down within ~11 ticks of it, or up again out of
+		// the centre then down any time it's still turning) - kept from the takeoff on
+		// (straight down off the up, no centre between: held up two steps or more it rolls under, any
+		// time; a single step up and straight down doesn't)
+		bool direct = up_run_ > 0;
+		if (y < -0.6f && r > 0.8f && shove_up_ > 0) {
+			if (direct ? up_run_ >= 2 : shove_up_ == 2 || since_flick_ - shove_up_at_ < kUnderDown)
+				shove_down_ = true;
+			else if (direct)
+				shove_up_ = 0; // (that up's used up)
+		}
+		stick_was_centre_ = r < 0.3f;
+		up_run_ = up ? up_run_ + 1 : 0;
+	}
 	// a crouch begun in the air well before touching down doesn't carry into a pop: let the stick go
 	// and crouch again (as the port, measured: down over ~6 ticks before landing, nothing pops)
 	bool in_air = mode_ == SK8_MODE_AIR;
@@ -658,6 +717,8 @@ void Rider::step(World &w, const sk8_input &in)
 		crouch_time_ += kDt;
 		crouch_ = clampf(crouch_time_ / std::max(p[CrouchCharge], 0.01f), 0, 1);
 	} else {
+		if (crouch_time_ > 0)
+			crouch_last_ = crouch_time_;
 		crouch_time_ = 0;
 		if (f.trick < 0 && lead >= 0) {
 			// let out of the crouch on the way to the flick: as the port (probed with pauses at the
@@ -800,7 +861,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			takeoff_trick_ = f.revised;
 		takeoff_time_ += kDt;
 		crouch_ = takeoff_crouch_; // the pop keeps the crouch the flick had
-		under_wanted_ = under_wanted_ || opposite_flick(takeoff_dir_);
+		under_wanted_ = under_wanted_ || under_stick();
 		if (takeoff_time_ >= p[PopWait] + takeoff_extra_) {
 			int trick = takeoff_trick_;
 			takeoff_trick_ = -1;
@@ -832,13 +893,18 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		}
 		int trick = f.trick;
 		float share = trick_table()[size_t(trick)].nollie ? p[NolliePop] : 1.0f;
+		// (out of a nose manual held a while, its nollie pops lower: as the port, measured)
+		if (trick_table()[size_t(trick)].nollie && since_nose_manual_ < kNoseNollieNow && nose_manual_len_ > kNoseLong)
+			share *= kNoseLongPop;
 		// the foot-off button: the front foot steps down off the board first (old school)
 		float old_pop = 1;
 		// flicked while a push's first stroke is stepping the foot off (as the port, measured over a
-		// stroke): an ollie is a no comply, anything else doesn't pop
-		bool stepping = push_time_ >= 0 && push_lead_ > 0 && push_time_ < kNoComplyWindow && mode_ == SK8_MODE_RIDE;
-		if (stepping && std::strcmp(trick_table()[size_t(trick)].name, "Ollie") != 0)
-			return;
+		// stroke): whatever the flick, a no comply
+		// (not the stroke a shuffle round out of fakie leads into: the port pops that as it's flicked)
+		bool stepping = push_time_ >= 0 && push_lead_ > 0 && !push_switched_ && push_time_ < kNoComplyWindow &&
+			mode_ == SK8_MODE_RIDE;
+		if (stepping)
+			trick = find_trick("Ollie");
 		int old = ((in.buttons & SK8_FOOT_OFF) || stepping) && mode_ == SK8_MODE_RIDE ? foot_off_variant(trick, &old_pop) : -1;
 		if (stepping)
 			push_time_ = -1; // (the stroke's over: the foot that was going down plants for the pop)
@@ -846,7 +912,9 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			trick = old;
 			share = old_pop;
 		}
-		if (p[PopWait] > 0 && takeoff_trick_ < 0) {
+		// (out of a nose manual the nose is already down: the nollie leaves at once, as the port's)
+		bool nose_down = trick_table()[size_t(trick)].nollie && since_nose_manual_ < kNoseNollieNow;
+		if (p[PopWait] > 0 && takeoff_trick_ < 0 && !nose_down) {
 			// the board loads up before it leaves the ground (the takeoff), then pops
 			takeoff_trick_ = trick;
 			takeoff_share_ = share;
@@ -927,6 +995,9 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		manual_time_ = 0;
 		balance_ = 0;
 	}
+	since_nose_manual_ = mode_ == SK8_MODE_MANUAL && manual_dir_ < 0 ? 0.0f : since_nose_manual_ + kDt;
+	if (mode_ == SK8_MODE_MANUAL && manual_dir_ < 0)
+		nose_manual_len_ = manual_time_;
 	if (mode_ == SK8_MODE_MANUAL) {
 		manual_time_ += kDt;
 		// A held manual settles back toward level (the stick held steady keeps it up); the wobble
@@ -1159,6 +1230,11 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	// (barely rolling, though, it pushes off the way the board points, back the other way: as the port)
 	if (push_button && fakie_ && mode_ == SK8_MODE_RIDE && switching_ < 0 && push_time_ < 0 && speed < kFakieTurnPush)
 		fakie_ = false, push_turn_ = true;
+	// (rolling fakie the push only counts once held a moment: tapped, the port does nothing - measured)
+	bool held_fakie = push_button && !push_queued_ && fakie_ && mode_ == SK8_MODE_RIDE && switching_ < 0 && push_time_ < 0;
+	fakie_push_ticks_ = held_fakie ? fakie_push_ticks_ + 1 : 0;
+	if (held_fakie && speed >= kFakieTurnPush && fakie_push_ticks_ < kFakiePushTicks)
+		push_button = false;
 	if (push_button && fakie_ && mode_ == SK8_MODE_RIDE && switching_ < 0 && push_time_ < 0 && p[SwitchWait] > 0) {
 		start_switch(p[SwitchTime] * 0.5f);
 		push_queued_ = true;
@@ -1173,6 +1249,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	if (push_button && switching_ < 0 && mode_ == SK8_MODE_RIDE && push_cooldown_ <= 0 && push_time_ < 0 && plant_wind_ < 0 &&
 		brake_up_ <= 0 && !(in.buttons & SK8_BRAKE) &&
 		std::fabs(dot(vel_, travel)) < p[PushTop]) {
+		push_switched_ = push_queued_;
 		push_queued_ = false;
 		bool mongo = (in.buttons & SK8_PUSH_MONGO) || p[PushMongo] > 0.5f;
 		// straight on from the last stroke (same foot) the foot is already off the board
@@ -1188,8 +1265,9 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	// drag and brake
 	speed = len(vel_);
 	float dec = p[RollDrag] * kDt + p[AirDrag] * speed * speed * kDt;
-	// the foot goes down to the ground first, then drags
-	brake_held_ = (in.buttons & SK8_BRAKE) ? brake_held_ + kDt : 0;
+	// the foot goes down to the ground first, then drags (not until a landing has settled: the port
+	// rides its landing out first, measured - clean ~1 s, sketchy ~1.5 s to the brake biting)
+	brake_held_ = (in.buttons & SK8_BRAKE) && since_land_ >= land_settle_ ? brake_held_ + kDt : 0;
 	if (brake_held_ > p[BrakeLead])
 		dec += p[Brake] * kDt;
 	if (skid_time_ > 0) {
@@ -1429,6 +1507,7 @@ constexpr float kOllieLoadFull = 0.21f;
 
 void Rider::pop(const TrickDef &def, float share, bool off_rail)
 {
+	popped_nollie_ = def.nollie;
 	bool from_air = mode_ == SK8_MODE_AIR && !off_rail; // (a lip pop, just off a ramp)
 	reset_body_flip();
 	V3 aim_in{}; // (a vert air: back in over the ramp, aimed to come down just inside the lip)
@@ -1556,6 +1635,7 @@ void Rider::start_flip(int trick)
 	flip_dir_[0] = r > 0.3f ? last_flick_[0] / r : 0;
 	flip_dir_[1] = r > 0.3f ? last_flick_[1] / r : 0;
 	under_a0_ = -1;
+	flip_late_ = mode_ == SK8_MODE_AIR && air_time_ > 0.05f;
 	flip_speed_ = 1;
 	dark_used_ = false;
 	if (takeoff_dir_[0] != 0 || takeoff_dir_[1] != 0) { // (flicked before a takeoff: the flick's own way)
@@ -1586,12 +1666,30 @@ bool Rider::opposite_flick(const float dir[2]) const
 	return (-last_flick_[0] * dir[0] + last_flick_[1] * dir[1]) / r > 0.87f;
 }
 
+// The stick put where a kickflip turns back under (as the port, measured from the flick: down or
+// either down diagonal up to ~11 ticks on, the far up diagonal up to ~9; not straight left / right)
+bool Rider::under_stick() const
+{
+	float x = last_flick_[0], y = last_flick_[1];
+	// (only a kickflip flicked through the centre: straight across from the crouch, or round a side,
+	// the port's doesn't roll under - measured)
+	if (!flick_centre_ || std::sqrt(x * x + y * y) < kHeldIn)
+		return false;
+	float deg = std::atan2(x, y) * 180 / kPi;
+	if (std::fabs(deg) > 112.5f)
+		return since_flick_ < kUnderDown;
+	if (deg > -67.5f && deg < -22.6f)
+		return since_flick_ < kUnderBack;
+	return false;
+}
+
 // An underflip (as the port: the opposite way flicked just as the board starts to flip): the board
 // turns back and goes round once the other way instead, landing when the flip would have.
 void Rider::start_underflip()
 {
 	const TrickDef &def = trick_table()[size_t(flip_)];
-	if (def.roll == 0 || def.shove != 0 || def.wrap != 0 || flip_extra_ > 0)
+	// (only the kickflip: the port has no heelflip underflip, measured)
+	if (def.roll == 0 || def.shove != 0 || def.wrap != 0 || flip_extra_ > 0 || std::strcmp(def.name, "Kickflip") != 0)
 		return;
 	// (it carries on its first way a third of a turn before it turns back)
 	float a0 = std::max(flip_angle_, kUnderTurn * flip_base_turns_);
@@ -1686,6 +1784,8 @@ float Rider::air_left() const
 		float pull = ollie_pull(ollie, hang, t, vy, ollie_load_, ollie_hang_);
 		if (held_flip_ && ollie >= 3)
 			pull = kHeldFloat / std::max(g, 1.0f);
+		if (grab_pose_ > left && ollie >= 3)
+			pull = std::min(pull, kGrabFloat / std::max(g, 1.0f));
 		vy -= g * pull * kDt;
 		y += vy * kDt;
 		left += kDt;
@@ -1719,8 +1819,9 @@ bool Rider::predict_landing(World &w, V3 &normal, float &t) const
 	return false;
 }
 
-void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
+void Rider::air(World &w, const sk8_input &in, const Flick::Result &flick)
 {
+	Flick::Result f = flick;
 	if (air_time_ <= 0) { // into the air: where from, for the air's height and length
 		launch_ = pos_;
 		launch_vel_ = vel_;
@@ -1774,6 +1875,8 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	// short and it comes down on an even, lighter pull - time for the turns it's going for)
 	if (held_flip_ && ollie_ >= 3)
 		pull = kHeldFloat / std::max(p[Gravity], 1.0f);
+	if (grab_pose_ > 0 && ollie_ >= 3)
+		pull = std::min(pull, kGrabFloat / std::max(p[Gravity], 1.0f));
 	if (vert_air_ && vel_.y > 0)
 		pull *= kVertPull; // (a vert air floats a little on the way up: as the port's)
 	vel_ += V3{0, -p[Gravity] * pull, 0} * kDt;
@@ -1933,14 +2036,24 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	// flick a trick late
 	// (not while grabbing: the stick then tweaks the grab)
 	// (and not just off the ground: as the port, a flick done in the first ~0.15 s of the air is let go)
+	// (an ollie's flick in the air - down, up - is the late kickflip: as the port, measured)
+	if (f.trick >= 0 && flip_ < 0 && std::strcmp(trick_table()[size_t(f.trick)].name, "Ollie") == 0)
+		f.trick = find_trick(switch_ ? "Heelflip" : "Kickflip");
+	// (and a nollie's - up, centre, down - the late backfoot kickflip: measured)
+	if (f.trick >= 0 && flip_ < 0 && f.up_centre && std::strcmp(trick_table()[size_t(f.trick)].name, "Nollie") == 0)
+		f.trick = find_trick("Nollie Kickflip");
 	if (!foot_air_ && f.trick >= 0 && flip_ < 0 && !grab_ && p[AirFlick] >= 0.5f && !trick_table()[size_t(f.trick)].flat &&
-		takeoff_trick_ < 0 && air_time_ >= kLateFlickAfter) {
+		takeoff_trick_ < 0 && air_time_ >= kLateFlickAfter + (popped_nollie_ ? kLateFlickNollie : 0.0f)) {
 		// flicked from up (a nollie's way) in the air: the back foot flips it (a late backfoot flip)
 		const TrickDef &d = trick_table()[size_t(f.trick)];
-		bool backfoot = d.nollie && d.roll != 0 && d.wrap == 0;
+		// (swept from up round the rim to down, no centre: a late shove-it, the way it went round - measured)
+		bool backfoot = d.nollie && d.roll != 0 && d.wrap == 0 && f.up_side == 0;
 		int trick = backfoot ? find_trick(d.roll > 0 ? "Kickflip" : "Heelflip") : f.trick;
+		if (d.nollie && f.up_side != 0)
+			trick = find_trick(f.up_side < 0 ? "Pop Shove-it" : "Frontside Shove-it");
 		start_flip(trick);
 		// (kicked in the air it's straight away at speed, no spin-up off the tail: as the port)
+		flip_speed_ *= kLateFlipSpeed;  // (a late flip comes round a touch slower: it needs more air left)
 		flip_rate_ = flip_speed_ / std::max(p[FlipPerRev], 0.05f);
 		std::string base = trick_table()[size_t(trick)].name;
 		flip_name_ = stance_pre_ + (backfoot ? "Late Backfoot " : "Late ") + base;
@@ -1987,8 +2100,26 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 			}
 		}
 	}
-	if (flip_ >= 0 && under_a0_ < 0 && flip_time_ < kUnderWindow && opposite_flick(flip_dir_))
+	if (flip_ >= 0 && under_a0_ < 0 && !flip_late_ && under_stick())
 		start_underflip();
+	// a frontside shove-it with the stick pulled back down soon after: it rolls under as it turns (as
+	// the port's frontside shove-it underflip; a backside one doesn't)
+	if (flip_ >= 0 && !shove_under_ && shove_down_ && !flip_late_ && flip_extra_ == 0 &&
+		std::strcmp(trick_table()[size_t(flip_)].name, "Frontside Shove-it") == 0) {
+		int v = find_trick("Varial Heelflip");
+		if (v >= 0) {
+			float done = flip_frac();
+			start_flip(v);
+			flip_angle_ = std::min(done, 0.45f) * flip_turns_;
+			shove_under_ = true;
+			flip_name_ = stance_pre_ + "Frontside Shove-it Underflip";
+			trick_ = flip_name_;
+			if (!pending_.empty()) {
+				pending_.back().name = flip_name_;
+				pending_.back().points += 150;
+			}
+		}
+	}
 	if (flip_ >= 0) {
 		flip_time_ += kDt;
 		// spin up, cruise, brake to stop on the last turn
@@ -2005,7 +2136,8 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 			(last_flick_[0] * flip_dir_[0] + last_flick_[1] * flip_dir_[1]) / r > 0.87f;
 		// (once held, it floats on down even let go: as the port)
 		held_flip_ = held_flip_ || (held && under_a0_ < 0);
-		if (held && flip_extra_ < 3 && flip_turns_ - flip_angle_ < 0.5f && under_a0_ < 0)
+		// (a double only held on from the flick without a break: let go and back, the port doesn't)
+		if (held && held_since_flick_ && flip_extra_ < 3 && flip_turns_ - flip_angle_ < 0.5f && under_a0_ < 0 && !shove_under_)
 			extend_flip();
 	}
 
@@ -2035,8 +2167,11 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &f)
 	// a body flip (as the port: grab with the left stick held forward / back - a frontflip /
 	// backflip; with a spin too, a flip 540 and the like): as many whole turns as the air leaves
 	// time for, or, too short for one, a part way over and back
-	if (hands && !grab_)
+	if (hands && !grab_) {
 		grab_began_ = air_time_;
+		grab_pose_ = std::max(grab_pose_, kGrabPoseMin);
+	}
+	grab_pose_ = hands ? std::max(grab_pose_ - kDt, kGrabOut) : grab_pose_ - kDt;
 	if (hands && bflip_dir_ == 0 && air_time_ - grab_began_ <= kFlipWindow && std::fabs(steer_pad_[1]) > kFlipStick) {
 		bflip_dir_ = steer_pad_[1] > 0 ? 1 : -1;
 		V3 ln;
@@ -2377,10 +2512,12 @@ void Rider::land(const Hit &h)
 	settle_e_ = flip_ >= 0 ? flip_frac() : 1;
 	settle_mult_ = flip_mult_;
 	flip_ = -1;
+	shove_under_ = false;
 	held_flip_ = false;
 	spin_total_ = spin_speed_ = 0;
 	air_time_ = 0;
 	grab_ = 0;
+	grab_pose_ = 0;
 	grab_style_ = 0;
 	mode_ = SK8_MODE_RIDE;
 	trick_.clear();

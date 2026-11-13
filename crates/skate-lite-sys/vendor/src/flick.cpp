@@ -201,6 +201,30 @@ int find_trick(const char *name)
 	return -1;
 }
 
+int mirror_trick(int trick)
+{
+	// (the port, measured riding switch after a shuffle round out of fakie: each flick names its
+	// twin, while the board still turns the world way the stick went)
+	static const char *const kTwins[][2] = {
+		{"Kickflip", "Heelflip"}, {"Pop Shove-it", "Frontside Shove-it"}, {"Tre Flip", "Laser Flip"},
+		{"Varial Kickflip", "Varial Heelflip"}, {"Hardflip", "Inward Heelflip"},
+		{"360 Shove-it", "Frontside 360 Shove-it"}, {"360 Hardflip", "360 Inward Heelflip"},
+		{"Nollie Kickflip", "Nollie Heelflip"}, {"Nollie Shove-it", "Nollie Frontside Shove-it"},
+		{"Nollie Varial Kickflip", "Nollie Varial Heelflip"}, {"Nollie Hardflip", "Nollie Inward Heelflip"},
+		{"Nollie 360 Shove-it", "Nollie Frontside 360 Shove-it"},
+	};
+	if (trick < 0)
+		return trick;
+	const char *name = trick_table()[size_t(trick)].name;
+	for (const auto &t : kTwins) {
+		if (std::strcmp(name, t[0]) == 0)
+			return find_trick(t[1]);
+		if (std::strcmp(name, t[1]) == 0)
+			return find_trick(t[0]);
+	}
+	return trick;
+}
+
 // Up is wider toward the kick side than the heel side: in the port (a recorded session, 36 flicks)
 // a flick ending up to ~38 degrees right of up was still an ollie, one ~18 degrees left already a
 // heelflip. The other sectors stay 45 degrees, centred on their directions.
@@ -234,7 +258,7 @@ int sector_of(float x, float y)
 
 void Flick::reset()
 {
-	kick_sweep_ = heel_sweep_ = false;
+	kick_sweep_ = heel_sweep_ = heel_low_ = waited_ = false;
 	tokens_.clear();
 	raw_.clear();
 	pending_ = -1;
@@ -374,11 +398,17 @@ Flick::Result Flick::feed(float x, float y)
 		if (!std::isnan(prev_deg_) && !off_crouch) {
 			if (prev_deg_ > 0 && prev_deg_ < kKickZone && deg <= prev_deg_ - kZoneMove)
 				kick_sweep_ = true;
-			if (prev_deg_ < 0 && prev_deg_ > kHeelZone && deg >= prev_deg_ + kZoneMove)
+			// (on the left only once it came up round from below it: jumped off the crouch straight
+			// out to the left and up to the diagonal, the port flips it - measured)
+			if (prev_deg_ < 0 && prev_deg_ > kHeelZone && deg >= prev_deg_ + kZoneMove && heel_low_)
 				heel_sweep_ = true;
 		}
-		if (!std::isnan(prev_deg_) && prev_deg_ >= kKickZone && deg > kKickCone && deg < kKickZone)
+		if (deg < kHeelZone && deg > -178.8f + kZoneMove)
+			heel_low_ = true;
+		// (from the right itself: not straight up out of the crouch)
+		if (!std::isnan(prev_deg_) && prev_deg_ >= kKickZone && prev_deg_ < 134.8f && deg > kKickCone && deg < kKickZone)
 			wait = true;
+		waited_ = wait;
 		prev_deg_ = deg;
 		if (last_sector_ >= 0 && s != last_sector_ && !tokens_.empty() && tokens_.back() == last_sector_ &&
 			tokens_.size() >= 2 && rim_steps_ + 1 < kSweepDwell &&
@@ -437,7 +467,12 @@ Flick::Result Flick::feed(float x, float y)
 		young_ = false;
 		if (++arc_centre_ >= 3) // let go (not just crossing the middle in a sweep)
 			arc_.clear();
-		if (!tokens_.empty()) {
+		// (let go straight after a step that waited: it was the flip it got to, as the port)
+		if (waited_ && !tokens_.empty()) {
+			waited_ = false;
+			out = resolve(true);
+		}
+		if (out.trick < 0 && !tokens_.empty()) {
 			push(TCentre);
 			last_sector_ = -1;
 			out = resolve(false);
@@ -451,6 +486,16 @@ Flick::Result Flick::feed(float x, float y)
 				}
 			}
 		}
+	}
+	if (out.trick >= 0)
+		out.through_centre = tokens_.size() == 3 && tokens_[0] == TDown && tokens_[1] == TCentre;
+	if (out.trick >= 0 && !tokens_.empty() && tokens_[0] == TUp) {
+		out.up_centre = tokens_.size() >= 2 && tokens_[1] == TCentre;
+		if (!out.up_centre)
+			for (unsigned char t : tokens_) {
+				if (t == TLeft || t == TUpLeft || t == TDownLeft) { out.up_side = -1; break; }
+				if (t == TRight || t == TUpRight || t == TDownRight) { out.up_side = 1; break; }
+			}
 	}
 	if (out.trick >= 0) {
 		arc_.clear();
