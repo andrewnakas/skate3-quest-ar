@@ -21,6 +21,12 @@ pub fn main() {
         // attempted; the consent dialog, if any, happens in parallel with
         // engine startup.
         permissions::request_scene_permissions();
+        // Room lighting opens a passthrough camera, once the player turns it on.
+        skate_game::set_camera_hooks(skate_game::CameraHooks {
+            has_access: permissions::has_headset_camera,
+            request_access: permissions::request_headset_camera,
+            passthrough_camera: permissions::left_passthrough_camera,
+        });
         // The in-app Skate 3 import reads Download/Skate3.
         skate_game::set_storage_hooks(skate_game::StorageHooks {
             has_access: permissions::has_all_files_access,

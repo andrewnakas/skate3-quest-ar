@@ -40,6 +40,10 @@ fn yes() -> bool {
     true
 }
 
+fn one() -> f32 {
+    1.0
+}
+
 #[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ArSettings {
     #[serde(default)]
@@ -64,6 +68,13 @@ pub(crate) struct ArSettings {
     /// The trick / points readout in the corner while skating.
     #[serde(default = "yes")]
     pub hud: bool,
+    /// The skater and the park lit by the real room (`xr::room_light`),
+    /// which uses the headset's passthrough camera: off until asked for.
+    #[serde(default)]
+    pub room_light: bool,
+    /// The room light's brightness against passthrough's (1: as estimated).
+    #[serde(default = "one")]
+    pub room_light_strength: f32,
     #[serde(skip)]
     pub revision: u64,
 }
@@ -79,6 +90,8 @@ impl Default for ArSettings {
             mesh: Layer::default(),
             floor_offset: 0.0,
             hud: true,
+            room_light: false,
+            room_light_strength: 1.0,
             revision: 0,
         }
     }
@@ -152,6 +165,7 @@ mod tests {
         assert!(s.floor.collide && s.planes.collide && s.mesh.collide);
         assert!(!s.any_shown());
         assert!(s.hud && !s.onboarding_done && !s.free_roam());
+        assert!(!s.room_light && s.room_light_strength == 1.0);
         let s: ArSettings = serde_json::from_str(r#"{"mode":"FreeRoam","mesh":{"show":true}}"#).unwrap();
         assert!(s.free_roam() && s.mesh.show && s.mesh.collide);
     }

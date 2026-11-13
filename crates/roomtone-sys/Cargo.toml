@@ -1,0 +1,12 @@
+[package]
+name = "roomtone-sys"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license = "MIT"
+description = "Rust bindings for Roomtone, room light estimation for mixed reality (vendored from github.com/rhythmerc/roomtone)"
+
+[dependencies]
+
+[build-dependencies]
+cc = "1"

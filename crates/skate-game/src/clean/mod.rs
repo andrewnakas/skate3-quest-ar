@@ -199,6 +199,11 @@ fn build(options: Options) -> App {
             .0
             .push(std::sync::Arc::new(skater_page::CleanPages));
     }
+    // SK8_ROOM_LIGHT: the room light on the desktop park (see `xr::room_light`).
+    #[cfg(feature = "xr")]
+    if !xr && let Some(source) = crate::xr::room_light::preview_source() {
+        app.add_plugins(crate::xr::room_light::RoomLightPlugin(source));
+    }
     if !xr {
         app.add_systems(Startup, view::desktop_world).add_systems(
             Update,

@@ -21,6 +21,12 @@ pub fn main() {
         // Must run before skate_game::run() builds the OpenXR instance.
         activity_context::point_ndk_context_at_activity();
         permissions::request_scene_permissions();
+        // Room lighting opens a passthrough camera, once the player turns it on.
+        skate_game::set_camera_hooks(skate_game::CameraHooks {
+            has_access: permissions::has_headset_camera,
+            request_access: permissions::request_headset_camera,
+            passthrough_camera: permissions::left_passthrough_camera,
+        });
     }
     #[cfg(target_os = "android")]
     let exit = {

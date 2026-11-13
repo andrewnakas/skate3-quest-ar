@@ -4577,6 +4577,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "roomtone-sys"
+version = "0.1.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "roxmltree"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4876,7 +4883,9 @@ dependencies = [
  "image",
  "naga",
  "naga_oil",
+ "ndk-sys 0.6.0+11769913",
  "openxr",
+ "roomtone-sys",
  "serde",
  "serde_json",
  "skate-audio-core",
