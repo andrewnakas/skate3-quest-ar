@@ -36,6 +36,6 @@ def sp(r): return math.hypot(float(r["deck_vx"]), float(r["deck_vz"]))
 # the second line: up the same quarter pipe at an angle, slower (T2)
 LINE2 = "30 41 0 0 0 0 0x1000\n70 81 0 0 0 0 0x1000\n90 170 -1 0 0 0 0\n180 191 0 0 0 0 0x1000\n215 226 0 0 0 0 0x1000\n"
 T2 = 411
-def run2(extra="", ticks=200, params=()):
+def run2(extra="", ticks=200, params=(), sk_extra=()):
     pr = port(LINE2 + (shift(extra, T2) if extra.strip() else ""), T2 + ticks)
-    return pr[T2:], sk8_from(pr[T2], extra, ticks, params)
+    return pr[T2:], sk8_from(pr[T2], extra, ticks, params, sk_extra)
