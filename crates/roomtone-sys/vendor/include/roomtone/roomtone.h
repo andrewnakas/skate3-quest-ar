@@ -86,6 +86,7 @@ typedef struct roomtone_frame_result {
   int32_t used;      /* 0 or 1 */
   int32_t restarted; /* 0 or 1 */
   float change;
+  int32_t black;     /* 0 or 1: left out, the image was black */
 } roomtone_frame_result;
 
 roomtone_room* roomtone_room_new(void);

@@ -62,6 +62,13 @@ constexpr float kGlareMax = 1.4f;
 constexpr double kChange = 3.0, kChangeSeen = 20.0;
 constexpr int64_t kChangeNs = 1'000'000'000;
 constexpr size_t kChangeMinSamples = 64;
+// A frame whose median cell is darker than 6 of 255 (sRGB) is a black image,
+// not a dark room (auto exposure lifts a dark room's median well past it): a
+// covered or stopped camera, a headset off the face, a camera still starting.
+// It's left out. Taken as the room, a second of them started the capture over
+// on black and put the level at its floor, the content near black until the
+// room was seen again (2026-11-13).
+constexpr float kBlackFrame = 0.00182f;
 // The frames whose exposure sets the level: the camera's middle within 40
 // degrees of the point, the closest 30, at least 10.
 constexpr float kPointCos = 0.766f;
@@ -868,6 +875,16 @@ FrameResult Room::addFrame(const Frame& fr) {
       lums[i] = lumf(fr.cells + i * 4);
       sumAll += lums[i];
     }
+  {
+    std::vector<float> sorted = lums;
+    std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
+    if (!(sorted[sorted.size() / 2] >= kBlackFrame)) {
+      out.used = false;
+      out.black = true;
+      c.changedNs = 0;
+      return out;
+    }
+  }
   // The samples' distances: the latest depth image's points projected into
   // the frame (from the head, in the capture's frame), each cell's median.
   const Vec3 headAt = c.toCapture(fr.head.position);

@@ -192,8 +192,10 @@ impl Spot {
 /// What a frame did.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FrameResult {
-    /// False: no exposure, no camera or an empty grid.
+    /// False: no exposure, no camera, an empty grid or a black image.
     pub used: bool,
+    /// Left out: the image was black (a covered or stopped camera).
+    pub black: bool,
     /// The room changed (a light switched): the capture started over.
     pub restarted: bool,
     /// The frame against the capture, by its median.
@@ -241,6 +243,7 @@ mod ffi {
         pub used: i32,
         pub restarted: i32,
         pub change: f32,
+        pub black: i32,
     }
 
     // The layouts roomtone.h declares.
@@ -323,7 +326,7 @@ impl Room {
             time_ns: frame.time_ns,
         };
         let r = unsafe { ffi::roomtone_room_add_frame(self.0, &raw) };
-        FrameResult { used: r.used != 0, restarted: r.restarted != 0, change: r.change }
+        FrameResult { used: r.used != 0, restarted: r.restarted != 0, change: r.change, black: r.black != 0 }
     }
 
     /// A depth hit along a ray from `origin` (a raycast): gives the lights a place.
@@ -628,5 +631,18 @@ mod tests {
         let room = Room::new();
         assert!(!room.made() && room.light_at(0).is_none() && room.spots().is_empty());
         assert!(!lamp_room().summary().is_empty());
+    }
+
+    #[test]
+    fn a_black_image_is_left_out() {
+        let mut room = lamp_room();
+        let level = room.light_at(0).unwrap().level;
+        let cells = vec![0.0005f32; 32 * 32 * 4];
+        let frame = Frame { cells: &cells, cols: 32, rows: 32, exposure_ms: 33.0, iso: 3200.0, head: Pose::default(), time_ns: 0 };
+        for i in 0..20 {
+            let r = room.add_frame(&Frame { time_ns: 100_000_000_000 + i * 200_000_000, ..frame });
+            assert!(r.black && !r.used && !r.restarted, "{r:?}");
+        }
+        assert_eq!(room.light_at(0).unwrap().level, level);
     }
 }

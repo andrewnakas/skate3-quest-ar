@@ -108,7 +108,8 @@ struct Spot {
 
 // What a frame did.
 struct FrameResult {
-  bool used = false;      // false: no exposure, no camera or an empty grid
+  bool used = false;      // false: no exposure, no camera, an empty grid or a black image
+  bool black = false;     // left out: the image was black (a covered or stopped camera)
   bool restarted = false; // the room changed: the capture started over
   float change = 1.f;     // the frame against the capture, by its median
 };

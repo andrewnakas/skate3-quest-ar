@@ -278,15 +278,18 @@ fn feed_head(
     feed: Res<RoomFeed>,
     settings: Res<ArSettings>,
     mut light: ResMut<RoomLight>,
-    eyes: Query<&Transform, With<bevy_mod_xr::camera::XrCamera>>,
+    eyes: Query<(&Transform, &Camera), With<bevy_mod_xr::camera::XrCamera>>,
 ) {
     feed.0.set_wanted(settings.room_light);
     let state = feed.0.state();
     if light.camera != state {
         light.camera = state;
     }
-    // The eye cameras' own transforms are tracking space (the rig scales their parent).
-    let mut eyes = eyes.iter();
+    // The eye cameras' own transforms are tracking space (the rig scales their
+    // parent). They render only while the runtime shows the game: off the
+    // face or in the system menu they don't, their pose is the last tracked
+    // one, and the camera's frames aren't the room as played in (often black).
+    let mut eyes = eyes.iter().filter(|(_, camera)| camera.is_active).map(|(t, _)| t);
     let head = eyes.next().map(|first| {
         let (sum, count) = eyes.fold((first.translation, 1.0), |(sum, count), eye| (sum + eye.translation, count + 1.0));
         let (p, q) = (sum / count, first.rotation);
@@ -399,11 +402,32 @@ fn read(capture: Res<RoomCapture>, mut light: ResMut<RoomLight>) {
     if !room.made() || room.stale() {
         return;
     }
-    let Some(content) = room.light_at(0) else { return };
-    let grid: Option<Vec<Lighting>> = (1..light.points.len()).map(|i| room.light_at(i)).collect();
-    if let Some(grid) = grid {
-        light.made = Some((content, grid));
+    let Some(content) = room.light_at(0).filter(finite) else { return };
+    let grid: Option<Vec<Lighting>> = (1..light.points.len()).map(|i| room.light_at(i).filter(finite)).collect();
+    let Some(grid) = grid else { return };
+    // A level that falls (or rises) several times over is what a wrong light
+    // looks like: say what the capture saw, for the log.
+    let was = light.made.as_ref().map_or(content.level, |(l, _)| l.level);
+    if content.level < was / LEVEL_JUMP || content.level > was * LEVEL_JUMP {
+        info!("Room light: level {was:.2} -> {:.2}: {}", content.level, room.summary());
     }
+    light.made = Some((content, grid));
+}
+
+/// A level change this many times over is logged.
+const LEVEL_JUMP: f32 = 2.0;
+
+/// No NaN or infinity anywhere: one would stick in the shown light's
+/// smoothing and blacken everything it lights.
+fn finite(l: &Lighting) -> bool {
+    l.sh.iter().flatten().all(|v| v.is_finite())
+        && l.lights.iter().all(|k| {
+            k.color.iter().all(|v| v.is_finite())
+                && [k.dir, k.pos].iter().all(|p| p.x.is_finite() && p.y.is_finite() && p.z.is_finite())
+                && k.range.is_finite()
+        })
+        && l.mean.is_finite()
+        && l.level.is_finite()
 }
 
 fn show(
@@ -460,12 +484,16 @@ fn show(
     let exposure = exposures.iter().next().copied().unwrap_or_default().exposure();
     let strength = settings.as_ref().map_or(1.0, |s| s.room_light_strength);
     let scale = Scale::new(&content, exposure, strength);
+    if !scale.luminance.is_finite() {
+        return;
+    }
 
     // The soft light: settle on the newly made cubes, and upload when they've moved.
     let tracking_from_world = root.rotation.inverse();
     let made: Vec<[Vec3; 6]> = grid_light.iter().map(|l| shade::ambient_cube(l, tracking_from_world, scale)).collect();
     let weight = 1.0 - (-dt / SETTLE_S).exp();
-    if light.resolution != grid.resolution || light.cubes.len() != made.len() {
+    let broken = light.cubes.iter().flatten().any(|side| !side.is_finite());
+    if light.resolution != grid.resolution || light.cubes.len() != made.len() || broken {
         light.resolution = grid.resolution;
         light.cubes = made;
         light.uploaded.clear();
@@ -514,6 +542,9 @@ fn show(
             },
             (_, made) => made,
         };
+        if !key_finite(&light.keys[n]) {
+            light.keys[n] = made;
+        }
     }
     for (sun, mut directional, mut transform, mut visibility) in &mut suns {
         let Key::Directional { color, illuminance, toward } = light.keys[sun.0] else {
@@ -535,6 +566,14 @@ fn show(
         point.range = POINT_REACH_M * root.scale.x;
         transform.translation = position;
         set_visibility(&mut visibility, mix > 0.0);
+    }
+}
+
+fn key_finite(key: &Key) -> bool {
+    match *key {
+        Key::None => true,
+        Key::Directional { color, illuminance, toward } => color.is_finite() && illuminance.is_finite() && toward.is_finite(),
+        Key::Point { color, intensity, position } => color.is_finite() && intensity.is_finite() && position.is_finite(),
     }
 }
 

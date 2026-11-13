@@ -25,6 +25,12 @@ unsafe extern "C" {}
 
 /// Between frames: Roomtone wants a look around the room, not video.
 const FRAME_EVERY: Duration = Duration::from_millis(200);
+/// Frames are left out this long after the camera opens or the headset comes
+/// back (on the face, out of the system menu): auto exposure is still
+/// settling, and the first images can be black or far off.
+const SETTLE: Duration = Duration::from_secs(1);
+/// At most one line this often about black frames.
+const BLACK_LOG_EVERY: Duration = Duration::from_secs(10);
 const IDLE_EVERY: Duration = Duration::from_millis(500);
 /// A camera that keeps failing is left alone until room lighting is turned
 /// off and on again.
@@ -44,6 +50,9 @@ fn run(feed: &Feed, room: &Mutex<Room>) {
     let mut stream: Option<Stream> = None;
     let mut failures = 0;
     let started = Instant::now();
+    // Frames count from here (the camera opened, the head came back).
+    let mut usable_from = Instant::now();
+    let mut black_logged: Option<Instant> = None;
     loop {
         if !feed.wanted() {
             if stream.take().is_some() {
@@ -71,6 +80,7 @@ fn run(feed: &Feed, room: &Mutex<Room>) {
                         info!("Room light: camera {} at {}x{}", opened.id, opened.camera.width, opened.camera.height);
                         room.lock().unwrap().set_camera(&opened.camera);
                         stream = Some(opened);
+                        usable_from = Instant::now() + SETTLE;
                     }
                     Err(why) => {
                         warn!("Room light: no camera: {why}");
@@ -82,8 +92,13 @@ fn run(feed: &Feed, room: &Mutex<Room>) {
             continue;
         };
         std::thread::sleep(FRAME_EVERY);
-        let Some(head) = feed.head() else { continue };
-        if !open.latest(&linear, &mut cells) {
+        // No head while the headset isn't showing the game (off the face, the
+        // system menu): what the camera sees then isn't the room as played in.
+        let Some(head) = feed.head() else {
+            usable_from = Instant::now() + SETTLE;
+            continue;
+        };
+        if !open.latest(&linear, &mut cells) || Instant::now() < usable_from {
             continue;
         }
         feed.set_state(CameraState::Running);
@@ -97,9 +112,14 @@ fn run(feed: &Feed, room: &Mutex<Room>) {
             head,
             time_ns: started.elapsed().as_nanos() as i64,
         };
-        let result = feed.add_frame(&mut room.lock().unwrap(), &frame);
+        let mut room = room.lock().unwrap();
+        let result = feed.add_frame(&mut room, &frame);
         if result.restarted {
-            info!("Room light: the room's light changed, starting over");
+            info!("Room light: the room's light changed ({:.2}x), starting over", result.change);
+        }
+        if result.black && black_logged.is_none_or(|at| at.elapsed() >= BLACK_LOG_EVERY) {
+            info!("Room light: the camera's image is black (covered or stopped): keeping the light");
+            black_logged = Some(Instant::now());
         }
     }
 }

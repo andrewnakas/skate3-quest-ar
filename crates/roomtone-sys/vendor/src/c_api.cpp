@@ -104,7 +104,7 @@ int roomtone_room_has_camera(const roomtone_room* room) { return room->room.hasC
 
 roomtone_frame_result roomtone_room_add_frame(roomtone_room* room, const roomtone_frame* f) {
   const roomtone::FrameResult r = room->room.addFrame(frame(*f));
-  return {r.used, r.restarted, r.change};
+  return {r.used, r.restarted, r.change, r.black};
 }
 
 void roomtone_room_add_hit(roomtone_room* room, roomtone_vec3 origin, roomtone_vec3 point) {
