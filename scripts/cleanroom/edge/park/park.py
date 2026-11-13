@@ -2,7 +2,7 @@
 The mesh (map geometry from your own pack) is dumped to a temp dir on first use, never stored."""
 import csv, io, math, os, subprocess, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
-PACKDIR = "/Volumes/FreeAgent GoFlex Drive/MacOffload/Documents/haloskate-ref/cleanpack"
+PACKDIR = os.environ.get("PACKDIR", "/Volumes/Untitled/MacOffload/Documents/haloskate-ref/cleanpack")
 PACK, MAP = os.path.join(PACKDIR, "core.pack"), os.path.join(PACKDIR, "KenneyPark.skate")
 BUILD = os.path.expanduser("~/cleanroom/skatecore-cpp/build")
 S3, SK = os.path.join(BUILD, "s3trace"), os.path.join(BUILD, "sk8trace")

@@ -31,6 +31,9 @@ int gesture_trick_count();
 // the old-school trick a gesture trick becomes with the foot-off button held (-1 none); its pop share
 int foot_off_variant(int trick, float *pop);
 int find_trick(const char *name);
+// the same flick ridden switch: its mirror twin (kickflip <-> heelflip, pop <-> frontside shove-it...),
+// or itself
+int mirror_trick(int trick);
 
 // Stick radius thresholds, measured on the port with a pad's right stick (scripted depth sweeps):
 // a pop's first move (the crouch) counts from kLeadIn, every move after it from kRimIn; the crouch
@@ -57,6 +60,9 @@ public:
 		bool fallback = false;
 		bool crouch_let_go = false; // held down (the crouch), let go to the centre and no flick followed
 		int revised = -1;   // a trick already returned, read again as the stick carried on (see feed)
+		bool through_centre = false; // came out of the crouch through the centre to its end (down, centre, end)
+		bool up_centre = false; // started up and went through the centre (up, centre, end)
+		int up_side = 0;        // started up and swept round the rim: -1 by the left, 1 by the right
 	};
 
 	// Feed one stick sample. Returns a trick the moment one completes.
@@ -113,6 +119,8 @@ private:
 	// sweep rather than a flip's flick)
 	float prev_deg_ = NAN;
 	bool kick_sweep_ = false, heel_sweep_ = false;
+	bool waited_ = false; // the last rim step waited to see a sweep or a flip
+	bool heel_low_ = false; // the stick has been round below the left (a heel sweep comes up from there)
 	int part_steps_ = 0, part_centre_ = 0; // steps the stick has been held part-way out
 	// a finished gesture that's also the start of a longer one: fired when the stick goes on
 	// somewhere else (or back to the centre) rather than straight away

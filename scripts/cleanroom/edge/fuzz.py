@@ -51,6 +51,9 @@ def tricks(rows, port_):
     out = []
     for r in rows:
         names = [r["trick_name"]] if port_ else [e[4:] for e in r["events"].split("|") if e[:4] in ("EV0:", "EV1:")]
+        # (sk8 names a late flip only when it lands: the one being flipped counts too, bailed or not)
+        if not port_ and "Late " in r.get("trick_name", "") and r["trick_name"] not in names:
+            names.append(r["trick_name"])
         for n in names:
             if n and (not out or out[-1] != n): out.append(n)
     return out
