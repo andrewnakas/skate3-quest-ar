@@ -2,7 +2,7 @@
 import sys, os, math, csv, io, subprocess
 sys.path.insert(0, os.path.expanduser("~/skate3-quest-ar/scripts/cleanroom"))
 import feel
-PACK = "/Volumes/FreeAgent GoFlex Drive/MacOffload/Documents/haloskate-ref/cleanpack/core.pack"
+PACK = os.path.join(os.environ.get("PACKDIR", "/Volumes/Untitled/MacOffload/Documents/haloskate-ref/cleanpack"), "core.pack")
 S3 = os.path.expanduser("~/cleanroom/skatecore-cpp/build/s3trace")
 SK = os.path.expanduser("~/cleanroom/skatecore-cpp/build/sk8trace")
 import tempfile

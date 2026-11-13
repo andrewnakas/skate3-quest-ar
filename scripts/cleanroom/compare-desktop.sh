@@ -10,10 +10,10 @@
 #   OUT       where the web page and the map dump go (~/skate-compare)
 #   GAME      the desktop game binary (cargo build --release -p skate-game --bin skate3rust)
 set -eu
-PACKDIR="${PACKDIR:-/Volumes/FreeAgent GoFlex Drive/MacOffload/Documents/haloskate-ref/cleanpack}"
+PACKDIR="${PACKDIR:-/Volumes/Untitled/MacOffload/Documents/haloskate-ref/cleanpack}"
 SKATECORE="${SKATECORE:-$HOME/cleanroom/skatecore-cpp}"
 OUT="${OUT:-$HOME/skate-compare}"
-GAME="${GAME:-/Volumes/FreeAgent GoFlex Drive/MacOffload/skate3-quest-ar-desktop-target/release/skate3rust}"
+GAME="${GAME:-/Volumes/Untitled/MacOffload/skate3-quest-ar-desktop-target/release/skate3rust}"
 PORT=8771
 
 [ -f "$PACKDIR/core.pack" ] || { echo "no core.pack in $PACKDIR (is the drive mounted?)"; exit 1; }
