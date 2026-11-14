@@ -62,15 +62,16 @@ def bailed(rows, port_):
 if __name__ == "__main__":
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 30
     s0 = int(sys.argv[2]) if len(sys.argv) > 2 else 0
-    bad = 0
+    bad, W = 0, 175
     for seed in range(s0, s0 + n):
         act = gen(random.Random(seed))
-        pr, sk = pair(act, 160, extra=("--host-map",))
-        a, b = tricks(pr[:160], True), tricks(sk[:160], False)
+        # (to 175: sk8 names a pop at its takeoff, the port at the flick, and the last flick is by ~155)
+        pr, sk = pair(act, W + 5, extra=("--host-map",))
+        a, b = tricks(pr[:W], True), tricks(sk[:W], False)
         skip = ("grab", "manual", "grind", "slide", "big air", "long air", "50-50", "5-0", "smith", "crook", "salad", "feeble", "willy")
         pa = sorted(set(canon(x) for x in a if not x.startswith(("BS_", "FS_")) and "MANUAL" not in x))
         sb = sorted(set(canon(x) for x in b if not any(k in x.lower() for k in skip)))
-        ba, bb = bailed(pr[:160], True), bailed(sk[:160], False)
+        ba, bb = bailed(pr[:W], True), bailed(sk[:W], False)
         same = pa == sb and ba == bb
         bad += not same
         if not same or "-v" in sys.argv:
