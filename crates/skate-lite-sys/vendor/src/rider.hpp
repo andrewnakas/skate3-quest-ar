@@ -255,6 +255,8 @@ private:
 	int rail_dir_ = 1;
 	int grind_kind_ = 0;
 	float carve_in_ = 0, carve_ = 0; // the steer, eased in two stages
+	float face_kick_ = 0;            // rad the stick has swung the line round on a ramp's face so far
+	bool face_hold_ = false, face_against_ = false;         // the stick held against the face's downhill curl: the line holds
 	bool vert_air_ = false; // off the top of a steep wall: comes back down into it
 	int settle_trick_ = -1; // a flip landed short: the board finishing its turn
 	float settle_e_ = 1, settle_mult_ = 1;
