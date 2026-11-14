@@ -306,6 +306,15 @@ constexpr float kWallStall = 0.3f; // m/s: slower than this the board stops comi
 constexpr float kWallYawPerV = 0.8f; // rad/s per m/s
 constexpr float kWallScrub = 6.0f;  // m/s^2 the wheels take off sideways scrubbing across one
 constexpr float kWallDrag = 0.3f;   // of a powerslide's drag, scrubbing across one
+// Steering on a ramp's face (as the port, measured on its quarter pipe): the stick swings the line
+// round at once, a set amount for how far it's pushed (more against the downhill curl than with it),
+// and held against the curl the line holds; past that it carves on slowly.
+constexpr float kFaceKick = 0.55f;     // rad at full stick, against the curl (x the steer curve)
+constexpr float kFaceKickWith = 0.43f; // rad at full stick, with it (x the curve squared)
+constexpr float kFaceKickRate = 8.4f;  // rad/s it swings round
+constexpr float kFaceDrift = 0.7f;     // rad/s it carves on round after that
+constexpr float kFaceDriftFull = 0.15f; // (from this far pushed: the steer curve)
+constexpr float kFaceHoldWith = 0.4f;  // with the curl, the line holds pushed this far (curve)
 constexpr float kSlideAngle = 1.2f;  // rad (~69 deg) off the rail: a slide, not a grind
 constexpr float kSpinCoast = 0.42f;  // s: a spin let go slows over about this long
 constexpr float kAngledGrind = 0.44f; // rad (~25 deg): a board landing this far off the rail is a turned grind (19 off was still a nosegrind, recorded)
@@ -1077,6 +1086,30 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	} else {
 		kickturn_ = 0;
 	}
+	// on a ramp's face: the swing round and the hold (see kFaceKick)
+	face_hold_ = false;
+	if (mode_ == SK8_MODE_RIDE && up_.y < kWallUp && kickturn_ <= 0 && revert_time_ < 0) {
+		V3 uphill = flatten(V3{0, 1, 0}, up_), going = flatten(vel_, up_);
+		float side = dot(cross(uphill, going), up_); // + = across one way of the fall line
+		float cur = on_curve(kSteerCurve, carve_steer);
+		if (cur == 0 || len(uphill) < 0.15f || len(going) < kWallStall) {
+			face_kick_ = 0;
+		} else {
+			float dir = carve_steer > 0 ? 1.0f : -1.0f;
+			if (face_kick_ * dir > 0) // (turned the other way: a fresh swing)
+				face_kick_ = 0;
+			if (face_kick_ == 0) // (which side of the curl it started, kept as it swings across the fall line)
+				face_against_ = (carve_steer > 0) == (side > 0);
+			float target = -(face_against_ ? kFaceKick * std::fabs(cur) : kFaceKickWith * cur * cur) * dir;
+			float step = std::fabs(target) > std::fabs(face_kick_) ? clampf(target - face_kick_, -kFaceKickRate * kDt, kFaceKickRate * kDt) : 0.0f;
+			face_kick_ += step;
+			// (then on round steadily, the same however far it's pushed past a little)
+			face_hold_ = face_against_ || std::fabs(cur) > kFaceHoldWith;
+			rate = (face_hold_ ? dir * kFaceDrift * std::min(1.0f, std::fabs(cur) / kFaceDriftFull) : 0.0f) - step / kDt;
+		}
+	} else {
+		face_kick_ = 0;
+	}
 	fwd_ = unit(flatten(rotate(fwd_, up_, -rate * kDt), up_), fwd_);
 	// The wheels carry the motion round with the board (a carve keeps its speed).
 	if (mode_ != SK8_MODE_SLIDE)
@@ -1268,7 +1301,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	fakie_push_ticks_ = held_fakie ? fakie_push_ticks_ + 1 : 0;
 	if (held_fakie && speed >= kFakieTurnPush && fakie_push_ticks_ < kFakiePushTicks)
 		push_button = false;
-	if (push_button && fakie_ && mode_ == SK8_MODE_RIDE && switching_ < 0 && push_time_ < 0 && p[SwitchWait] > 0) {
+	if (push_button && fakie_ && mode_ == SK8_MODE_RIDE && switching_ < 0 && push_time_ < 0) {
 		start_switch(p[SwitchTime] * 0.5f);
 		push_queued_ = true;
 	}
@@ -1339,7 +1372,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	// quarter pipe: ridden up at an angle it comes round downhill at a steady rate and rides back
 	// down forward; ridden straight up it rolls back fakie). Slow at the top, the way it's going
 	// swings round quicker than the board: it scrubs sideways until the board catches up.
-	bool on_wall = up_.y < kWallUp && mode_ == SK8_MODE_RIDE && !reverting && slide_off_ <= 0 && kickturn_ <= 0;
+	bool on_wall = up_.y < kWallUp && mode_ == SK8_MODE_RIDE && !reverting && slide_off_ <= 0 && kickturn_ <= 0 && !face_hold_;
 	if (on_wall) {
 		V3 going = flatten(vel_, up_), travel = fakie_ ? -fwd_ : fwd_;
 		// (not near a stall at the top, as the port: it holds the board there and, ridden up
@@ -1386,6 +1419,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 	float lateral = dot(vel_, side);
 	float grip = mode_ == SK8_MODE_SLIDE || slide_off_ > 0 || swinging
 		? 0.0f // (sliding, the board's way is the slide's own, above)
+		: face_hold_ ? 1.0f // (held into the face, the wheels hold its line: as the port)
 		: 1 - std::exp(-p[Grip] * kDt * (reverting ? 0.08f : 1.0f));
 	float take = lateral * grip;
 	if (on_wall) // (scrubbing across the face: as much as the wheels' sideways friction takes)
