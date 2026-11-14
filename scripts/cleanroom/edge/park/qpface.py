@@ -16,8 +16,9 @@ def face_angle(r):
 def fmt(a): return "  -  " if a is None else f"{a:5.0f}"
 if __name__ == "__main__":
     on, hold = int(os.environ.get("ON", 34)), int(os.environ.get("HOLD", 40))
-    pre = f"{T0-55} {T0-30} 0 0 0 0 0x2000\n"
+    brake = int(os.environ.get("BRAKE", 25))
+    pre = f"{T0-55} {T0-55+brake} 0 0 0 0 0x2000\n" if brake else ""
     for st in [float(x) for x in sys.argv[1:]] or (0, 0.3, 0.6, 1, -0.3, -0.6, -1):
-        pr, sk = run(f"{on} {on+hold} {st} 0 0 0 0", 110, pre=pre)
+        pr, sk = run(f"{on} {on+hold} {st} 0 0 0 0", on + 70, pre=pre)
         print(f"steer {st:5.2f}\n  P " + " ".join(fmt(face_angle(pr[i])) for i in range(on, on + 60, 4)) +
               "\n  S " + " ".join(fmt(face_angle(sk[i])) for i in range(on, on + 60, 4)))
