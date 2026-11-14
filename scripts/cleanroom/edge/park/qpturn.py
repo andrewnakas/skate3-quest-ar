@@ -18,7 +18,8 @@ def summary(rows, port_):
 if __name__ == "__main__":
     brake = int(sys.argv[1]) if len(sys.argv) > 1 else 45
     for s in [float(x) for x in sys.argv[2:]] or (-0.8, -0.6, -0.45, 0, 0.45, 0.6, 0.8):
-        pre = f"{T0-75} {T0-75+brake} 0 0 0 0 0x2000\n" + (f"{T0-28} {T0-16} {s} 0 0 0 0\n" if s else "")
+        # (the brake ends well before the steer: just off it the foot coming back up blocks steering)
+        pre = f"{T0-90} {T0-90+brake} 0 0 0 0 0x2000\n" + (f"{T0-20} {T0-8} {s} 0 0 0 0\n" if s else "")
         pr, sk = run("", 240, pre=pre)
         ang = d(vdir(pr[30]), 90)
         print(f"steer {s:5.2f} v0 {sp(pr[0]):4.2f} in{ang:6.1f}  P {summary(pr, True)}\n{'':27s}S {summary(sk, False)}")
