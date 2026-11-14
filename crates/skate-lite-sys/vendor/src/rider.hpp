@@ -221,9 +221,12 @@ private:
 	std::string flip_name_;
 	void extend_flip();
 	// round far enough to land on: at most (1 - lenience) of a turn left, however many turns
-	bool flip_landable() const { return flip_ < 0 || flip_turns_ - flip_angle_ <= (1 - p[FlipLenience]) * flip_base_turns_ + 1e-4f; }
+	// (a held-on double has less give at the end than one flip: as the port's, measured by pop height)
+	bool flip_landable() const { return flip_ < 0 || flip_turns_ - flip_angle_ <= (flip_extra_ > 0 && held_flip_ ? 0.104f : 1 - p[FlipLenience]) * flip_base_turns_ + 1e-4f; }
 	float spin_speed_ = 0, spin_total_ = 0;
 	float air_time_ = 0;
+	float climb_base_y_ = 0; bool climb_topped_ = true, turn_kick_ = false; float turn_kick_left_ = 0; // the flat a ramp was ridden up from; came back down yet
+	bool standing_ = false; // put down at a standstill and not pushed yet (the first push kicks off full)
 	bool popped_nollie_ = false; // the last pop was a nollie's (its air takes a flick later)
 	bool held_flip_ = false;
 	float runout_ = 0;
