@@ -2,6 +2,10 @@
 
 Bevy sources retain their MIT and Apache licenses under `vendor/`.
 
+`crates/roomtone-sys/vendor` contains Roomtone (room light estimation for
+mixed reality, https://github.com/rhythmerc/roomtone), MIT; its license is
+alongside the source. See `docs/room-lighting.md`.
+
 Retail world shading equations were referenced against Alex's Skate3Recomp
 native renderer. Source revision and implementation scope are documented in
 `docs/retail-renderer.md`. No game shaders or texture payloads are bundled.

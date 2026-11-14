@@ -142,6 +142,41 @@ pub(crate) fn request_storage_access() {
     }
 }
 
+/// Platform hooks for the headset's passthrough cameras (room lighting,
+/// `xr::room_light`), set by the Android entry point: whether the app may
+/// open them, and asking the player for it.
+#[derive(Clone, Copy)]
+pub struct CameraHooks {
+    pub has_access: fn() -> bool,
+    pub request_access: fn(),
+    /// The left passthrough camera's Camera2 id, if the headset has one.
+    pub passthrough_camera: fn() -> Option<String>,
+}
+
+static CAMERA_HOOKS: std::sync::OnceLock<CameraHooks> = std::sync::OnceLock::new();
+
+pub fn set_camera_hooks(hooks: CameraHooks) {
+    let _ = CAMERA_HOOKS.set(hooks);
+}
+
+/// The passthrough cameras can be opened (never, without hooks).
+#[cfg_attr(not(feature = "xr"), allow(dead_code))]
+pub(crate) fn camera_access() -> bool {
+    CAMERA_HOOKS.get().is_some_and(|h| (h.has_access)())
+}
+
+#[cfg_attr(not(feature = "xr"), allow(dead_code))]
+pub(crate) fn request_camera_access() {
+    if let Some(h) = CAMERA_HOOKS.get() {
+        (h.request_access)();
+    }
+}
+
+#[cfg_attr(not(all(feature = "xr", target_os = "android")), allow(dead_code))]
+pub(crate) fn passthrough_camera() -> Option<String> {
+    CAMERA_HOOKS.get().and_then(|h| (h.passthrough_camera)())
+}
+
 /// Startup loading. `Err` is the exit to return, including the asset
 /// check's success.
 #[cfg(feature = "retail")]

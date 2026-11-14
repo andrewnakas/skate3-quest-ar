@@ -42,6 +42,10 @@ No EA assets are in this repo or the APK.
 
 More in [scripts/quest/README.md](scripts/quest/README.md) and the in-app How to play page.
 
+**Roomtone room lighting (experimental):** menu > AR settings > Roomtone room lighting lights the skater and your
+park by your real room, estimated from the passthrough cameras (Quest 3 / 3S). See
+[docs/room-lighting.md](docs/room-lighting.md).
+
 **Handing off to Snap Spectacles?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): how this
 maps onto the C++ port [skatecore-cpp](https://github.com/andrewnakas/skatecore-cpp).
 

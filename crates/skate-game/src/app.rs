@@ -182,6 +182,11 @@ pub(crate) fn build(
             retail: true,
         });
     }
+    // SK8_ROOM_LIGHT: the room light on the desktop's test world (see `xr::room_light`).
+    #[cfg(feature = "xr")]
+    if xr.is_none() && let Some(source) = crate::xr::room_light::preview_source() {
+        app.add_plugins(crate::xr::room_light::RoomLightPlugin(source));
+    }
     crate::profiling::install(&mut app);
     app
 }

@@ -69,6 +69,13 @@ name = "com.oculus.permission.USE_SCENE"
 [[package.metadata.android.uses_permission]]
 name = "com.oculus.permission.USE_ANCHOR_API"
 
+# Room lighting (the AR settings; off until asked for) reads one passthrough
+# camera's frames to estimate the room's light: Meta's Passthrough Camera API,
+# Quest 3 / 3S. Asked for at runtime when the player turns it on; frames
+# never leave the headset.
+[[package.metadata.android.uses_permission]]
+name = "horizonos.permission.HEADSET_CAMERA"
+
 # The Khronos loader finds Meta's runtime through the runtime broker.
 [[package.metadata.android.uses_permission]]
 name = "org.khronos.openxr.permission.OPENXR"

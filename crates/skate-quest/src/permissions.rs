@@ -37,6 +37,147 @@ const PERMISSION_GRANTED: i32 = 0;
 /// GrantPermissionsActivity (a Quest "exclusive system dialog"), which pauses
 /// and stops this activity mid-startup even when it has nothing to ask.
 pub fn request_scene_permissions() {
+    request(&PERMISSIONS);
+}
+
+/// The passthrough cameras (Meta's Passthrough Camera API), for room
+/// lighting: asked for only when the player turns that on.
+const HEADSET_CAMERA: &str = "horizonos.permission.HEADSET_CAMERA";
+
+pub fn has_headset_camera() -> bool {
+    let Some(app) = bevy::android::ANDROID_APP.get() else {
+        return false;
+    };
+    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) };
+    let result = vm.attach_current_thread(|env| -> jni::errors::Result<bool> {
+        let activity = unsafe { JObject::from_raw(&*env, app.activity_as_ptr().cast()) };
+        let jname = JString::from_str(env, HEADSET_CAMERA)?;
+        let state = env
+            .call_method(
+                &activity,
+                jni_str!("checkSelfPermission"),
+                jni_sig!("(Ljava/lang/String;)I"),
+                &[JValue::from(&jname)],
+            )?
+            .i()?;
+        Ok(state == PERMISSION_GRANTED)
+    });
+    result.unwrap_or_else(|e| {
+        eprintln!("skate_quest: checkSelfPermission failed: {e}");
+        false
+    })
+}
+
+pub fn request_headset_camera() {
+    request(&[HEADSET_CAMERA]);
+}
+
+/// The Camera2 id of the left passthrough camera: the one whose Meta vendor
+/// tags say `camera_source` 0 (passthrough) and `position` 0 (left). The
+/// tags aren't public keys, so they are found by name among the camera's
+/// characteristics (which the NDK's camera API can't do).
+pub fn left_passthrough_camera() -> Option<String> {
+    let app = bevy::android::ANDROID_APP.get()?;
+    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) };
+    let result = vm.attach_current_thread(|env| -> jni::errors::Result<Option<String>> {
+        let activity = unsafe { JObject::from_raw(&*env, app.activity_as_ptr().cast()) };
+        let service = JString::from_str(env, "camera")?;
+        let manager = env
+            .call_method(
+                &activity,
+                jni_str!("getSystemService"),
+                jni_sig!("(Ljava/lang/String;)Ljava/lang/Object;"),
+                &[JValue::from(&service)],
+            )?
+            .l()?;
+        if manager.is_null() {
+            return Ok(None);
+        }
+        let ids = env
+            .call_method(&manager, jni_str!("getCameraIdList"), jni_sig!("()[Ljava/lang/String;"), &[])?
+            .l()?;
+        let ids = env.cast_local::<JObjectArray<JString>>(ids)?;
+        for i in 0..ids.len(env)? {
+            let id = ids.get_element(env, i)?;
+            let characteristics = env
+                .call_method(
+                    &manager,
+                    jni_str!("getCameraCharacteristics"),
+                    jni_sig!("(Ljava/lang/String;)Landroid/hardware/camera2/CameraCharacteristics;"),
+                    &[JValue::from(&id)],
+                )?
+                .l()?;
+            let source = vendor_tag(env, &characteristics, "com.meta.extra_metadata.camera_source")?;
+            let position = vendor_tag(env, &characteristics, "com.meta.extra_metadata.position")?;
+            if source == Some(0) && position == Some(0) {
+                return id.try_to_string(env).map(Some);
+            }
+        }
+        Ok(None)
+    });
+    result.unwrap_or_else(|e| {
+        eprintln!("skate_quest: looking for the passthrough camera failed: {e}");
+        None
+    })
+}
+
+/// A camera characteristic by its key's name, as a number: Meta's come as
+/// `byte[1]`, others as a `Number`.
+fn vendor_tag(env: &mut jni::Env, characteristics: &JObject, name: &str) -> jni::errors::Result<Option<i32>> {
+    let name = JString::from_str(env, name)?;
+    let keys = env.call_method(characteristics, jni_str!("getKeys"), jni_sig!("()Ljava/util/List;"), &[])?.l()?;
+    let count = env.call_method(&keys, jni_str!("size"), jni_sig!("()I"), &[])?.i()?;
+    for i in 0..count {
+        let key = env.call_method(&keys, jni_str!("get"), jni_sig!("(I)Ljava/lang/Object;"), &[JValue::from(i)])?.l()?;
+        let key_name = env.call_method(&key, jni_str!("getName"), jni_sig!("()Ljava/lang/String;"), &[])?.l()?;
+        let same = env
+            .call_method(&key_name, jni_str!("equals"), jni_sig!("(Ljava/lang/Object;)Z"), &[JValue::from(&name)])?
+            .z()?;
+        if !same {
+            continue;
+        }
+        let value = env
+            .call_method(
+                characteristics,
+                jni_str!("get"),
+                jni_sig!("(Landroid/hardware/camera2/CameraCharacteristics$Key;)Ljava/lang/Object;"),
+                &[JValue::from(&key)],
+            )?
+            .l()?;
+        if value.is_null() {
+            return Ok(None);
+        }
+        if env.is_instance_of(&value, jni_str!("[B"))? {
+            let length = env
+                .call_static_method(
+                    jni_str!("java/lang/reflect/Array"),
+                    jni_str!("getLength"),
+                    jni_sig!("(Ljava/lang/Object;)I"),
+                    &[JValue::from(&value)],
+                )?
+                .i()?;
+            if length == 0 {
+                return Ok(None);
+            }
+            let first = env
+                .call_static_method(
+                    jni_str!("java/lang/reflect/Array"),
+                    jni_str!("getByte"),
+                    jni_sig!("(Ljava/lang/Object;I)B"),
+                    &[JValue::from(&value), JValue::from(0i32)],
+                )?
+                .b()?;
+            return Ok(Some(first as i32));
+        }
+        if env.is_instance_of(&value, jni_str!("java/lang/Number"))? {
+            return env.call_method(&value, jni_str!("intValue"), jni_sig!("()I"), &[])?.i().map(Some);
+        }
+        return Ok(None);
+    }
+    Ok(None)
+}
+
+fn request(names: &[&'static str]) {
     let Some(app) = bevy::android::ANDROID_APP.get() else {
         eprintln!("skate_quest: ANDROID_APP not set yet, skipping permission request");
         return;
@@ -45,7 +186,7 @@ pub fn request_scene_permissions() {
     let result = vm.attach_current_thread(|env| -> jni::errors::Result<Vec<&'static str>> {
         let activity = unsafe { JObject::from_raw(&*env, app.activity_as_ptr().cast()) };
         let mut missing = Vec::new();
-        for name in PERMISSIONS {
+        for &name in names {
             let jname = JString::from_str(env, name)?;
             let state = env
                 .call_method(
@@ -78,7 +219,7 @@ pub fn request_scene_permissions() {
     });
     match result {
         Ok(missing) if missing.is_empty() => {
-            eprintln!("skate_quest: {PERMISSIONS:?} already granted")
+            eprintln!("skate_quest: {names:?} already granted")
         }
         Ok(missing) => eprintln!("skate_quest: requested {missing:?}"),
         Err(e) => eprintln!("skate_quest: requestPermissions failed: {e}"),

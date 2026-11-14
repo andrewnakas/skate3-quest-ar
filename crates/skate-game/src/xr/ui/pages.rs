@@ -10,6 +10,7 @@ use crate::xr::build::{BuildMode, MAX_PARK_SCALE, MAX_PIECE_SCALE, MAX_SCALE, MI
 use crate::xr::link::{ArWorld, SkaterLink, TeleportSkater};
 use crate::xr::planes::{RoomMesh, SceneCapture, SceneShapes};
 use crate::xr::rig::Rig;
+use crate::xr::room_light::RoomLight;
 use crate::xr::spawn::ray_triangle;
 use bevy::prelude::*;
 use bevy_mod_xr::camera::XrCamera;
@@ -154,6 +155,12 @@ impl UiProvider for Shared {
                 Outcome::Replace(INTRO_FLOOR)
             }
             (INTRO_FLOOR, "next") => Outcome::Replace(INTRO_CONTROLS),
+            (_, "room_light_strength") => {
+                if let Act::Set(v) = act {
+                    edit(world, |s| s.room_light_strength = v);
+                }
+                Outcome::Stay
+            }
             (_, "floor_offset") => {
                 if let Act::Set(v) = act {
                     edit(world, |s| s.floor_offset = v);
@@ -260,6 +267,19 @@ fn ar_widgets(world: &World) -> Vec<Widget> {
     }
     let shapes = world.resource::<SceneShapes>().0.len();
     let triangles = world.resource::<RoomMesh>().0.as_ref().map_or(0, |m| m.indices.len() / 3);
+    w.push(Widget::toggle("room_light", "Roomtone room lighting: light the skater and the park by your room", s.room_light));
+    if s.room_light {
+        w.push(Widget::slider(
+            "room_light_strength",
+            "Roomtone brightness",
+            s.room_light_strength,
+            (0.25, 2.0, 0.05),
+            format!("{:.0}%", s.room_light_strength * 100.0),
+        ));
+    }
+    if let Some(problem) = world.resource::<RoomLight>().problem(s.room_light) {
+        w.push(Widget::info(problem));
+    }
     w.extend([
         Widget::toggle("hud", "Trick and points readout", s.hud),
         Widget::button("intro", "Replay the intro"),
@@ -292,8 +312,14 @@ fn ar_act(widget: &str, world: &mut World) -> Outcome {
         "show_all" => s.set_all_shown(true),
         "hide_all" => s.set_all_shown(false),
         "hud" => s.hud = !s.hud,
+        "room_light" => s.room_light = !s.room_light,
         _ => {}
     });
+    // The room's light is read from a passthrough camera: ask for it once.
+    if widget == "room_light" && world.resource::<ArSettings>().room_light && !crate::camera_access() {
+        crate::request_camera_access();
+        return Outcome::Say("Roomtone looks at your room through the headset's cameras. Nothing is saved or sent.".into());
+    }
     Outcome::Stay
 }
 

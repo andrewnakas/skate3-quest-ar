@@ -42,7 +42,7 @@ retail = [
     "dep:blake3", "dep:image", "dep:zip", "zip/deflate-flate2-zlib-rs",
 ]
 # OpenXR passthrough mode (`--xr`); the Quest build always enables it.
-xr = ["dep:bevy_mod_openxr", "dep:bevy_mod_xr", "dep:openxr"]
+xr = ["dep:bevy_mod_openxr", "dep:bevy_mod_xr", "dep:openxr", "dep:roomtone-sys"]
 # Desktop XR keeps a mirror window beside the headset view.
 xr-window = ["xr", "bevy_mod_openxr/window_support"]
 
@@ -58,6 +58,8 @@ serde_json.workspace = true
 serde.workspace = true
 skate-mods = { path = "../skate-mods", optional = true }
 skate-lite-sys = { path = "../skate-lite-sys" }
+# Room light estimation for the passthrough mode (xr::room_light).
+roomtone-sys = { path = "../roomtone-sys", optional = true }
 
 skate-vehicles = { path = "../skate-vehicles", optional = true }
 skate-net = { path = "../skate-net", optional = true }
@@ -72,6 +74,9 @@ image = { version = "=0.25.10", optional = true, default-features = false, featu
 # Game pads on Quest come through the (vendored, patched) winit Android backend: xr::actions.
 [target.'cfg(target_os = "android")'.dependencies]
 winit = { version = "0.30.13", default-features = false }
+# The passthrough camera for room lighting (xr::room_light::camera): the NDK's
+# Camera2 and image reader. The version android-activity already brings in.
+ndk-sys = { version = "0.6", features = ["media"] }
 
 [dev-dependencies]
 naga = { version = "=27.0.3", features = ["wgsl-in"] }
