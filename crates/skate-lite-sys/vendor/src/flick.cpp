@@ -289,6 +289,11 @@ Flick::Result Flick::resolve(bool ending)
 		else if (is_prefix(tokens_, rule.tokens))
 			extendable = true;
 	}
+	if (exact >= 0 && air_ && std::strcmp(kTricks[size_t(exact)].name, "Impossible") == 0) {
+		tokens_.assign(1, TDown);
+		pending_ = -1;
+		return r;
+	}
 	if (exact >= 0 && !(extendable && !ending)) {
 		pending_ = -1;
 		r.trick = exact;
@@ -390,6 +395,10 @@ Flick::Result Flick::feed(float x, float y)
 		return out;
 	}
 	part_centre_ = 0;
+	// (part-way again, another way: out of a manual into a nose manual, that's the lead-in now, as the
+	// port - the down from the manual before it is forgotten)
+	if (r >= kLeadIn && r < kRimIn && tokens_.size() == 1 && sector_of(x, y) != tokens_[0])
+		reset();
 	if (r >= (tokens_.empty() ? kLeadIn : kRimIn)) {
 		int s = sector_of(x, y);
 		float deg = std::atan2(x, y) * 180 / kPi;

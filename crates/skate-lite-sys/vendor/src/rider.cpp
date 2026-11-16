@@ -202,6 +202,7 @@ constexpr float kCarveAtMid = 0.8f, kCarveTopShare = 0.95f; // carve share at 4.
 constexpr float kUnderDown = 0.19f, kUnderBack = 0.16f, kUnderCrouch = 0.174f;
 constexpr float kNoseLong = 0.38f, kNoseLongPop = 0.9f; // a nose manual held longer: its nollie pops lower
 constexpr float kNoseNollieNow = 0.2f; // s after a nose manual a nollie still pops at once
+constexpr float kNoseDownWait = 0.5f / 60; // (that is, the next tick: the port's board leaves a tick after the flick)
 constexpr float kNoComplyWindow = 0.52f, kNoComplyPlant = 0.12f; // s into a push's first stroke a flicked ollie is a no comply
 constexpr float kLateFlickAfter = 0.15f; // s into the air before a flick flips it late
 constexpr float kLateFlickNollie = 0.066f; // off a nollie, later still (as the port, measured)
@@ -261,6 +262,7 @@ constexpr float kBumpReach = 0.14f; // m to the side of its line
 constexpr float kBumpKeep = 0.28f;  // of the speed kept, bumped
 constexpr float kBumpCool = 1.0f;   // s before it can bump again
 constexpr float kPushTap = 0.91f;    // m/s a tapped push gives (held, up to a full one)
+constexpr float kPushBusy = 78.5f / 60, kPushBusyHeld = 5.0f / 60; // s a push takes (tap; per step held past one)
 constexpr int kPushTapSteps = 3;     // held this long it's still a tap; then up to a full one...
 constexpr float kPushFull = 11.0f;   // ...this many steps more (as the port, measured over speed x hold)
 constexpr float kStandPush = 3.785f; // the first push from standing still where the rider was put: a full one
@@ -415,6 +417,7 @@ void Rider::place(V3 position, float facing, float speed)
 	switching_ = -1;
 	fakie_time_ = 0;
 	push_queued_ = false;
+	push_busy_ = -1;
 	skid_time_ = 0;
 	vert_air_ = false;
 	carve_in_ = carve_ = 0;
@@ -571,6 +574,9 @@ static float ease_tilt(float tilt, float target, float tau)
 }
 
 constexpr float kPopAfterLand = 9.5f / 60; // s after touching down before a flick pops
+constexpr float kCrouchAfterLand = 8.5f / 60; // s after touching down the crouch must still be held for a pop
+// (out of a frontside shove-it the port's landing settles 2 ticks later than the board comes down, measured)
+constexpr float kFsShoveLandLag = 2.0f / 60;
 
 // ---------------------------------------------------------------- ramps
 
@@ -664,6 +670,7 @@ void Rider::step(World &w, const sk8_input &in)
 	step_count_++;
 	Flick::Result f;
 	if (mode_ != SK8_MODE_BAIL)
+		flick_.set_air(mode_ == SK8_MODE_AIR);
 		f = flick_.feed(in.flick[0], in.flick[1]);
 	if (switch_) { // (switch names each flick's twin: see mirror_trick)
 		f.trick = mirror_trick(f.trick);
@@ -764,6 +771,8 @@ void Rider::step(World &w, const sk8_input &in)
 
 	since_land_ += kDt;
 	since_wall_ += kDt;
+	if (std::hypot(in.flick[0], in.flick[1]) > 0.5f && in.flick[1] <= 0.1f)
+		low_since_land_ = since_land_;
 	// off the board / back on: a press of the button
 	bool off_press = (in.buttons & SK8_OFF_BOARD) && !(last_buttons_ & SK8_OFF_BOARD);
 	prev_buttons_ = last_buttons_;
@@ -894,9 +903,12 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			return;
 		}
 	}
-	// just landed, a flick doesn't pop yet: one finished within kPopAfterLand of touching down is
-	// dropped (as the port, probed: up 9 ticks after landing pops nothing, 10 ticks after pops)
-	if (f.trick >= 0 && since_land_ >= 0 && since_land_ < kPopAfterLand && takeoff_trick_ < 0)
+	// just landed, a flick doesn't pop yet: it pops only if the stick was still down (crouched, or
+	// swept out round a side) kCrouchAfterLand after touching down, however soon the flick comes
+	// after that (as the port, probed for every crouch length and flick shape: down until 9 ticks
+	// on pops, let go before it pops nothing); a flick with no crouch since: kPopAfterLand
+	if (f.trick >= 0 && since_land_ >= 0 && takeoff_trick_ < 0 &&
+		(low_since_land_ >= 0 ? low_since_land_ < kCrouchAfterLand + land_lag_ : since_land_ < kPopAfterLand + land_lag_))
 		return;
 	// a grab trigger held on the ground (crouched, a hand on the board): a flick doesn't pop (as the port)
 	if (f.trick >= 0 && (in.buttons & (SK8_GRAB_LEFT | SK8_GRAB_RIGHT)) && takeoff_trick_ < 0)
@@ -928,15 +940,15 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 			trick = old;
 			share = old_pop;
 		}
-		// (out of a nose manual the nose is already down: the nollie leaves at once, as the port's)
+		// (out of a nose manual the nose is already down: the nollie leaves at once, a tick on, as the port's)
 		bool nose_down = trick_table()[size_t(trick)].nollie && since_nose_manual_ < kNoseNollieNow;
-		if (p[PopWait] > 0 && takeoff_trick_ < 0 && !nose_down) {
+		if (p[PopWait] > 0 && takeoff_trick_ < 0) {
 			// the board loads up before it leaves the ground (the takeoff), then pops
 			takeoff_trick_ = trick;
 			takeoff_share_ = share;
 			takeoff_time_ = 0;
 			// (a no comply's front foot plants on the ground first: it leaves later, as the port's)
-			takeoff_extra_ = stepping ? kNoComplyPlant : 0.0f;
+			takeoff_extra_ = stepping ? kNoComplyPlant : nose_down ? kNoseDownWait - p[PopWait] : 0.0f;
 			takeoff_crouch_ = crouch_;
 			flick_dir(takeoff_dir_);
 			under_wanted_ = false;
@@ -1003,7 +1015,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		manual_lock_ = false;
 	// caught on the landing (held into it) or, pressed fresh, only once the landing has settled
 	bool settling = since_land_ >= 0.1f && since_land_ < p[ManualLand];
-	if (mode_ == SK8_MODE_RIDE && want_manual && !manual_lock_ && speed > 0.6f && !settling) {
+	if (mode_ == SK8_MODE_RIDE && want_manual && !manual_lock_ && speed > 0.6f && !settling && push_busy_ < 0) {
 		mode_ = SK8_MODE_MANUAL;
 		manual_dir_ = stick != 0 ? stick : (in.buttons & SK8_MANUAL) ? 1 : -1;
 		// with the foot-off button: the board flipped onto its side (primo) or upside down (casper)
@@ -1213,6 +1225,13 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		standing_ = false; // (got rolling some other way)
 	if (push_cooldown_ > 0)
 		push_cooldown_ -= kDt;
+	// the push isn't over until the foot's back on the board and the body has come up from it (as the
+	// port's, measured by when a manual can start: a tap ~1.3 s, held a little longer up to ~1.6 s)
+	if (push_busy_ >= 0) {
+		push_busy_ += kDt;
+		if (push_busy_ > kPushBusy + kPushBusyHeld * float(std::min(std::max(push_held_ - kPushTapSteps, 0), 3)))
+			push_busy_ = -1;
+	}
 	// (a push is as hard as the button's held for it: a tap a light one, held ~10 steps a full one,
 	// as the port's)
 	if (push_time_ >= 0 && push_counting_) {
@@ -1326,6 +1345,7 @@ void Rider::ground(World &w, const sk8_input &in, const Flick::Result &f)
 		// (held on through from the last stroke: a full one, as the port's)
 		push_held_ = (prev_buttons_ & push_bits) && since_stroke_ < 0.05f ? kPushTapSteps + int(kPushFull) : 0;
 		push_counting_ = true;
+		push_busy_ = 0;
 		emit(SK8_EV_PUSH);
 	}
 
@@ -1576,6 +1596,7 @@ constexpr float kOllieLoadFull = 0.21f;
 void Rider::pop(const TrickDef &def, float share, bool off_rail)
 {
 	popped_nollie_ = def.nollie;
+	popped_fs_shove_ = std::strcmp(def.name, "Frontside Shove-it") == 0;
 	bool from_air = mode_ == SK8_MODE_AIR && !off_rail; // (a lip pop, just off a ramp)
 	reset_body_flip();
 	V3 aim_in{}; // (a vert air: back in over the ramp, aimed to come down just inside the lip)
@@ -1667,6 +1688,7 @@ void Rider::pop(const TrickDef &def, float share, bool off_rail)
 	plant_air_ = false;
 	wall_off_ = false;
 	flick_.rearm();
+	push_busy_ = -1; // (a pop ends the push)
 	air_up_ = air_down_in_ = 0;
 	air_feet_ = air_feet_want_ = 0;
 	air_feet_scored_ = false;
@@ -2423,6 +2445,9 @@ void Rider::air(World &w, const sk8_input &in, const Flick::Result &flick)
 void Rider::land(const Hit &h)
 {
 	since_land_ = 0;
+	low_since_land_ = -1;
+	land_lag_ = popped_fs_shove_ ? kFsShoveLandLag : 0.0f;
+	popped_fs_shove_ = false;
 	if (foot_air_) { // back on its feet
 		foot_air_ = false;
 		pos_ = h.point;

@@ -291,6 +291,10 @@ private:
 	// the right stick tilted part-way (1 down = manual, -1 up = nose manual), for how long, how deep 0..1
 	int stick_manual_ = 0;
 	float stick_manual_time_ = 0, stick_manual_depth_ = 0, since_land_ = 9;
+	bool popped_fs_shove_ = false; // the last pop a frontside shove-it (its landing settles later)
+	float land_lag_ = 0;           // s more before a pop after this landing
+	float push_busy_ = -1; // s since the push began, while it's still going on (-1 done)
+	float low_since_land_ = -1; // since_land_ the last time the right stick was down (or out to a side): -1 not since
 };
 
 } // namespace sk8
