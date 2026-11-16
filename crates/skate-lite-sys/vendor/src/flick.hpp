@@ -72,6 +72,8 @@ public:
 	Result crouch_arc();
 	// in the air after a pop: a new flick may start from wherever the stick is held (as the port:
 	// held up after the ollie, then flicked down, a late backfoot flip)
+	// in the air: the port reads no Impossible there (down, centre, down is the next flick's crouch)
+	void set_air(bool air) { air_ = air; }
 	void rearm()
 	{
 		reset();
@@ -107,6 +109,7 @@ private:
 	int arc_centre_ = 0;
 	bool on_rim_ = false;
 	bool spent_ = false;
+	bool air_ = false;
 	// after a trick: a few more steps the stick may carry on (a sweep on round to the end) and the
 	// trick be read again, as the port reads the whole flick by the takeoff
 	int revise_steps_ = 0, revise_trick_ = -1;
